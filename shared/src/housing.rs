@@ -299,7 +299,13 @@ pub struct HouseData {
     pub rooms: Vec<RoomData>,
     #[serde(default)]
     pub passability: Vec<PassabilityGrid>,
+    /// Exterior style set; 0 is the plain look.
+    #[serde(default)]
+    pub style: u8,
 }
+
+/// Number of exterior style sets, including the plain one.
+pub const HOUSE_STYLE_COUNT: u8 = 4;
 
 impl HouseData {
     pub fn room_at(&self, x: f32, z: f32, floor: u8) -> Option<&RoomData> {

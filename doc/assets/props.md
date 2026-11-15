@@ -237,3 +237,12 @@ Not used right now, but for future reference.
 - 원본: `assets/items/excavation_trowel/excavation_trowel.blend`, 제작 기록 `provenance.json`. 게임 파일: `client/public/models/props/excavation_trowel.glb`, 약 75KB. 별도 판매 아이템이 아닌 이졸데의 작업 소품이다.
 - `tools/blender-scripts/build_excavation_trowel.py`로 재현한 뒤 `.venv/bin/python tools/repack-glb-textures.py client/public/models/props/excavation_trowel.glb`로 압축한다. 기존 캐릭터 메시·텍스처는 변경하지 않는다.
 - 오른손에 부착하고 기존 여성 캐릭터의 강철 장검 그립을 이식한 발굴 클립의 손가락 자세로 쥐게 한다. 손바닥 관통을 줄이도록 손가락 쪽으로 옮긴 부착 위치는 `RightHand` 로컬 `(0, 0.1, 0.03)m`다(2026-10-25). 손목을 꺾어 삽끝을 땅에 맞추지 않는다(2026-10-24 사용자 지정). 삽날은 주먹의 위쪽·앞쪽을 향하며 넓은 면이 바깥쪽에서 보이도록 자루 축으로 90° 돌렸다. 게임과 이졸데 미리보기는 같은 부착 함수를 쓴다. 대기·이동·발굴 때 보이며 수면·사망·다른 상호작용 때 숨긴다. Khronos glTF Validator 오류·경고 0개.
+
+## 집 외관 스타일 세트 (2026-11-15)
+
+마을 집이 예쁘지 않다는 의견에 따라 집 구조는 그대로 두고 외관만 바꾸는 스타일 세트를 만들었다. 구조와 세트 표는 [HOUSING_SYSTEM.md](../HOUSING_SYSTEM.md#exterior-style-set).
+
+- 원화: [A 정통 반목조](../images/props/house-style-concept-a.png) · [B 돌 1층 + 슬레이트](../images/props/house-style-concept-b.png) · [C 동화풍](../images/props/house-style-concept-c.png), 각 1586×992 PNG. OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 생성 2026-11-15. 게임의 현재 마을 집 렌더(`assets/props/house-style/concept-reference-render.png`)를 참조로 붙이고 시점·집 위치·층수·지붕 모양·1m 칸 구조를 유지하도록 지시했다. OpenAI 생성 출력물 이용 조건 적용.
+- 세트 1 Timber 텍스처: `client/public/textures/housing/timber-style-{plaster,timber,roof,stone,door}.webp`, 각 1024×1024 알베도. 창 새시 `timber-style-sash.webp`는 생성하지 않고 기존 새시 텍스처의 나무 부분을 세트 목재로 바꿔 만들었다. 같은 도구·요금제·날짜로 원화 A를 참조로 붙여 생성했다. 기와만 반복되도록 6줄×7칸으로 자르고, 게임 톤매핑(AgX)과 정오 햇빛에서 분홍으로 뜨지 않게 색을 주황 쪽으로 옮기고 대비를 올렸으며, 나머지는 크기만 줄였다. [프롬프트·해시·가공 내역](house-timber-style-prompts.json), 생성 원본은 `assets/props/house-style/timber/`.
+- 세트 2 Storybook 텍스처: `client/public/textures/housing/storybook-decor.webp`(덧문·꽃·담쟁이·창 불빛 자리를 한 장에 모은 1024² 아틀라스)와 불빛 영역만 흰 `storybook-decor-emissive.webp`. 같은 도구·요금제·날짜로 원화 C를 참조로 붙여 생성했다. 덧문은 팔레트 색을 입히도록 거의 흰색으로 그렸고, 꽃과 담쟁이는 자홍 배경을 알파로 빼냈다. 나머지 재질은 세트 1의 텍스처를 집별 색조로 물들여 쓴다. [프롬프트·해시·가공 내역](house-storybook-style-prompts.json), 생성 원본은 `assets/props/house-style/storybook/`.
+- 세트 3 Stone 텍스처: `client/public/textures/housing/stone-style-slate.webp`, 1024×1024 알베도. 같은 도구·요금제·날짜로 원화 B를 참조로 붙여 생성했고, 반복되도록 6줄로 잘랐다. 돌벽은 세트 1의 자연석, 덧문·꽃·불빛은 세트 2의 아틀라스를 그대로 쓴다. [프롬프트·해시·가공 내역](house-stone-style-prompts.json), 생성 원본은 `assets/props/house-style/stone/`.

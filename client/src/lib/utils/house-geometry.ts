@@ -32,6 +32,7 @@ import { collectFloorGeometry } from './house-geo-floor'
 import { collectRoofGeometry, shouldSuppressRoof } from './house-geo-roof'
 import { collectStairwellGeometries } from './house-geo-stairwell'
 import { collectWallSegments } from './house-geo-walls'
+import { resolveHouseStyle, type ResolvedHouseStyle } from './house-style'
 
 // Re-export public API so existing imports continue to work
 export {
@@ -86,6 +87,7 @@ export function buildHouseGroup(
   const spanByRoom = roofSpanByRoom(house.rooms, (r) => suppressed.has(r))
 
   const perFloor = new Map<number, FloorEntries>()
+  const style = resolveHouseStyle(house.style, house.id)
 
   for (let ri = 0; ri < house.rooms.length; ri++) {
     const room = house.rooms[ri]
@@ -99,7 +101,8 @@ export function buildHouseGroup(
       suppressed.has(room),
       spanByRoom.get(room),
       house.rooms,
-      stairwellFootprints
+      stairwellFootprints,
+      style
     )
   }
 
@@ -188,7 +191,8 @@ function collectRoomGeometries(
   suppressRoof: boolean,
   roofSpan: RoofSpan | undefined,
   allRooms: RoomData[],
-  stairwellFootprints: RoomFootprint[]
+  stairwellFootprints: RoomFootprint[],
+  style: ResolvedHouseStyle | null
 ) {
   if (room.roomType === 'stairwell') {
     collectStairwellGeometries(room, entries.stair, allRooms)
@@ -197,7 +201,14 @@ function collectRoomGeometries(
 
   collectFloorGeometry(room, entries.floor, stairwellFootprints)
   if (!suppressRoof)
-    collectRoofGeometry(room, roofSpan, entries.front, entries.back, allRooms)
+    collectRoofGeometry(
+      room,
+      roofSpan,
+      entries.front,
+      entries.back,
+      allRooms,
+      style
+    )
 
   for (const dir of ALL_WALL_DIRS)
     collectWallSegments(
@@ -206,7 +217,8 @@ function collectRoomGeometries(
       room,
       roomIndex,
       entries,
-      allRooms
+      allRooms,
+      style
     )
 }
 

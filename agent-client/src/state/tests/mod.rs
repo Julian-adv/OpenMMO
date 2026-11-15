@@ -276,6 +276,7 @@ pub(crate) fn house(id: &str, origin: Position, rooms: Vec<RoomData>) -> HouseDa
         id: id.to_string(),
         owner_id: "test".to_string(),
         source_scroll_id: None,
+        style: 0,
         origin,
         rooms,
         passability: Vec::new(),

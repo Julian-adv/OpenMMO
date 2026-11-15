@@ -104,6 +104,7 @@
   - [x] goto
   - [x] mute
   - [x] spawnmob (`/spawnmob <타입> [마릿수]`, 전투 테스트용 몬스터 소환)
+  - [x] housestyle (`/housestyle <0-3|mix> [반경]`, 주변 마을 집 외관 세트 일괄 지정)
   - [x] weather (`/weather rain [0~1]`, `clear`, `auto`, 서버 전체 비 디버깅)
 - party, guild 기능
   - [x] party는 만듦

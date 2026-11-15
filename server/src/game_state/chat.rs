@@ -1,6 +1,8 @@
 use super::auth_db;
 use crate::auth::{ban_message, unix_now, AuthService, DEFAULT_BAN_REASON};
 use crate::types::{ClientKind, Player, PlayerId, ServerMessage};
+use onlinerpg_shared::fnv::{fnv1a64, FNV_OFFSET};
+use onlinerpg_shared::housing::HOUSE_STYLE_COUNT;
 use onlinerpg_shared::messages::{strip_command, ANNOUNCEMENT_MAX_CHARS};
 use std::collections::HashMap;
 use std::sync::atomic::Ordering;
@@ -25,6 +27,8 @@ const SPAWNMOB_MAX_COUNT: u32 = 10;
 /// Meters from the admin to each spawned monster.
 const SPAWNMOB_RING_RADIUS: f32 = 3.0;
 const GIVE_MAX_COUNT: u32 = 10_000;
+const HOUSESTYLE_DEFAULT_RADIUS: u32 = 100;
+const HOUSESTYLE_MAX_RADIUS: u32 = 500;
 pub(crate) const GOD_ON_MESSAGE: &str =
     "God: on — blows land but take no health. /god again to turn off.";
 
@@ -255,6 +259,10 @@ pub(crate) enum AdminCommand<'a> {
         monster_type: &'a str,
         count: Option<&'a str>,
     },
+    HouseStyle {
+        style: &'a str,
+        radius: Option<&'a str>,
+    },
 }
 
 pub(crate) fn parse_admin_command(message: &str) -> Option<AdminCommand<'_>> {
@@ -292,6 +300,10 @@ pub(crate) fn parse_admin_command(message: &str) -> Option<AdminCommand<'_>> {
             monster_type,
             count,
         });
+    }
+    if let Some(rest) = strip_command(message, "/housestyle") {
+        let (style, radius) = split_name_and_arg(rest);
+        return Some(AdminCommand::HouseStyle { style, radius });
     }
     if strip_command(message, "/god").is_some() {
         return Some(AdminCommand::God);
@@ -1015,6 +1027,9 @@ impl super::GameState {
                 monster_type,
                 count,
             } => self.spawnmob_command(admin_id, monster_type, count).await,
+            AdminCommand::HouseStyle { style, radius } => {
+                self.housestyle_command(admin_id, style, radius).await
+            }
         }
         .unwrap_or_else(std::convert::identity);
         self.send_system_message(admin_id, reply).await;
@@ -1308,6 +1323,71 @@ impl super::GameState {
             .await;
         info!(admin = ?admin_id, target = %canonical, "admin goto");
         Ok(format!("Goto: you are at {canonical}'s side."))
+    }
+
+    /// Restyle village houses around the admin; player-built ones are skipped.
+    async fn housestyle_command(
+        &self,
+        admin_id: &PlayerId,
+        style: &str,
+        raw_radius: Option<&str>,
+    ) -> Result<String, String> {
+        let last = HOUSE_STYLE_COUNT - 1;
+        if style.is_empty() {
+            return Err(format!(
+                "Housestyle: /housestyle <0-{last}|mix> [radius m] — restyles village houses around you"
+            ));
+        }
+        let fixed = if style.eq_ignore_ascii_case("mix") {
+            None
+        } else {
+            Some(parse_bounded(style, 0..=last, "Housestyle: style")?)
+        };
+        let radius = match raw_radius {
+            None => HOUSESTYLE_DEFAULT_RADIUS,
+            Some(raw) => parse_bounded(raw, 1..=HOUSESTYLE_MAX_RADIUS, "Housestyle: radius")?,
+        } as f32;
+        let Some((center, ..)) = self.player_pose(admin_id).await else {
+            warn!("/housestyle from non-existent player: {admin_id}");
+            return Err("Housestyle: server error, try again.".to_string());
+        };
+
+        let _edit = self.world_edit_guard().await;
+        let houses = self.housing_io.read_all_houses().await.map_err(|e| {
+            error!("/housestyle could not read houses: {e}");
+            "Housestyle: server error, try again.".to_string()
+        })?;
+        let mut restyled = 0u32;
+        let mut player_built = 0u32;
+        for mut house in houses {
+            if house.origin.dist_xz_sq(&center) > radius * radius {
+                continue;
+            }
+            if house.source_scroll_id.is_some() {
+                player_built += 1;
+                continue;
+            }
+            // "mix" spreads the dressed sets by house id, so a rerun is stable.
+            let target = fixed.unwrap_or_else(|| {
+                1 + (fnv1a64(FNV_OFFSET, house.id.bytes()) % u64::from(last)) as u8
+            });
+            if house.style == target {
+                continue;
+            }
+            house.style = target;
+            self.housing_io.write_house(&house).await.map_err(|e| {
+                error!("/housestyle could not save house {}: {e}", house.id);
+                format!("Housestyle: stopped after {restyled} houses, server error.")
+            })?;
+            self.apply_open_door_state(std::slice::from_mut(&mut house))
+                .await;
+            self.publish_house(&house);
+            restyled += 1;
+        }
+        info!(admin = ?admin_id, style, radius, restyled, "admin housestyle");
+        Ok(format!(
+            "Housestyle: {restyled} houses restyled within {radius} m; {player_built} player-built left alone."
+        ))
     }
 
     async fn spawnmob_command(

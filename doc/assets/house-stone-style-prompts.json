@@ -1,0 +1,18 @@
+{
+ "tool": "OpenAI Codex built-in ImageGen (codex exec -i)",
+ "tier": "ChatGPT Pro 20x",
+ "generated": "2026-11-15",
+ "license": "Project-owned generated output; OpenAI output terms apply, no separate CC license.",
+ "reference": "doc/images/props/house-style-concept-b.png attached to the request",
+ "assets": [
+  {
+   "id": "slate",
+   "file": "client/public/textures/housing/stone-style-slate.webp",
+   "sha256": "80279649d872061f80231606d6fb158fb9a9d6d4391e934719ec763ec2da418c",
+   "source": "assets/props/house-style/stone/slate-src.png",
+   "source_sha256": "dea562b22e6c98483f00e2f64d4fa5303c781baab1703261aa0358184f66af32",
+   "processing": "Cropped to 6 slate rows and a repeating width (x 173, y 21, 822 x 940 px), resized to 1024 x 1024. No colour edits. WebP quality 88.",
+   "prompt": "Use case: stylized-concept\nAsset type: seamlessly tileable roof albedo texture.\nPrimary request: overlapping rectangular slate roof tiles with slightly uneven, chipped lower edges, laid in straight horizontal courses as on the concept art roofs. Exactly eight courses down and about ten slates across the square, each course offset by half a slate. Each slate slightly varied in tone, a thin dark line under each slate's lower edge to suggest overlap. Lower edges point toward the bottom of the image.\nPalette: cool blue-grey slate with a few darker charcoal and a few lighter grey-blue slates, and two or three small muted green moss specks; mid-dark overall.\nComposition: orthographic straight-on flat surface filling the whole 1024x1024 square edge to edge. The pattern must continue seamlessly across both image edges so the image tiles.\nStyle: stylised hand-painted game texture, broad readable shapes, soft painterly brushwork, low noise, no photographic grain.\nLighting: uniform diffuse albedo, no directional shadows, no specular highlights.\nAvoid: scene, perspective, objects, text, borders, vignette, framing. One opaque RGB tile."
+  }
+ ]
+}

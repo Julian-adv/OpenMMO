@@ -1,6 +1,6 @@
 import * as THREE from 'three'
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js'
-import type { GeoEntry } from './house-geo-utils'
+import { paintGeometry, type GeoEntry } from './house-geo-utils'
 import { HOUSING_TEXTURES } from './housing-textures'
 import { DUNGEON_FLOOR_UV_SCALE, WALL_THICKNESS } from './dungeon-geo-constants'
 import { quadMeshBuilder } from './dungeon-geo-primitives'
@@ -33,16 +33,6 @@ function noise(seed: number, x: number, y: number) {
   return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296
 }
 
-function addWhiteVertexColors(geo: THREE.BufferGeometry) {
-  geo.setAttribute(
-    'color',
-    new THREE.BufferAttribute(
-      new Float32Array(geo.getAttribute('position').count * 3).fill(1),
-      3
-    )
-  )
-}
-
 export function buildMasonryWallGhost(
   alongX: boolean,
   lo: number,
@@ -65,7 +55,7 @@ export function buildMasonryWallGhost(
   const entries: GeoEntry[] = []
   surface.finish(entries, 0)
   const geo = entries[0].geo
-  addWhiteVertexColors(geo)
+  paintGeometry(geo)
   return geo
 }
 
@@ -202,7 +192,7 @@ export function buildMasonryWall(
   geos.push(mortarEntries[0].geo)
 
   for (const part of geos) {
-    if (!part.hasAttribute('color')) addWhiteVertexColors(part)
+    if (!part.hasAttribute('color')) paintGeometry(part)
   }
   const geo = mergeGeometries(geos, false)!
   const backingCount = backing.getIndex()!.count

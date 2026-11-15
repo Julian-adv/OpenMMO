@@ -294,7 +294,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `OfferImpound`/`ImpoundOffered`, the guard captain opening the reclaim window.
 /// v158: `PatrolScout`/`PatrolScouted` and `PatrolStrike`/`PlayerSwung`, a guard
 /// walking up to a road fence and striking it before the sweep.
-pub const PROTOCOL_VERSION: u32 = 158;
+pub const PROTOCOL_VERSION: u32 = 159;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

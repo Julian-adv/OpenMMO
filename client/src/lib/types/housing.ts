@@ -52,6 +52,8 @@ export interface HouseData {
   origin: { x: number; y: number; z: number }
   rooms: RoomData[]
   passability?: PassabilityGrid[]
+  /** Exterior style set (index into HOUSE_STYLES); 0 or absent is plain. */
+  style?: number
 }
 
 export interface HouseMapFootprint {

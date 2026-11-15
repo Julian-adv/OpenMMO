@@ -1,0 +1,36 @@
+{
+ "tool": "OpenAI Codex built-in ImageGen (codex exec -i)",
+ "tier": "ChatGPT Pro 20x",
+ "generated": "2026-11-15",
+ "license": "Project-owned generated output; OpenAI output terms apply, no separate CC license.",
+ "reference": "doc/images/props/house-style-concept-c.png attached to every request",
+ "assets": [
+  {
+   "id": "shutter",
+   "source": "assets/props/house-style/storybook/shutter-src.png",
+   "source_sha256": "72c6c87d6889c7b160ba5b54a439244718ede704883c536ea102616c7e4574e0",
+   "processing": "Generated 887 x 1774, resized to 256 x 512. Near-white on purpose; the per-house palette tints it. Packed into the atlas.",
+   "prompt": "Use case: stylized-concept\nAsset type: albedo texture of one wooden window shutter leaf, mapped onto a flat rectangular board.\nPrimary request: a painted louvered wooden shutter seen straight on, filling the entire image edge to edge with no wall or background. A narrow outer frame, about twelve horizontal slats, one middle rail.\nPalette: neutral off-white and very light warm grey paint only, with soft grey shading between slats, so the game can tint it to any colour. No coloured paint.\nComposition: orthographic straight-on; all four image edges are the shutter frame.\nStyle: stylised hand-painted game texture, broad readable shapes, low noise.\nLighting: uniform diffuse albedo, soft shading only inside the slat gaps, no directional shadows.\nAvoid: perspective, wall, window, hinges, text, borders, vignette, colour tints. One opaque RGB image."
+  },
+  {
+   "id": "flowers",
+   "source": "assets/props/house-style/storybook/flowers-src.png",
+   "source_sha256": "e250107a45118a02d97aebea432b713cf1b07fe064982752f89c445e143b7ab1",
+   "processing": "Generated 2172 x 724 on a flat magenta background. Background keyed to alpha (min(R,B) - G), magenta spill reduced on edge pixels, cropped to the foliage rows and resized to 768 x 288. Packed into the atlas.",
+   "prompt": "Use case: stylized-concept\nAsset type: cut-out sprite strip of window-box flowers.\nPrimary request: a dense horizontal row of blooming geraniums and trailing leaves seen straight on, as they would spill over the front of a window flower box: red, pink and white blossoms with green leaves, a few stems hanging lower. The row spans the full image width; flowers touch the left and right edges; the top edge of the foliage is irregular.\nBackground: perfectly flat solid pure magenta (#FF00FF) everywhere that is not flowers or leaves, with crisp edges and no shadows or glow on the background, so it can be keyed out. Do not use magenta or purple in the flowers.\nStyle: stylised hand-painted game sprite, broad readable shapes, low noise.\nLighting: uniform diffuse, no cast shadows.\nAvoid: flower box, pot, wall, window, ground, text, borders, gradients in the background. One opaque RGB image."
+  },
+  {
+   "id": "ivy",
+   "source": "assets/props/house-style/storybook/ivy-src.png",
+   "source_sha256": "bb0d969e810667574ba39c2f77ceb3360ea49e8ca6d6df2ca37ae7ed0a3df302",
+   "processing": "Generated 887 x 1774 on a flat magenta background. Background keyed to alpha (min(R,B) - G), magenta spill reduced on edge pixels, resized to 384 x 768. Packed into the atlas.",
+   "prompt": "Use case: stylized-concept\nAsset type: cut-out sprite of climbing ivy to overlay on a house wall.\nPrimary request: a patch of climbing ivy seen straight on, rooted along the bottom edge of the image and growing upward: dense leaves at the bottom spreading across the full width, thinning into a few irregular tendrils that reach the top. Varied green leaves with a few yellow-green highlights, thin brown stems. Leave irregular gaps so the wall would show through.\nBackground: perfectly flat solid pure magenta (#FF00FF) everywhere that is not ivy, with crisp edges and no shadows or glow, so it can be keyed out. Do not use magenta, pink or purple in the plant.\nStyle: stylised hand-painted game sprite, broad readable leaf shapes, low noise.\nLighting: uniform diffuse, no cast shadows.\nAvoid: wall, bricks, window, ground, pot, flowers, text, borders, background gradients. One opaque RGB image."
+  }
+ ],
+ "atlas": {
+  "file": "client/public/textures/housing/storybook-decor.webp",
+  "sha256": "1a093a6ac3fd2a18e1b420e0f38ce48c164538f5b10b31fbd74fa8e7faf4978c",
+  "emissive_mask": "client/public/textures/housing/storybook-decor-emissive.webp",
+  "layout": "1024 x 1024 RGBA, pixel rects x,y,w,h: shutter 8,8,256,512; glow 280,8,64,64 (flat dark patch, white in the emissive mask); ivy 632,8,384,768; flowers 8,536,608,228. Opaque tiles bleed 6 px into the gutter. UV rects in client/src/lib/utils/house-style.ts DECOR_RECTS are inset 2 px. WebP quality 90; mask 256 x 256 lossless."
+ }
+}

@@ -217,6 +217,7 @@
       const existing = houses.get(data.id)
       const newHash = JSON.stringify({
         roofs,
+        style: data.style ?? 0,
         origin: data.origin,
         rooms: data.rooms,
       })

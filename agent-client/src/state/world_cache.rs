@@ -904,6 +904,7 @@ mod interest_tests {
             id: "a".into(),
             owner_id: "owner".into(),
             source_scroll_id: None,
+            style: 0,
             origin: Position { x, y: 0.0, z: 0.0 },
             rooms: vec![],
             passability: vec![PassabilityGrid {

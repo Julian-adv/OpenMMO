@@ -3,7 +3,7 @@
  */
 import * as THREE from 'three'
 import type { RoomData, WallConfig } from '../types/housing'
-import { getHousingMaterial } from './housing-textures'
+import { DECOR_UV, getHousingMaterial } from './housing-textures'
 import {
   crossRoomDoorPartner,
   doubleDoorPartner,
@@ -28,6 +28,7 @@ import {
   type GeoEntry,
   type FloorEntries,
 } from './house-geo-utils'
+import { STYLE_TEX, type ResolvedHouseStyle } from './house-style'
 
 const DOOR_TEXTURE_IDX = WOOD_TEXTURE_IDX
 const DOOR_WIDTH = 0.8
@@ -41,6 +42,95 @@ const FRAME_SIDE_FRAC = 0.1 // side strip width as fraction of segment width
 const FRAME_BOTTOM_FRAC = 0.05 // bottom strip height fraction
 const FRAME_DIAG_THICKNESS = 0.06 // diagonal beam thickness in meters
 const SHUTTER_BORDER = 0.045 // shutter border frame thickness (used for side-face UV)
+const TOP_PLATE_HEIGHT = 0.1
+const PLINTH_HEIGHT = 0.3
+const PLINTH_DROP = 0.15
+const PLINTH_DEPTH = FRAME_DEPTH + 0.06
+const SILL_WIDTH = WINDOW_WIDTH + 0.2
+const SILL_HEIGHT = 0.05
+const SILL_DEPTH = 0.12
+const SHUTTER_WIDTH = 0.24
+const SHUTTER_THICKNESS = 0.03
+const FLOWER_BOX_WIDTH = WINDOW_WIDTH - 0.06
+const FLOWER_BOX_HEIGHT = 0.12
+const FLOWER_BOX_DEPTH = 0.14
+const FLOWER_HEIGHT = 0.3
+const LANTERN_REACH = 0.22
+const SURROUND_JAMB = 0.07
+const DOOR_STEP_HEIGHT = 0.14
+const DOOR_STEP_DEPTH = 0.4
+const IVY_WIDTH = 1.1
+const IVY_HEIGHT = 2.2
+
+function addPlinth(
+  target: GeoEntry[],
+  w: number,
+  x: number,
+  yBase: number,
+  z: number,
+  rotY: number,
+  uOffset = 0
+) {
+  const h = PLINTH_HEIGHT + PLINTH_DROP
+  target.push({
+    geo: bakedGeo(
+      new THREE.BoxGeometry(w, h, PLINTH_DEPTH),
+      x,
+      yBase + PLINTH_HEIGHT - h / 2,
+      z,
+      rotY,
+      w,
+      h,
+      uOffset
+    ),
+    textureIndex: STYLE_TEX.stone,
+  })
+}
+
+/** Covers the floor slab edge between storeys. */
+function addJettyBeam(
+  target: GeoEntry[],
+  w: number,
+  x: number,
+  yBase: number,
+  z: number,
+  rotY: number
+) {
+  target.push({
+    geo: bakedGeo(
+      new THREE.BoxGeometry(w, JETTY_BEAM_HEIGHT, JETTY_BEAM_DEPTH),
+      x,
+      yBase - FLOOR_THICKNESS / 2,
+      z,
+      rotY,
+      w,
+      JETTY_BEAM_HEIGHT
+    ),
+    textureIndex: STYLE_TEX.frame,
+  })
+}
+
+/** Stable per-piece choice within a house. */
+function pieceHash(seed: number, a: number, b: number, c: number): number {
+  let h =
+    seed ^
+    Math.imul(a + 1, 73856093) ^
+    Math.imul(b + 1, 19349663) ^
+    Math.imul(c + 1, 83492791)
+  h = Math.imul(h ^ (h >>> 13), 0x5bd1e995)
+  return (h ^ (h >>> 15)) >>> 0
+}
+const OUTWARD_ROT_Y: Record<WallDirection, number> = {
+  south: 0,
+  north: Math.PI,
+  east: Math.PI / 2,
+  west: -Math.PI / 2,
+}
+const JETTY_BEAM_HEIGHT = FLOOR_THICKNESS + 0.04
+const JETTY_BEAM_DEPTH = FRAME_DEPTH + 0.03
+
+/** 'x' crosses the panel; a sign is one brace rising toward that local side. */
+type FrameBrace = 'x' | 'none' | -1 | 1
 const WINDOW_CLICK_MATERIAL = new THREE.MeshBasicMaterial({
   side: THREE.DoubleSide,
 })
@@ -94,7 +184,8 @@ function addFrameXDiagonals(
   innerW: number,
   diagBottom: number,
   diagTop: number,
-  texIdx: number
+  texIdx: number,
+  flips: readonly number[] = [-1, 1]
 ) {
   const diagH = diagTop - diagBottom
   if (diagH <= 0 || innerW <= 0) return
@@ -103,7 +194,7 @@ function addFrameXDiagonals(
   const diagAngle = Math.atan2(diagH, innerW)
   const diagCenterY = yBase + diagBottom + diagH / 2
 
-  for (const flipSign of [-1, 1]) {
+  for (const flipSign of flips) {
     const geo = new THREE.BoxGeometry(
       diagLen,
       FRAME_DIAG_THICKNESS,
@@ -226,6 +317,44 @@ function addWindowFrameGeometry(
   )
 }
 
+/** Frame a window set in a stone wall: sill rail, lintel and jambs only. */
+function addWindowSurround(
+  target: GeoEntry[],
+  x: number,
+  yBase: number,
+  z: number,
+  rotY: number,
+  wh: number,
+  isNS: boolean,
+  texIdx: number
+) {
+  const railH = wh * FRAME_BEAM_FRAC
+  const outerW = WINDOW_WIDTH + SURROUND_JAMB * 2
+  const beam = (w: number, h: number, along: number, y: number) =>
+    target.push({
+      geo: bakedGeo(
+        new THREE.BoxGeometry(w, h, FRAME_DEPTH),
+        x + (isNS ? along : 0),
+        yBase + y,
+        z + (isNS ? 0 : along),
+        rotY,
+        w,
+        h
+      ),
+      decor: true,
+      textureIndex: texIdx,
+    })
+  beam(outerW, railH, 0, wh * FRAME_BEAM_Y_FRAC)
+  beam(outerW, SURROUND_JAMB, 0, WINDOW_BOTTOM + WINDOW_HEIGHT)
+  for (const side of [-1, 1])
+    beam(
+      SURROUND_JAMB,
+      WINDOW_HEIGHT,
+      side * (WINDOW_WIDTH / 2 + SURROUND_JAMB / 2),
+      WINDOW_BOTTOM + WINDOW_HEIGHT / 2
+    )
+}
+
 /** Add half-timber frame for a solid wall. */
 function addFrameGeometry(
   target: GeoEntry[],
@@ -238,7 +367,8 @@ function addFrameGeometry(
   isNS: boolean,
   skipLeft: boolean,
   skipRight: boolean,
-  woodTexIdx: number
+  woodTexIdx: number,
+  brace: FrameBrace = 'x'
 ) {
   const beamH = wh * FRAME_BEAM_FRAC
   const beamY = wh * FRAME_BEAM_Y_FRAC
@@ -290,6 +420,7 @@ function addFrameGeometry(
     textureIndex: woodTexIdx,
   })
 
+  if (brace === 'none') return
   addFrameXDiagonals(
     target,
     x,
@@ -298,8 +429,9 @@ function addFrameGeometry(
     rotY,
     innerW,
     bottomH,
-    beamY - beamH / 2,
-    woodTexIdx
+    brace === 'x' ? beamY - beamH / 2 : wh - TOP_PLATE_HEIGHT,
+    woodTexIdx,
+    brace === 'x' ? undefined : [brace]
   )
 }
 
@@ -310,7 +442,8 @@ export function collectWallSegments(
   room: RoomData,
   roomIndex: number,
   entries: FloorEntries,
-  allRooms: RoomData[]
+  allRooms: RoomData[],
+  style: ResolvedHouseStyle | null = null
 ) {
   const dirInfo = WALL_DIR_INFO[dir]
   const { doors } = entries
@@ -327,6 +460,10 @@ export function collectWallSegments(
   const wallSpan = (dirInfo.isNS ? sizeX : sizeZ) + oh * 2 - WALL_THICKNESS
   const segW = numSegs > 0 ? wallSpan / numSegs : 1
   const along0 = dirInfo.isNS ? localX : localZ
+  const frameTex = style ? STYLE_TEX.frame : DOOR_TEXTURE_IDX
+  const ground = room.floorLevel === 0
+  const outX = dir === 'east' ? 1 : dir === 'west' ? -1 : 0
+  const outZ = dir === 'south' ? 1 : dir === 'north' ? -1 : 0
 
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i]
@@ -399,8 +536,19 @@ export function collectWallSegments(
 
     // fitSegment: normalize UV to 0→1 per segment instead of world-space tiling
     const fit = HOUSING_TEXTURES[texIdx].fitSegment
-    const u = (v: number) => (fit ? v / W : v)
-    const v = (h: number) => (fit ? h / wh : h)
+    const ext = style && fit && !interior ? style : null
+    const stoneWall = !!ext && ext.stoneGround && ground
+    const plaster = !!style && !!fit && !stoneWall
+    const wallTex = stoneWall
+      ? STYLE_TEX.stone
+      : plaster
+        ? STYLE_TEX.plaster
+        : texIdx
+    const wallTint = plaster ? style.palette.plaster : undefined
+    const stretch = fit && wallTex === texIdx
+    const hash = ext ? pieceHash(ext.seed, roomIndex, i, dir.charCodeAt(0)) : 0
+    const u = (v: number) => (stretch ? v / W : v)
+    const v = (h: number) => (stretch ? h / wh : h)
 
     if (variant === 'solid') {
       const wallH = fit ? wh - 0.01 : wh
@@ -412,11 +560,13 @@ export function collectWallSegments(
           z,
           rotY,
           u(segW),
-          v(wallH)
+          v(wallH),
+          plaster || stoneWall ? i * segW : 0
         ),
-        textureIndex: texIdx,
+        textureIndex: wallTex,
+        tint: wallTint,
       })
-      if (fit && DOOR_TEXTURE_IDX >= 0) {
+      if (fit && !stoneWall && DOOR_TEXTURE_IDX >= 0) {
         const skipL = i === 0
         const skipR = i === segments.length - 1
         addFrameGeometry(
@@ -430,7 +580,12 @@ export function collectWallSegments(
           dirInfo.isNS,
           skipL,
           skipR,
-          DOOR_TEXTURE_IDX
+          frameTex,
+          !style || numSegs < 3
+            ? 'x'
+            : skipL || skipR
+              ? (((skipL ? -1 : 1) * (dirInfo.isNS ? 1 : -1)) as -1 | 1)
+              : 'none'
         )
       }
     } else {
@@ -447,7 +602,7 @@ export function collectWallSegments(
       const oz = dirInfo.isNS ? z : z + openOff
 
       // Left and right solid strips (skip for fitSegment — frame pillars cover them)
-      if (sideW > 0.01 && !fit) {
+      if (sideW > 0.01 && (!fit || (stoneWall && !isDoor))) {
         for (const sign of [-1, 1]) {
           if (sign === boundary) continue
           const offset = sign * (W / 2 - sideW / 2)
@@ -466,7 +621,8 @@ export function collectWallSegments(
               u(uOffX),
               0
             ),
-            textureIndex: texIdx,
+            textureIndex: wallTex,
+            tint: wallTint,
           })
         }
       }
@@ -485,7 +641,8 @@ export function collectWallSegments(
             u(sideW),
             0
           ),
-          textureIndex: texIdx,
+          textureIndex: wallTex,
+          tint: wallTint,
         })
       }
 
@@ -504,12 +661,15 @@ export function collectWallSegments(
             u(sideW),
             v(openBot + openH)
           ),
-          textureIndex: texIdx,
+          textureIndex: wallTex,
+          tint: wallTint,
         })
       }
 
       // Window frame geometry
-      if (fit && variant === 'window' && DOOR_TEXTURE_IDX >= 0) {
+      if (stoneWall && variant === 'window') {
+        addWindowSurround(target, x, yBase, z, rotY, wh, dirInfo.isNS, frameTex)
+      } else if (fit && variant === 'window' && DOOR_TEXTURE_IDX >= 0) {
         addWindowFrameGeometry(
           target,
           x,
@@ -523,7 +683,7 @@ export function collectWallSegments(
           dirInfo.isNS,
           i === 0,
           i === segments.length - 1,
-          DOOR_TEXTURE_IDX
+          frameTex
         )
       }
 
@@ -545,7 +705,7 @@ export function collectWallSegments(
           dirInfo.isNS,
           i === 0 || boundary === -1,
           lastIdx === segments.length - 1 || boundary === 1,
-          DOOR_TEXTURE_IDX
+          frameTex
         )
         target.push({
           geo: bakedGeo(
@@ -558,13 +718,158 @@ export function collectWallSegments(
             FRAME_DIAG_THICKNESS
           ),
           decor: true,
-          textureIndex: DOOR_TEXTURE_IDX,
+          textureIndex: frameTex,
+        })
+      }
+
+      const win = variant === 'window' ? ext : null
+      const door = isDoor && ground ? ext : null
+      // Two windows in three show a room that lights up at night.
+      if (win?.decor && hash % 3 !== 0) {
+        const inward = halfT + 0.01
+        target.push({
+          geo: bakedGeo(
+            new THREE.PlaneGeometry(WINDOW_WIDTH, WINDOW_HEIGHT),
+            ox - outX * inward,
+            yBase + WINDOW_BOTTOM + WINDOW_HEIGHT / 2,
+            oz - outZ * inward,
+            OUTWARD_ROT_Y[dir],
+            ...DECOR_UV.glow
+          ),
+          textureIndex: STYLE_TEX.decor,
+        })
+      }
+      if (door?.stoneGround) {
+        const out = FRAME_DEPTH / 2 + DOOR_STEP_DEPTH / 2
+        target.push({
+          geo: bakedGeo(
+            new THREE.BoxGeometry(W, DOOR_STEP_HEIGHT, DOOR_STEP_DEPTH),
+            x + outX * out,
+            yBase - DOOR_STEP_HEIGHT / 2 - 0.03,
+            z + outZ * out,
+            rotY,
+            W,
+            DOOR_STEP_DEPTH
+          ),
+          textureIndex: STYLE_TEX.stone,
+        })
+      }
+      // Lantern above the lintel, clear of the leaves when the door is open.
+      if (door?.decor) {
+        const part = (
+          w: number,
+          h: number,
+          d: number,
+          out: number,
+          y: number,
+          tex: number,
+          uv: readonly [number, number, number, number] = [1, 1, 0, 0]
+        ) =>
+          target.push({
+            geo: bakedGeo(
+              new THREE.BoxGeometry(w, h, d),
+              x + outX * (FRAME_DEPTH / 2 + out),
+              yBase + y,
+              z + outZ * (FRAME_DEPTH / 2 + out),
+              rotY,
+              ...uv
+            ),
+            textureIndex: tex,
+          })
+        part(0.04, 0.04, LANTERN_REACH, LANTERN_REACH / 2, 2.62, frameTex)
+        part(0.16, 0.03, 0.16, LANTERN_REACH, 2.57, frameTex)
+        part(
+          0.11,
+          0.17,
+          0.11,
+          LANTERN_REACH,
+          2.47,
+          STYLE_TEX.decor,
+          DECOR_UV.glow
+        )
+        part(0.13, 0.02, 0.13, LANTERN_REACH, 2.375, frameTex)
+      }
+      if (win?.decor) {
+        const out = FRAME_DEPTH / 2 + SHUTTER_THICKNESS / 2 + 0.005
+        for (const side of [-1, 1] as const) {
+          // Only over plain wall, so shutters never cross a neighbouring opening.
+          if (segments[i + side]?.variant !== 'solid') continue
+          const along = side * (WINDOW_WIDTH / 2 + SHUTTER_WIDTH / 2 + 0.01)
+          target.push({
+            geo: bakedGeo(
+              new THREE.BoxGeometry(
+                SHUTTER_WIDTH,
+                WINDOW_HEIGHT,
+                SHUTTER_THICKNESS
+              ),
+              ox + outX * out + (dirInfo.isNS ? along : 0),
+              yBase + WINDOW_BOTTOM + WINDOW_HEIGHT / 2,
+              oz + outZ * out + (dirInfo.isNS ? 0 : along),
+              rotY,
+              ...DECOR_UV.shutter
+            ),
+            textureIndex: STYLE_TEX.decor,
+            tint: win.palette.shutter,
+          })
+        }
+      }
+      const sillTop =
+        yBase + wh * FRAME_BEAM_Y_FRAC + (wh * FRAME_BEAM_FRAC) / 2
+      if (win?.decor) {
+        const boxOut = FRAME_DEPTH / 2 + FLOWER_BOX_DEPTH / 2
+        target.push({
+          geo: bakedGeo(
+            new THREE.BoxGeometry(
+              FLOWER_BOX_WIDTH,
+              FLOWER_BOX_HEIGHT,
+              FLOWER_BOX_DEPTH
+            ),
+            ox + outX * boxOut,
+            sillTop - FLOWER_BOX_HEIGHT / 2,
+            oz + outZ * boxOut,
+            rotY,
+            FLOWER_BOX_WIDTH,
+            FLOWER_BOX_HEIGHT
+          ),
+          textureIndex: frameTex,
+        })
+        const flowerOut = FRAME_DEPTH / 2 + FLOWER_BOX_DEPTH + 0.01
+        target.push({
+          geo: bakedGeo(
+            new THREE.PlaneGeometry(WINDOW_WIDTH, FLOWER_HEIGHT),
+            ox + outX * flowerOut,
+            sillTop + FLOWER_HEIGHT / 2 - FLOWER_BOX_HEIGHT * 0.8,
+            oz + outZ * flowerOut,
+            OUTWARD_ROT_Y[dir],
+            ...DECOR_UV.flowers
+          ),
+          textureIndex: STYLE_TEX.decor,
+        })
+      } else if (win) {
+        const out = halfT + SILL_DEPTH / 2
+        target.push({
+          geo: bakedGeo(
+            new THREE.BoxGeometry(SILL_WIDTH, SILL_HEIGHT, SILL_DEPTH),
+            ox + outX * out,
+            sillTop - SILL_HEIGHT / 2,
+            oz + outZ * out,
+            rotY,
+            SILL_WIDTH,
+            SILL_HEIGHT
+          ),
+          decor: true,
+          textureIndex: frameTex,
         })
       }
 
       // Shared panel setup for door / window hinged panels
       if (isDoor || variant === 'window') {
-        const panelTexIdx = DOOR_TEXTURE_IDX >= 0 ? DOOR_TEXTURE_IDX : texIdx
+        const panelTexIdx = style
+          ? STYLE_TEX.door
+          : DOOR_TEXTURE_IDX >= 0
+            ? DOOR_TEXTURE_IDX
+            : texIdx
+        const sashTexIdx = style ? STYLE_TEX.sash : SHUTTER_PANEL_TEXTURE_IDX
         const panelMat = getHousingMaterial(panelTexIdx)
         const isOpen = seg.isOpen ?? false
         // Inset hinge to clear frame pillar
@@ -651,7 +956,7 @@ export function collectWallSegments(
               uv.setXY(vi, woodU, woodV)
             }
           }
-          const shutterMat = getHousingMaterial(SHUTTER_PANEL_TEXTURE_IDX)
+          const shutterMat = getHousingMaterial(sashTexIdx)
           const clickTarget = new THREE.Mesh(
             new THREE.PlaneGeometry(openW, WINDOW_HEIGHT),
             WINDOW_CLICK_MATERIAL
@@ -668,7 +973,7 @@ export function collectWallSegments(
             const panelX = (dirInfo.isNS ? -side : side) * (halfW / 2 - inset)
 
             const shutter = new THREE.Mesh(shutterGeo, shutterMat)
-            shutter.userData.textureIndex = SHUTTER_PANEL_TEXTURE_IDX
+            shutter.userData.textureIndex = sashTexIdx
             shutter.position.set(panelX, panelYOff, panelZ)
 
             const pivot = new THREE.Group()
@@ -704,6 +1009,46 @@ export function collectWallSegments(
         }
       }
     }
+    if (style && fit) {
+      target.push({
+        geo: bakedGeo(
+          new THREE.BoxGeometry(W, TOP_PLATE_HEIGHT, FRAME_DEPTH),
+          x,
+          yBase + wh - TOP_PLATE_HEIGHT / 2,
+          z,
+          rotY,
+          W,
+          TOP_PLATE_HEIGHT
+        ),
+        decor: true,
+        textureIndex: frameTex,
+      })
+    }
+    if (ext && ground && !isDoor && !stoneWall)
+      addPlinth(target, segW, x, yBase, z, rotY, i * segW)
+    if (
+      ext?.decor &&
+      ext.ivy &&
+      ground &&
+      variant === 'solid' &&
+      numSegs >= 3 &&
+      (i === 0 || i === numSegs - 1) &&
+      hash % 3 === 0
+    ) {
+      const out = FRAME_DEPTH / 2 + 0.015
+      target.push({
+        geo: bakedGeo(
+          new THREE.PlaneGeometry(IVY_WIDTH, IVY_HEIGHT),
+          x + outX * out,
+          yBase + PLINTH_HEIGHT - 0.15 + IVY_HEIGHT / 2,
+          z + outZ * out,
+          OUTWARD_ROT_Y[dir],
+          ...DECOR_UV.ivy
+        ),
+        textureIndex: STYLE_TEX.decor,
+      })
+    }
+    if (ext && !ground) addJettyBeam(target, W, x, yBase, z, rotY)
   }
 
   // Corner pillars: centered at wall center-line intersection, sized to FRAME_DEPTH
@@ -715,6 +1060,7 @@ export function collectWallSegments(
       HOUSING_TEXTURES[segments[numSegs - 1].texture % HOUSING_TEXTURES.length]
         .fitSegment
     const cornerSize = FRAME_DEPTH
+    const stoneCorner = !!style && style.stoneGround && ground
 
     for (const end of [0, 1] as const) {
       const isFit = end === 0 ? firstFit : lastFit
@@ -748,8 +1094,12 @@ export function collectWallSegments(
           cornerSize,
           wh
         ),
-        textureIndex: DOOR_TEXTURE_IDX,
+        textureIndex: stoneCorner ? STYLE_TEX.stone : frameTex,
       })
+      if (style && ground && !stoneCorner)
+        addPlinth(outerTarget, PLINTH_DEPTH, cx, yBase, cz, 0)
+      if (style && !ground)
+        addJettyBeam(outerTarget, JETTY_BEAM_DEPTH, cx, yBase, cz, 0)
     }
   }
 }

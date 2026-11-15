@@ -10,6 +10,7 @@ import {
   computeCelestialLightState,
 } from '../../utils/celestialSimulation'
 import { setDirectionalShadowIntensity } from './renderer-quality'
+import { setHouseGlow } from '../../utils/housing-textures'
 
 export const AMBIENT_DAY_INTENSITY = 0.35
 export const AMBIENT_NIGHT_INTENSITY = 0.3
@@ -133,6 +134,7 @@ export function createSceneLightingController(): SceneLightingController {
 
     const eclipse = params.eclipseFactor
     const cloud = params.cloudFactor ?? 0
+    setHouseGlow(celestialLightState.ambientNightFactor)
 
     if (params.ambientLight) {
       const twilightBlend = celestialLightState.directional.sunColorBlendFactor

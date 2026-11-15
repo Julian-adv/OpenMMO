@@ -1,6 +1,8 @@
 pub mod routes;
 
-use onlinerpg_shared::housing::{HouseData, RoomData, RoomType, MAX_FLOOR_LEVEL};
+use onlinerpg_shared::housing::{
+    HouseData, RoomData, RoomType, HOUSE_STYLE_COUNT, MAX_FLOOR_LEVEL,
+};
 use onlinerpg_shared::world::{WORLD_MAX_X, WORLD_MIN_X};
 use onlinerpg_terrain::io::atomic_write;
 use std::path::PathBuf;
@@ -23,6 +25,10 @@ pub fn validate_house(house: &HouseData) -> Result<(), String> {
     }
     if house.rooms.len() > MAX_ROOMS {
         return Err(format!("House must have at most {} rooms", MAX_ROOMS));
+    }
+
+    if house.style >= HOUSE_STYLE_COUNT {
+        return Err(format!("Unknown house style {}", house.style));
     }
 
     let origin = &house.origin;
@@ -248,6 +254,11 @@ impl HousingIO {
         Self { base_dir }
     }
 
+    #[cfg(test)]
+    pub(crate) fn base_dir(&self) -> &std::path::Path {
+        &self.base_dir
+    }
+
     fn chunk_dir(&self, cx: i32, cz: i32) -> PathBuf {
         self.base_dir.join(chunk_prefix(cx, cz))
     }
@@ -321,7 +332,7 @@ impl HousingIO {
         })
     }
 
-    /// Save a house to disk. Creates chunk directory if needed.
+    /// Save a house under its origin's chunk, creating the directory.
     pub async fn write_house(&self, house: &HouseData) -> std::io::Result<()> {
         let (cx, cz) = world_to_chunk(house.origin.x, house.origin.z);
         let path = self.house_path(cx, cz, &house.id)?;
@@ -332,6 +343,10 @@ impl HousingIO {
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
         atomic_write(&path, json.as_bytes()).await?;
         info!("Saved house {} to {:?}", house.id, path);
+        // One file per id: drop a copy left under the chunk the id names.
+        if let Some(named) = parse_chunk_from_id(&house.id).filter(|c| *c != (cx, cz)) {
+            self.delete_house(&house.id, named.0, named.1).await?;
+        }
         Ok(())
     }
 
@@ -429,6 +444,7 @@ pub(crate) mod test_fixtures {
             id: "r+00_+00_1".into(),
             owner_id: "test".into(),
             source_scroll_id: None,
+            style: 0,
             origin: Position { x, y: 0.0, z },
             rooms,
             passability: vec![],
@@ -528,6 +544,30 @@ mod tests {
         let found = io.find_house(&house.id).await.unwrap().unwrap();
         assert_eq!(found.id, moved.id);
         assert_eq!(found.origin.x, moved.origin.x);
+        let _ = tokio::fs::remove_dir_all(&dir).await;
+    }
+
+    #[tokio::test]
+    async fn saving_a_misfiled_house_leaves_one_copy() {
+        let dir = unique_temp_dir("housing_misfiled");
+        let io = HousingIO::new(dir.clone());
+        // Stands in chunk (-1, 0) but was filed under the chunk its id names.
+        let house = house_at(-10.0, 10.0, vec![room_at(0, 0)]);
+        let named_dir = dir.join(super::chunk_prefix(0, 0));
+        tokio::fs::create_dir_all(&named_dir).await.unwrap();
+        tokio::fs::write(
+            named_dir.join(format!("{}.json", house.id)),
+            serde_json::to_string(&house).unwrap(),
+        )
+        .await
+        .unwrap();
+
+        io.write_house(&house).await.unwrap();
+
+        assert!(io.read_chunk(0, 0).await.unwrap().is_empty());
+        assert_eq!(io.read_chunk(-1, 0).await.unwrap().len(), 1);
+        assert_eq!(io.read_all_houses().await.unwrap().len(), 1);
+        assert!(io.find_house(&house.id).await.unwrap().is_some());
         let _ = tokio::fs::remove_dir_all(&dir).await;
     }
 

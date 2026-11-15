@@ -95,6 +95,8 @@ export interface GeoEntry {
   decor?: boolean
   /** Open to the sky, so lying snow settles on it. */
   outdoor?: boolean
+  /** sRGB hex multiplied into the texture; needs a vertexColors texture. */
+  tint?: number
 }
 
 export interface RoomFootprint {
@@ -209,6 +211,17 @@ export function bakedGeo(
   return baseGeo
 }
 
+const _tint = new THREE.Color()
+
+/** Fills the vertex colours with one sRGB tint. */
+export function paintGeometry(geo: THREE.BufferGeometry, tint = 0xffffff) {
+  _tint.set(tint)
+  const count = geo.getAttribute('position').count
+  const colors = new Float32Array(count * 3)
+  for (let i = 0; i < count; i++) _tint.toArray(colors, i * 3)
+  geo.setAttribute('color', new THREE.BufferAttribute(colors, 3))
+}
+
 /** Group entries by texture index, merge geometries per group, create meshes. Returns mesh count. */
 export function addMergedMeshes(
   group: THREE.Group,
@@ -225,6 +238,11 @@ export function addMergedMeshes(
     } else {
       byTex.set(key, [e.geo])
     }
+    if (
+      HOUSING_TEXTURES[e.textureIndex % HOUSING_TEXTURES.length].vertexColors &&
+      !e.geo.hasAttribute('color')
+    )
+      paintGeometry(e.geo, e.tint)
   }
 
   let count = 0

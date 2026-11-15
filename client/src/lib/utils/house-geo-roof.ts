@@ -20,6 +20,11 @@ import {
   type RoofSpan,
   type RoomFootprint,
 } from './house-geo-utils'
+import {
+  ROOF_COURSE_V,
+  STYLE_TEX,
+  type ResolvedHouseStyle,
+} from './house-style'
 
 const _roofMatrix = new THREE.Matrix4()
 
@@ -28,6 +33,97 @@ const GABLE_WIN_W = 0.6
 const GABLE_WIN_H = 0.7
 const GABLE_WIN_FRAME = 0.06
 const GABLE_WIN_MARGIN = 0.25
+
+const DRESSED_OVERHANG = 0.45
+const COURSE_SPACING = 0.5
+const COURSE_RISE = 0.1
+const RIDGE_CAP_RADIUS = 0.14
+const BARGE_THICKNESS = 0.07
+const BARGE_HEIGHT = 0.26
+const FASCIA_HEIGHT = 0.2
+const FASCIA_THICKNESS = 0.06
+const FINIAL_SIZE = 0.1
+const FINIAL_HEIGHT = 0.45
+const CHIMNEY_SIZE = 0.7
+const CHIMNEY_RISE = 0.6
+const CHIMNEY_MIN_RIDGE = 6
+const CHIMNEY_MIN_SPAN = 4
+
+interface SlopeFrame {
+  cx: number
+  cz: number
+  wallTopY: number
+  ridgeHeight: number
+  halfShort: number
+  slopeAngle: number
+  ridgeAlongX: boolean
+}
+
+/** Places a piece authored in slope space (x ridge, y off the roof, z down
+ *  the slope) `perp` metres from the ridge and `along` metres down it. */
+function onSlope(
+  geo: THREE.BufferGeometry,
+  f: SlopeFrame,
+  side: -1 | 1,
+  perp: number,
+  along: number,
+  lift: number
+): THREE.BufferGeometry {
+  geo.translate(0, lift, 0)
+  _roofMatrix.makeRotationX(side * f.slopeAngle)
+  geo.applyMatrix4(_roofMatrix)
+  if (!f.ridgeAlongX) {
+    _roofMatrix.makeRotationY(Math.PI / 2)
+    geo.applyMatrix4(_roofMatrix)
+  }
+  _roofMatrix.makeTranslation(
+    f.cx + (f.ridgeAlongX ? along : side * perp),
+    f.wallTopY + f.ridgeHeight * (1 - perp / f.halfShort),
+    f.cz + (f.ridgeAlongX ? side * perp : along)
+  )
+  geo.applyMatrix4(_roofMatrix)
+  return geo
+}
+
+/** One tile course: a wedge `rise` thick at its lower edge. */
+function courseWedge(
+  len: number,
+  run: number,
+  rise: number,
+  side: -1 | 1,
+  vTop: number,
+  vSpan: number
+): THREE.BufferGeometry {
+  const hx = len / 2
+  const zu = (-side * run) / 2
+  const zl = (side * run) / 2
+  // prettier-ignore
+  const positions = [
+    -hx, 0, zu,   hx, 0, zu,   hx, rise, zl,  -hx, rise, zl,
+    -hx, 0, zl,   hx, 0, zl,   hx, rise, zl,  -hx, rise, zl,
+  ]
+  const ny = run / Math.hypot(run, rise)
+  const nz = (-side * rise) / Math.hypot(run, rise)
+  // prettier-ignore
+  const normals = [
+    0, ny, nz,  0, ny, nz,  0, ny, nz,  0, ny, nz,
+    0, 0, side, 0, 0, side, 0, 0, side, 0, 0, side,
+  ]
+  const vLow = vTop - vSpan
+  // prettier-ignore
+  const uvs = [
+    0, vTop,         len, vTop,         len, vLow, 0, vLow,
+    0, vLow - rise,  len, vLow - rise,  len, vLow, 0, vLow,
+  ]
+  const top = side === 1 ? [0, 3, 2, 0, 2, 1] : [0, 1, 2, 0, 2, 3]
+  const riser = side === 1 ? [4, 5, 6, 4, 6, 7] : [4, 6, 5, 4, 7, 6]
+  const geo = new THREE.BufferGeometry()
+  geo.setIndex([...top, ...riser])
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+  geo.setAttribute('normal', new THREE.Float32BufferAttribute(normals, 3))
+  geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2))
+  return geo
+}
 
 export function shouldSuppressRoof(
   room: RoomData,
@@ -53,7 +149,8 @@ export function collectRoofGeometry(
   span: RoofSpan | undefined,
   frontTarget: GeoEntry[],
   backTarget: GeoEntry[],
-  allRooms: RoomData[]
+  allRooms: RoomData[],
+  style: ResolvedHouseStyle | null = null
 ) {
   if (!span) {
     collectFlatRoof(room, frontTarget)
@@ -67,7 +164,7 @@ export function collectRoofGeometry(
     sizeX: span.sizeX,
     sizeZ: span.sizeZ,
   }
-  collectGabledRoof(spanRoom, span, frontTarget, backTarget, allRooms)
+  collectGabledRoof(spanRoom, span, frontTarget, backTarget, allRooms, style)
 }
 
 /** True when `other`'s wall line meets `room`'s gable end at `end`. */
@@ -169,19 +266,24 @@ function collectGabledRoof(
   span: RoofSpan,
   frontTarget: GeoEntry[],
   backTarget: GeoEntry[],
-  allRooms: RoomData[]
+  allRooms: RoomData[],
+  style: ResolvedHouseStyle | null
 ) {
   const { localX, localZ, sizeX, sizeZ, wallHeight } = room
   const yBase = floorYBase(room.floorLevel, wallHeight)
   const wallTopY = yBase + FLOOR_THICKNESS / 2 + wallHeight
-  const roofIdx = room.roofTexture % HOUSING_TEXTURES.length
+  const roofIdx =
+    (style ? style.roofTexture : room.roofTexture) % HOUSING_TEXTURES.length
   const { ridgeAlongX, ridgeHeight } = span
   const shortDim = ridgeAlongX ? sizeZ : sizeX
   const flOh = floorOverhang(room.floorLevel)
 
   const cx = localX + sizeX / 2
   const cz = localZ + sizeZ / 2
-  const oh = ROOF_OVERHANG
+  const frameTex = style ? STYLE_TEX.frame : WOOD_TEXTURE_IDX
+  const roofTint = style?.palette.roof
+  const sashTex = style ? STYLE_TEX.sash : SHUTTER_PANEL_TEXTURE_IDX
+  const oh = style ? DRESSED_OVERHANG : ROOF_OVERHANG
 
   // Expand roof base by floor overhang so it covers the expanded walls
   const halfShort = shortDim / 2 + flOh
@@ -243,7 +345,160 @@ function collectGabledRoof(
     _roofMatrix.makeTranslation(tx, yCenter, tz)
     geo.applyMatrix4(_roofMatrix)
 
-    frontTarget.push({ geo, textureIndex: roofIdx, outdoor: true })
+    frontTarget.push({
+      geo,
+      textureIndex: roofIdx,
+      outdoor: true,
+      tint: roofTint,
+    })
+  }
+
+  if (style) {
+    const frame: SlopeFrame = {
+      cx,
+      cz,
+      wallTopY,
+      ridgeHeight,
+      halfShort,
+      slopeAngle,
+      ridgeAlongX,
+    }
+    const apexY = wallTopY + ridgeHeight + WALL_THICKNESS / Math.cos(slopeAngle)
+    const ridgeX = cx + (ridgeAlongX ? ridgeShift : 0)
+    const ridgeZ = cz + (ridgeAlongX ? 0 : ridgeShift)
+
+    for (const side of [-1, 1] as const) {
+      const sideOh = (side === -1 ? span.innerLow : span.innerHigh) ? 0 : oh
+      const slopeLen = (halfShort + sideOh) * slopeUnit
+      const courses = Math.max(1, Math.round(slopeLen / COURSE_SPACING))
+      const run = slopeLen / courses
+      for (let i = 0; i < courses; i++) {
+        frontTarget.push({
+          geo: onSlope(
+            courseWedge(
+              ridgeLen,
+              run,
+              COURSE_RISE,
+              side,
+              -i * ROOF_COURSE_V,
+              ROOF_COURSE_V
+            ),
+            frame,
+            side,
+            ((i + 0.5) * run) / slopeUnit,
+            ridgeShift,
+            WALL_THICKNESS
+          ),
+          textureIndex: roofIdx,
+          outdoor: true,
+          tint: roofTint,
+        })
+      }
+
+      if (sideOh > 0) {
+        frontTarget.push({
+          geo: onSlope(
+            new THREE.BoxGeometry(ridgeLen, FASCIA_HEIGHT, FASCIA_THICKNESS),
+            frame,
+            side,
+            (slopeLen + FASCIA_THICKNESS / 2) / slopeUnit,
+            ridgeShift,
+            WALL_THICKNESS + COURSE_RISE - FASCIA_HEIGHT / 2
+          ),
+          textureIndex: frameTex,
+        })
+      }
+
+      for (const end of [-1, 1] as const) {
+        if ((end === -1 ? extLow : extHigh) > 0) continue
+        frontTarget.push({
+          geo: onSlope(
+            new THREE.BoxGeometry(BARGE_THICKNESS, BARGE_HEIGHT, slopeLen),
+            frame,
+            side,
+            (halfShort + sideOh) / 2,
+            ridgeShift + end * (ridgeLen / 2 + BARGE_THICKNESS / 2),
+            WALL_THICKNESS + COURSE_RISE + 0.01 - BARGE_HEIGHT / 2
+          ),
+          textureIndex: frameTex,
+        })
+      }
+    }
+
+    const cap = new THREE.CylinderGeometry(
+      RIDGE_CAP_RADIUS,
+      RIDGE_CAP_RADIUS,
+      ridgeLen + 0.04,
+      8
+    )
+    cap.rotateZ(Math.PI / 2)
+    frontTarget.push({
+      geo: bakedGeo(
+        cap,
+        ridgeX,
+        apexY - 0.03,
+        ridgeZ,
+        ridgeAlongX ? 0 : Math.PI / 2,
+        ridgeLen,
+        1
+      ),
+      textureIndex: roofIdx,
+      outdoor: true,
+      tint: roofTint,
+    })
+
+    for (const end of [-1, 1] as const) {
+      if ((end === -1 ? extLow : extHigh) > 0) continue
+      const a = end * (ridgeLen / 2 + BARGE_THICKNESS / 2)
+      frontTarget.push({
+        geo: bakedGeo(
+          new THREE.BoxGeometry(FINIAL_SIZE, FINIAL_HEIGHT, FINIAL_SIZE),
+          ridgeX + (ridgeAlongX ? a : 0),
+          apexY + FINIAL_HEIGHT / 2 - 0.15,
+          ridgeZ + (ridgeAlongX ? 0 : a)
+        ),
+        textureIndex: frameTex,
+      })
+    }
+
+    if (
+      halfLong * 2 >= CHIMNEY_MIN_RIDGE &&
+      shortDim >= CHIMNEY_MIN_SPAN &&
+      extLow === 0 &&
+      extHigh === 0
+    ) {
+      // On the slope facing the south-west camera.
+      const perp = (ridgeAlongX ? 1 : -1) * halfShort * 0.3
+      const a = ridgeShift - ridgeLen / 2 + ridgeLen * 0.72
+      const bottom = wallTopY + ridgeHeight * 0.7 - CHIMNEY_SIZE
+      const top = apexY + CHIMNEY_RISE
+      const x = cx + (ridgeAlongX ? a : perp)
+      const z = cz + (ridgeAlongX ? perp : a)
+      frontTarget.push({
+        geo: bakedGeo(
+          new THREE.BoxGeometry(CHIMNEY_SIZE, top - bottom, CHIMNEY_SIZE),
+          x,
+          (top + bottom) / 2,
+          z,
+          0,
+          CHIMNEY_SIZE,
+          top - bottom
+        ),
+        textureIndex: STYLE_TEX.stone,
+      })
+      frontTarget.push({
+        geo: bakedGeo(
+          new THREE.BoxGeometry(CHIMNEY_SIZE + 0.16, 0.12, CHIMNEY_SIZE + 0.16),
+          x,
+          top + 0.06,
+          z,
+          0,
+          CHIMNEY_SIZE,
+          0.12
+        ),
+        textureIndex: STYLE_TEX.stone,
+      })
+    }
   }
 
   // Gable window fit check (same for both ends)
@@ -271,9 +526,14 @@ function collectGabledRoof(
     } else {
       wallSegs = endSign === -1 ? room.wallNorth : room.wallSouth
     }
+    const gableWall = wallSegs.find((s) => s.variant !== 'open')
+    const gableWallIdx =
+      (gableWall?.texture ?? room.roofTexture) % HOUSING_TEXTURES.length
+    // A gable over an open wall has no wall texture of its own.
     const gableTexIdx =
-      (wallSegs.find((s) => s.variant !== 'open')?.texture ??
-        room.roofTexture) % HOUSING_TEXTURES.length
+      style && (!gableWall || HOUSING_TEXTURES[gableWallIdx].fitSegment)
+        ? STYLE_TEX.plaster
+        : gableWallIdx
 
     const endOffset = ridgeAlongX
       ? (endSign * (sizeX + flOh * 2)) / 2
@@ -341,7 +601,11 @@ function collectGabledRoof(
 
     const isFront = ridgeAlongX ? endSign === -1 : endSign === 1
     const target = isFront ? frontTarget : backTarget
-    target.push({ geo, textureIndex: gableTexIdx })
+    target.push({
+      geo,
+      textureIndex: gableTexIdx,
+      tint: gableTexIdx === gableWallIdx ? undefined : style?.palette.plaster,
+    })
 
     if (WOOD_TEXTURE_IDX >= 0 && endHasWindow) {
       const faceX = cx + (ridgeAlongX ? endOffset : 0)
@@ -360,7 +624,7 @@ function collectGabledRoof(
           beamWidth,
           GABLE_BEAM_HEIGHT
         ),
-        textureIndex: WOOD_TEXTURE_IDX,
+        textureIndex: frameTex,
       })
 
       const frameW = GABLE_WIN_W + GABLE_WIN_FRAME * 2
@@ -375,7 +639,7 @@ function collectGabledRoof(
             frameW,
             GABLE_WIN_FRAME
           ),
-          textureIndex: WOOD_TEXTURE_IDX,
+          textureIndex: frameTex,
         })
       }
       const pillarH = GABLE_WIN_H + GABLE_WIN_FRAME * 2
@@ -392,12 +656,12 @@ function collectGabledRoof(
             GABLE_WIN_FRAME,
             pillarH
           ),
-          textureIndex: WOOD_TEXTURE_IDX,
+          textureIndex: frameTex,
         })
       }
 
       // Glass pane filling the window opening
-      if (SHUTTER_PANEL_TEXTURE_IDX >= 0) {
+      if (sashTex >= 0) {
         const glassGeo = new THREE.PlaneGeometry(GABLE_WIN_W, GABLE_WIN_H)
         if (flipWinding) glassGeo.scale(1, 1, -1)
         target.push({
@@ -410,7 +674,7 @@ function collectGabledRoof(
             1,
             1
           ),
-          textureIndex: SHUTTER_PANEL_TEXTURE_IDX,
+          textureIndex: sashTex,
         })
       }
     }

@@ -80,9 +80,11 @@ export function snowMask(
   return Fn(() => {
     const mask = float(0).toVar()
     const cover = snowCover.mul(gate)
+    // A normal first read inside the branch is unset for lighting when skipped.
+    const up = upness.toVar()
     If(cover.greaterThan(0.001), () => {
       const p = positionWorld.xz
-      const edge = snowEdge(cover, p, upness, crevice)
+      const edge = snowEdge(cover, p, up, crevice)
       const width = max(fwidth(edge).mul(0.75), 0.035)
       const patch = smoothstep(width.negate(), width, edge)
       const speck = perlin(p, 7.0, 0.37, 91.7)

@@ -12,6 +12,12 @@ export interface HousingTextureEntry {
   roughness?: number
   vertexColors?: boolean
   ghostOpacity?: number
+  /** Glow colour, off until `setHouseGlow` raises it at night. */
+  emissive?: number
+  /** Limits the glow to the white parts of this image. */
+  emissiveMapUrl?: string
+  /** Cut-out threshold for the map's alpha. */
+  alphaTest?: number
   fallbackColor: number
   /** UV scale multiplier — smaller = larger tiles. Default 1.0 */
   uvScale?: number
@@ -252,6 +258,81 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     decal: true,
     internal: true,
   })),
+  // Style set textures (house-style.ts). Plaster and tiles take a per-house
+  // tint through vertex colours; tile images hold six rows.
+  ...[
+    { label: 'Timber', file: 'timber-style-timber', color: 0x4a3222 },
+    {
+      label: 'Cream Plaster',
+      file: 'timber-style-plaster',
+      color: 0xe8dcc0,
+      uvScale: 0.5,
+      vertexColors: true,
+    },
+    {
+      label: 'Beaver-tail Tiles',
+      file: 'timber-style-roof',
+      color: 0xa8482c,
+      uvScale: 0.667,
+      vertexColors: true,
+    },
+    {
+      label: 'Fieldstone',
+      file: 'timber-style-stone',
+      color: 0x8c8474,
+      uvScale: 0.66,
+    },
+    {
+      label: 'Slate Tiles',
+      file: 'stone-style-slate',
+      color: 0x5a6672,
+      uvScale: 0.667,
+      vertexColors: true,
+    },
+  ].map(({ label, file, color, uvScale, vertexColors }) => ({
+    label,
+    glb: '',
+    mapUrl: `/textures/housing/${file}.webp`,
+    fallbackColor: color,
+    roughness: 0.92,
+    bumpScale: 0.03,
+    uvScale,
+    vertexColors,
+    internal: true,
+  })),
+  {
+    label: 'Plank Door',
+    glb: '',
+    mapUrl: '/textures/housing/timber-style-door.webp',
+    fallbackColor: 0x6b4428,
+    roughness: 0.9,
+    internal: true,
+  },
+  {
+    // Same layout as Shutter Panel: wood border, four clear panes.
+    label: 'Timber Sash',
+    glb: '',
+    mapUrl: '/textures/housing/timber-style-sash.webp',
+    fallbackColor: 0x4a3222,
+    roughness: 0.9,
+    fitSegment: true,
+    internal: true,
+    transparent: true,
+  },
+  {
+    // Shutter, flowers, ivy and the lit-window patch; regions in DECOR_UV.
+    label: 'Storybook Decor',
+    glb: '',
+    mapUrl: '/textures/housing/storybook-decor.webp',
+    emissiveMapUrl: '/textures/housing/storybook-decor-emissive.webp',
+    emissive: 0xffb45e,
+    alphaTest: 0.5,
+    fallbackColor: 0xd8d8d8,
+    roughness: 0.9,
+    vertexColors: true,
+    fitSegment: true,
+    internal: true,
+  },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */
@@ -286,6 +367,11 @@ export function getHousingMaterial(
       roughness: entry.roughness ?? 0.85,
       vertexColors: entry.vertexColors ?? false,
       metalness: 0.0,
+      ...(entry.emissive !== undefined && {
+        emissive: entry.emissive,
+        emissiveIntensity: 0,
+      }),
+      ...(entry.alphaTest !== undefined && { alphaTest: entry.alphaTest }),
       ...(entry.transparent && { transparent: true, depthWrite: false }),
       ...(entry.decal && {
         visible: false,
@@ -298,6 +384,39 @@ export function getHousingMaterial(
     materialCache.set(idx, mat)
   }
   return mat
+}
+
+const DECOR_RECTS = {
+  shutter: [0.00977, 0.49414, 0.25586, 0.99023],
+  glow: [0.27539, 0.93164, 0.33398, 0.99023],
+  ivy: [0.61914, 0.24414, 0.99023, 0.99023],
+  flowers: [0.00977, 0.25586, 0.59961, 0.47461],
+}
+
+type AtlasUv = readonly [number, number, number, number]
+const atlasUv = ([u0, v0, u1, v1]: number[]): AtlasUv => [
+  u1 - u0,
+  v1 - v0,
+  u0,
+  v0,
+]
+
+/** Storybook Decor regions as bakedGeo's UV scale and offset. */
+export const DECOR_UV = {
+  shutter: atlasUv(DECOR_RECTS.shutter),
+  glow: atlasUv(DECOR_RECTS.glow),
+  ivy: atlasUv(DECOR_RECTS.ivy),
+  flowers: atlasUv(DECOR_RECTS.flowers),
+}
+
+const GLOW_TEXTURE_IDX = HOUSING_TEXTURES.findIndex((e) => e.emissive)
+const GLOW_NIGHT_INTENSITY = 2.2
+
+/** Lights the glowing windows and lanterns as night falls (0 day, 1 night). */
+export function setHouseGlow(night: number) {
+  if (GLOW_TEXTURE_IDX < 0) return
+  getHousingMaterial(GLOW_TEXTURE_IDX).emissiveIntensity =
+    night * GLOW_NIGHT_INTENSITY
 }
 
 /** Swap between opaque and ghost materials using the mesh's texture index. */
@@ -356,6 +475,12 @@ export function initHousingTextures(): Promise<void> {
           tex.needsUpdate = true
         }
 
+        if (entry.emissiveMapUrl) {
+          mat.emissiveMap = await new THREE.TextureLoader().loadAsync(
+            entry.emissiveMapUrl
+          )
+          mat.emissiveMap.colorSpace = THREE.SRGBColorSpace
+        }
         mat.map = layer.map
         layer.map.colorSpace = THREE.SRGBColorSpace
         layer.map.anisotropy = 8

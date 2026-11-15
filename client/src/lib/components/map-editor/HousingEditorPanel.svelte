@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { HOUSE_STYLE_LABELS } from '../../utils/house-style'
   import { onDestroy } from 'svelte'
   import {
     ROOM_TEMPLATES,
@@ -349,6 +350,22 @@
       {#if moveError}
         <div class="move-error">Cannot move there</div>
       {/if}
+    {/if}
+
+    {#if tool === 'select' && editHouse && editRoomIdx != null}
+      <div class="section-title">House Style</div>
+      <div class="tool-row">
+        {#each HOUSE_STYLE_LABELS as label, i (label)}
+          <button
+            class="tool-btn"
+            class:active={(editHouse.style ?? 0) === i}
+            onclick={() =>
+              applyRoomEdit((_room, house) => {
+                house.style = i
+              })}>{label}</button
+          >
+        {/each}
+      </div>
     {/if}
 
     {#snippet texSwatch(texIdx: number)}

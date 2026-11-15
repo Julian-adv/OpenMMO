@@ -24,8 +24,25 @@ pub struct HouseData {
     pub origin: Position,          // 월드 좌표 (1m 그리드 스냅)
     pub rooms: Vec<RoomData>,
     pub passability: Vec<PassabilityGrid>,  // 셀 기반 통행 가능 여부
+    pub style: u8,                 // 외관 스타일 세트 (0 = 기본)
 }
 ```
+
+### Exterior Style Set
+
+`style`은 집의 방·벽·통행 데이터를 바꾸지 않고 외관 장식만 고른다. 세트 표는
+`client/src/lib/utils/house-style.ts`의 `HOUSE_STYLES`, 개수는 shared
+`HOUSE_STYLE_COUNT`와 맞춘다. 모든 세트가 함께 쓰는 텍스처는 같은 파일의 `STYLE_TEX`에 있다. 서버는 범위를 벗어난 값을 거부한다.
+
+| style | 이름 | 내용 |
+|-------|------|------|
+| 0 | Plain | 기존 모습 |
+| 1 | Timber | 어두운 목재 골조, 벽 끝 칸 사선 가새, 상부 도리, 1층 돌 기단, 창턱, 기와 단·용마루·박공널·처마 마감·굴뚝. 반목조 벽의 회벽과 경사 지붕 기와는 세트 전용 텍스처(`/textures/housing/timber-style-*.webp`)로 바꿔 그린다. 문짝과 창 새시도 세트 텍스처를 쓰고, 2층 이상은 층 사이 바닥 테두리를 목재 보로 덮는다 |
+| 2 | Storybook | Timber에 색칠한 덧문(옆 칸이 빈 벽일 때만)과 창 아래 꽃 상자를 더하고, 집마다 회벽·기와·덧문 색 조합이 다르다. 조합은 세트의 `palettes` 중 집 id 해시로 고르므로 저장하지 않아도 같은 집은 늘 같은 색이다. 색은 텍스처의 `vertexColors`와 `GeoEntry.tint`로 입혀 재질 수가 늘지 않는다. 창 셋 중 둘은 유리 뒤에 방을 나타내는 면을 두어 밤에 불이 켜지고, 1층 문 위에는 같은 재질의 등불을 단다. 밝기는 `scene-lighting.ts`가 밤 정도에 따라 `setHouseGlow`로 올린다(빛을 드리우지는 않는다). 1층 벽 끝 칸 일부에는 담쟁이를 붙인다. 덧문·꽃·담쟁이·불빛은 아틀라스 한 장과 컷아웃 재질 하나(`Storybook Decor`, 영역은 `housing-textures.ts`의 `DECOR_UV`)를 써서 그룹당 메시가 하나만 늘어난다 |
+| 3 | Stone | 1층 바깥벽을 목재 골조 없이 자연석으로 그리고(창은 창턱·상인방·문설주만, 문 앞에 돌계단) 2층 이상은 Timber와 같은 반목조, 지붕은 슬레이트. 덧문·꽃 상자·창 불빛·등불은 Storybook과 같은 아틀라스를 쓰고 담쟁이는 없다. 색 조합은 세 가지 |
+
+에디터 Select 도구의 House Style에서 집별로 지정한다. 여러 채를 한 번에 바꿀 때는 관리자 채팅 명령 `/housestyle <0-3|mix> [반경 m]`을 쓴다. 관리자 위치에서 반경(기본 100, 최대 500) 안의 마을 집에 적용하고, 설계도로 지은 플레이어 집(`sourceScrollId` 있음)은 건드리지 않는다. `mix`는 집 id 해시로 1~3번 세트를 고르게 나눠서 다시 실행해도 결과가 같다. 파일에 저장하고 접속 중인 클라이언트에 바로 반영한다. 개발 서버에서만 주소에
+`?houseStyle=N`을 붙이면 style 0인 집을 모두 세트 N으로 그린다.
 
 ### RoomData
 

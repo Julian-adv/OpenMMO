@@ -1628,6 +1628,7 @@ async fn a_house_click_can_stop_inside_the_entrance_without_truncating_interacti
         id: "r0_0_1".into(),
         owner_id: String::new(),
         source_scroll_id: None,
+        style: 0,
         origin: Position {
             x: 10.0,
             y: 5.0,

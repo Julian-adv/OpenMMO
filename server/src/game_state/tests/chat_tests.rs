@@ -1864,3 +1864,70 @@ fn party_loot_is_a_subcommand_not_an_invite() {
         Some(PartyCommand::Invite("looter"))
     );
 }
+
+#[tokio::test]
+async fn housestyle_restyles_village_houses_in_reach_only() {
+    use crate::housing::test_fixtures::{house_at, room_at};
+    let game_state = make_test_game_state("admin_housestyle");
+    let auth = make_test_auth("admin_housestyle");
+    let admin_id = pid("admin");
+    game_state.add_player(make_player("admin", 0.0, 0.0)).await;
+    let mut admin_rx = game_state.register_direct_channel(&admin_id).await;
+
+    let mut village = house_at(10.0, 10.0, vec![room_at(0, 0)]);
+    village.id = "r+00_+00_1".into();
+    let mut player_built = house_at(20.0, 10.0, vec![room_at(0, 0)]);
+    player_built.id = "r+00_+00_2".into();
+    player_built.source_scroll_id = Some("scroll".into());
+    let mut far = house_at(400.0, 10.0, vec![room_at(0, 0)]);
+    far.id = "r+06_+00_1".into();
+    for house in [&village, &player_built, &far] {
+        game_state.housing_io.write_house(house).await.unwrap();
+    }
+    // Stored under the chunk its id names although it stands in the next one.
+    let mut misfiled = house_at(-10.0, 10.0, vec![room_at(0, 0)]);
+    misfiled.id = "r+00_+00_9".into();
+    let misfiled_dir = game_state.housing_io.base_dir().join("r+00_+00");
+    std::fs::write(
+        misfiled_dir.join("r+00_+00_9.json"),
+        serde_json::to_string(&misfiled).unwrap(),
+    )
+    .unwrap();
+    let style_of = |houses: &[onlinerpg_shared::housing::HouseData], id: &str| {
+        houses.iter().find(|h| h.id == id).unwrap().style
+    };
+
+    game_state
+        .send_chat_message(&admin_id, "/housestyle 2 50".to_string(), &auth)
+        .await;
+    let houses = game_state.housing_io.read_all_houses().await.unwrap();
+    assert_eq!(style_of(&houses, "r+00_+00_1"), 2);
+    assert_eq!(
+        houses.iter().filter(|h| h.id == "r+00_+00_9").count(),
+        1,
+        "a misfiled house must not be left twice"
+    );
+    assert_eq!(style_of(&houses, "r+00_+00_9"), 2);
+    assert_eq!(style_of(&houses, "r+00_+00_2"), 0, "player-built");
+    assert_eq!(style_of(&houses, "r+06_+00_1"), 0, "out of reach");
+    assert!(drain(&mut admin_rx).iter().any(|m| matches!(
+        m,
+        ServerMessage::SystemMessage { message, .. }
+            if message.starts_with("Housestyle: 2 houses restyled")
+    )));
+
+    game_state
+        .send_chat_message(&admin_id, "/housestyle mix 50".to_string(), &auth)
+        .await;
+    let houses = game_state.housing_io.read_all_houses().await.unwrap();
+    assert!((1..onlinerpg_shared::housing::HOUSE_STYLE_COUNT)
+        .contains(&style_of(&houses, "r+00_+00_1")));
+
+    game_state
+        .send_chat_message(&admin_id, "/housestyle 9".to_string(), &auth)
+        .await;
+    assert!(drain(&mut admin_rx).iter().any(|m| matches!(
+        m,
+        ServerMessage::SystemMessage { message, .. } if message.starts_with("Housestyle: style")
+    )));
+}
