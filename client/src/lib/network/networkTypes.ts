@@ -115,8 +115,10 @@ export type AccountCharacter = {
   family?: string | null
 }
 
+export const ARMOR_SLOTS = ['head', 'chest', 'pants', 'boots', 'hands'] as const
+
 export type ArmorEquipment = Partial<
-  Record<'head' | 'chest' | 'pants' | 'boots' | 'hands', string | null>
+  Record<(typeof ARMOR_SLOTS)[number], string | null>
 >
 
 /** Equipped item def ids the character-select preview renders. */

@@ -85,7 +85,7 @@ const CLASS_GENDER_MODELS: Partial<
     female: FEMALE_BARD_CHARACTER_MODEL_PATH,
     male: MODULAR_MALE_MODEL_PATH,
   },
-  merchant: { female: MERCHANT_CHARACTER_MODEL_PATH },
+  merchant: { female: MODULAR_FEMALE_MODEL_PATH },
   guard: {
     male: MODULAR_MALE_MODEL_PATH,
     female: MODULAR_FEMALE_MODEL_PATH,
@@ -95,6 +95,7 @@ const CLASS_GENDER_MODELS: Partial<
 
 /** Named NPC models override their class model. */
 const NPC_MODEL_OVERRIDES: Record<string, string> = {
+  Rica: MERCHANT_CHARACTER_MODEL_PATH,
   Karl: GUARD_CHARACTER_MODEL_PATH,
   Wick: NIGHT_MERCHANT_CHARACTER_MODEL_PATH,
   Cocoly: PINK_MAID_CHARACTER_MODEL_PATH,
@@ -103,7 +104,6 @@ const NPC_MODEL_OVERRIDES: Record<string, string> = {
   Grida: GRIDA_CHARACTER_MODEL_PATH,
   Tobin: TOBIN_CHARACTER_MODEL_PATH,
   Ysolde: YSOLDE_CHARACTER_MODEL_PATH,
-  Linnea: MODULAR_FEMALE_MODEL_PATH,
 }
 
 export function getNpcModelPath(npcName: string): string | undefined {

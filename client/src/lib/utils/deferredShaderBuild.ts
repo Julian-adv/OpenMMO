@@ -22,6 +22,15 @@ export function deferShaderBuilds(
   )
     return
   r.__deferredShaderBuilds = true
+  // An object disposed before its deferred first draw never took its bind groups,
+  // so releasing them would undercount the shared ones and free buffers still in use.
+  const bindings = r._bindings
+  const deleteForRender = bindings.deleteForRender
+  bindings.deleteForRender = function (this: any, renderObject: any) {
+    if (this.get(renderObject).initialized === true)
+      return deleteForRender.call(this, renderObject)
+    this.delete(renderObject)
+  }
   const direct = r._renderObjectDirect
   r._renderObjectDirect = function (
     this: any,

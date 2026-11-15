@@ -1,11 +1,7 @@
 import * as THREE from 'three'
 import { getItemDef } from '../data/itemDefs'
-import {
-  disposePeltPhysics,
-  resetPeltPhysics,
-  updatePeltPhysics,
-} from '../effects/pelt-rig'
-import type { ArmorEquipment } from '../network/networkTypes'
+import { updatePeltPhysics } from '../effects/pelt-rig'
+import { ARMOR_SLOTS, type ArmorEquipment } from '../network/networkTypes'
 import {
   createCharacterModelRoot,
   getGltfAnimations,
@@ -23,15 +19,17 @@ import {
 
 const STAND_HEIGHT = 0.06
 const POSE_CLIP = 'idle1'
-const ARMOR_SLOTS = new Set(['head', 'chest', 'pants', 'boots', 'hands'])
+const SETTLE_SECONDS = 1.5
 
-interface Mannequin {
-  root: THREE.Object3D | null
-  mixer: THREE.AnimationMixer | null
-  disposed: boolean
+interface Cloth {
+  holder: THREE.Object3D
+  at: THREE.Vector3
+  yaw: number
+  settle: number
 }
 
-const live = new Set<THREE.Object3D>()
+// Mannequins whose skirt or pelt still has to hang, keyed by character root.
+const cloths = new Map<THREE.Object3D, Cloth>()
 
 export function buildMannequinStand(): THREE.Group {
   const stand = new THREE.Mesh(
@@ -49,62 +47,84 @@ export function buildMannequinStand(): THREE.Group {
 function armorOf(items: string[]): ArmorEquipment {
   const armor: ArmorEquipment = {}
   for (const id of items) {
-    const slot = getItemDef(id)?.equipSlot
-    if (slot && ARMOR_SLOTS.has(slot)) armor[slot as keyof ArmorEquipment] = id
+    const slot = ARMOR_SLOTS.find((s) => s === getItemDef(id)?.equipSlot)
+    if (slot) armor[slot] = id
     else console.warn(`Mannequin cannot wear ${id}`)
   }
   return armor
 }
 
 /** Stands a dressed character on the stand, frozen at the first frame of its idle. */
-export function mountMannequin(holder: THREE.Object3D, items: string[] = []) {
-  const state: Mannequin = { root: null, mixer: null, disposed: false }
-  holder.userData.mannequin = state
-  Promise.all([
-    loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, undefined, 'game'),
-    loadCharacterAnimationPack(
-      MODULAR_FEMALE_MODEL_PATH,
-      CHARACTER_ANIMATION_PACK_PATHS.locomotion
-    ),
-  ])
-    .then(async ([model, pack]) => {
-      if (state.disposed) return
-      const { modelRoot: root } = createCharacterModelRoot(model.scene)
-      await applyCharacterArmor(root, armorOf(items))
-      if (state.disposed) {
-        disposeCharacterSkeletons(root)
-        return
-      }
-      const clip = getGltfAnimations(pack).find((c) => c.name === POSE_CLIP)
-      if (clip) {
-        state.mixer = new THREE.AnimationMixer(root)
-        state.mixer.clipAction(clip).play()
-        state.mixer.update(0)
-      }
-      root.position.y = STAND_HEIGHT
-      holder.add(root)
-      state.root = root
-      resetPeltPhysics(root)
-      live.add(root)
+export async function mountMannequin(
+  holder: THREE.Object3D,
+  items: string[] = []
+) {
+  let disposed = false
+  let root: THREE.Object3D | null = null
+  let mixer: THREE.AnimationMixer | null = null
+  holder.addEventListener('dispose', () => {
+    disposed = true
+    if (!root) return
+    cloths.delete(root)
+    mixer?.stopAllAction()
+    mixer?.uncacheRoot(root)
+    disposeCharacterSkeletons(root)
+  })
+  try {
+    const [model, pack] = await Promise.all([
+      loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, undefined, 'game'),
+      loadCharacterAnimationPack(
+        MODULAR_FEMALE_MODEL_PATH,
+        CHARACTER_ANIMATION_PACK_PATHS.locomotion
+      ),
+    ])
+    if (disposed) return
+    const dressed = createCharacterModelRoot(model.scene).modelRoot
+    await applyCharacterArmor(dressed, armorOf(items))
+    if (disposed) {
+      disposeCharacterSkeletons(dressed)
+      return
+    }
+    const clip = getGltfAnimations(pack).find((c) => c.name === POSE_CLIP)
+    if (clip) {
+      mixer = new THREE.AnimationMixer(dressed)
+      mixer.clipAction(clip).play()
+      mixer.update(0)
+    }
+    dressed.position.y = STAND_HEIGHT
+    holder.add(dressed)
+    root = dressed
+    let rigged = false
+    dressed.traverse((node) => {
+      rigged ||= !!(node.userData.pelt_physics || node.userData.robe_physics)
     })
-    .catch((error) => console.error('Failed to load mannequin', error))
+    if (rigged)
+      cloths.set(dressed, {
+        holder,
+        at: new THREE.Vector3(NaN),
+        yaw: 0,
+        settle: 0,
+      })
+  } catch (error) {
+    console.error('Failed to load mannequin', error)
+  }
 }
 
-/** Skirt and pelt rigs work in world space, so they follow a moved mannequin. */
+/** Lets cloth hang for a moment after a mannequin appears or is moved; the pose itself never changes. */
 export function updateMannequins(dt: number) {
-  for (const root of live) updatePeltPhysics(root, dt)
-}
-
-export function disposeMannequin(holder: THREE.Object3D) {
-  const state = holder.userData.mannequin as Mannequin | undefined
-  if (!state || state.disposed) return
-  state.disposed = true
-  if (!state.root) return
-  live.delete(state.root)
-  // The clone shares its geometry and materials with every other character.
-  state.root.removeFromParent()
-  state.mixer?.stopAllAction()
-  state.mixer?.uncacheRoot(state.root)
-  disposePeltPhysics(state.root)
-  disposeCharacterSkeletons(state.root)
+  for (const [root, cloth] of cloths) {
+    const { holder } = cloth
+    if (!holder.parent) {
+      cloth.at.setX(NaN)
+      continue
+    }
+    if (!cloth.at.equals(holder.position) || cloth.yaw !== holder.rotation.y) {
+      cloth.at.copy(holder.position)
+      cloth.yaw = holder.rotation.y
+      cloth.settle = SETTLE_SECONDS
+    }
+    if (cloth.settle <= 0) continue
+    cloth.settle -= dt
+    updatePeltPhysics(root, dt)
+  }
 }

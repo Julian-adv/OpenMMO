@@ -81,7 +81,6 @@
   import { buildNoticeBoard, mountNoticePapers } from '../../utils/notice-board'
   import {
     buildMannequinStand,
-    disposeMannequin,
     mountMannequin,
     updateMannequins,
   } from '../../utils/mannequin'
@@ -286,7 +285,6 @@
   let previewType: string | null = null
 
   function disposeClone(obj: THREE.Object3D) {
-    disposeMannequin(obj)
     obj.traverse((child) => {
       // Shop-sign text uses MeshBasicNodeMaterial + CanvasTexture, whose sampler
       // bindings crash the WebGPU backend if disposed (see TextLabel.svelte and
@@ -892,7 +890,7 @@
     }
     if (catDef?.noticeBoard)
       mountNoticePapers(clone, { Village: { object_id: p.id } })
-    if (catDef?.procedural === 'mannequin') mountMannequin(clone, p.armor)
+    if (catDef?.procedural === 'mannequin') void mountMannequin(clone, p.armor)
     return clone
   }
 
