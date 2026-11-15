@@ -10,8 +10,6 @@
    "id": "plaster",
    "file": "client/public/textures/housing/timber-style-plaster.webp",
    "sha256": "9363a73949bc7bbb4a200b1e9ddce35867e4e776b1767c388830c623dfc52be6",
-   "source": "assets/props/house-style/timber/plaster-src.png",
-   "source_sha256": "fb7dceaaea3029e9327e16f526093a777c67accc42d0a674f92af3df60a16555",
    "processing": "Resized 1254 to 1024; no other edits.",
    "prompt": "Use case: stylized-concept\nAsset type: seamlessly tileable wall albedo texture.\nPrimary request: warm cream lime plaster as seen between the timbers in the concept art. Smooth trowelled surface with very gentle tonal variation, a few faint hairline cracks and soft warm stains. No timber, no bricks, no edges.\nPalette: warm cream and pale ivory with subtle ochre variation; bright overall.\nComposition: orthographic straight-on flat surface filling the whole 1024x1024 square edge to edge. The pattern must continue seamlessly across both image edges so the image tiles.\nStyle: stylised hand-painted game texture, broad readable shapes, soft painterly brushwork, low noise, no photographic grain.\nLighting: uniform diffuse albedo, no directional shadows, no specular highlights, no ambient occlusion gradients.\nAvoid: scene, perspective, objects, text, borders, vignette, framing, symbols. One opaque RGB tile."
   },
@@ -19,8 +17,6 @@
    "id": "timber",
    "file": "client/public/textures/housing/timber-style-timber.webp",
    "sha256": "41b103b2668ff998a0f1f7b0d2baeb6c8a85ef7cc4f1f5ed6f491a3918678630",
-   "source": "assets/props/house-style/timber/timber-src.png",
-   "source_sha256": "0d36cbeccba87e9e8c7171cac8946327126a5d20a34596aa70f206b16667f2ee",
    "processing": "Resized 1254 to 1024; no other edits.",
    "prompt": "Use case: stylized-concept\nAsset type: seamlessly tileable wood albedo texture for structural beams.\nPrimary request: dark aged oak beam surface as in the concept art timbers. Fine, low-contrast wood grain with soft adze marks; the surface must read well on thin beams whether the grain runs along or across them, so keep the grain subtle and avoid strong long streaks, plank seams, knots larger than a coin, nails or bolts.\nPalette: deep warm chocolate brown with slightly lighter brown highlights; not grey, not orange.\nComposition: orthographic straight-on flat surface filling the whole 1024x1024 square edge to edge. The pattern must continue seamlessly across both image edges so the image tiles.\nStyle: stylised hand-painted game texture, broad readable shapes, soft painterly brushwork, low noise, no photographic grain.\nLighting: uniform diffuse albedo, no directional shadows, no specular highlights, no ambient occlusion gradients.\nAvoid: scene, perspective, objects, text, borders, vignette, framing, symbols. One opaque RGB tile."
   },
@@ -28,8 +24,6 @@
    "id": "roof",
    "file": "client/public/textures/housing/timber-style-roof.webp",
    "sha256": "008e78e28d077bc8773285ea633bab5afd6497f57ed434851c45ae68b6936ed4",
-   "source": "assets/props/house-style/timber/roof-src.png",
-   "source_sha256": "73b6af33f000a56c61cf86559b9e49677888ebeabd9c72c07a440453f22ec51d",
    "processing": "Cropped to 6 tile rows x 7 tile columns (x 234, y 178, 975 x 942 px) so the pattern repeats, then resized to 1024. One narrow tile column remains at the vertical seam. Colour shifted toward orange (R x0.72, G x0.88, B x0.50) and contrast about the mean raised x1.35: the game tone-maps with AgX under a sun of intensity 10, which turned the generated pure red salmon pink at noon.",
    "prompt": "Use case: stylized-concept\nAsset type: seamlessly tileable roof albedo texture.\nPrimary request: overlapping flat clay roof tiles with rounded lower edges (beaver-tail tiles) laid in straight horizontal courses, as on the concept art roofs. About eight courses down and ten tiles across the square, each course offset by half a tile. Each tile slightly varied in tone, a thin dark line under each tile's lower edge to suggest overlap. Lower edges of tiles point toward the bottom of the image.\nPalette: warm brick red and terracotta with a few darker and a few paler tiles; no moss.\nComposition: orthographic straight-on flat surface filling the whole 1024x1024 square edge to edge. The pattern must continue seamlessly across both image edges so the image tiles.\nStyle: stylised hand-painted game texture, broad readable shapes, soft painterly brushwork, low noise, no photographic grain.\nLighting: uniform diffuse albedo, no directional shadows, no specular highlights, no ambient occlusion gradients.\nAvoid: scene, perspective, objects, text, borders, vignette, framing, symbols. One opaque RGB tile."
   },
@@ -37,8 +31,6 @@
    "id": "stone",
    "file": "client/public/textures/housing/timber-style-stone.webp",
    "sha256": "75881816cf0639d28397d3032f7c6852624addd2358fe964742be9dc02b18bc2",
-   "source": "assets/props/house-style/timber/stone-src.png",
-   "source_sha256": "6990c2bc669c06831db69e64293d11364e4a182be635ff4de63ba46c8866078d",
    "processing": "Resized 1254 to 1024; no other edits.",
    "prompt": "Use case: stylized-concept\nAsset type: seamlessly tileable wall albedo texture.\nPrimary request: rough fieldstone masonry for a house plinth and chimney as in the concept art. Irregular rounded grey-beige stones of mixed sizes, roughly six stones across the square, set in recessed darker mortar.\nPalette: warm grey and beige stones with slight ochre and cool grey variation, dark brown-grey mortar.\nComposition: orthographic straight-on flat surface filling the whole 1024x1024 square edge to edge. The pattern must continue seamlessly across both image edges so the image tiles.\nStyle: stylised hand-painted game texture, broad readable shapes, soft painterly brushwork, low noise, no photographic grain.\nLighting: uniform diffuse albedo, no directional shadows, no specular highlights, no ambient occlusion gradients.\nAvoid: scene, perspective, objects, text, borders, vignette, framing, symbols. One opaque RGB tile."
   },
@@ -46,8 +38,6 @@
    "id": "door",
    "file": "client/public/textures/housing/timber-style-door.webp",
    "sha256": "0ab1a3a35044b376ded1d3832267d15a9f54b7e92c0ab3b9e7b774529a2ddc2b",
-   "source": "assets/props/house-style/timber/door-src.png",
-   "source_sha256": "b808ed61f4c7d3954f713ba14b2939c0123841a793b02290051f1b1f9bca12eb",
    "processing": "Generated 1024 x 1536, resized to 1024 x 1024 (the door leaf UV stretches it back), darkened (R x0.78, G x0.76, B x0.70).",
    "prompt": "Use case: stylized-concept\nAsset type: albedo texture of a single wooden door leaf, to be mapped onto a flat rectangular door panel.\nPrimary request: a medieval plank door seen straight on, filling the entire image from edge to edge with no wall, frame or background visible. Five or six vertical oak planks, two horizontal dark iron strap hinges across the upper and lower thirds with a few round rivets, and a small iron ring handle at mid height on the right side.\nPalette: warm medium-dark chestnut brown planks, clearly lighter than near-black timber beams but darker than cream plaster; dark grey iron.\nComposition: orthographic straight-on, the door surface covers 100% of the image; all four image edges are door planks.\nStyle: stylised hand-painted game texture, broad readable shapes, soft painterly brushwork, low noise.\nLighting: uniform diffuse albedo, no directional shadows, no specular highlights.\nAvoid: perspective, door frame, wall, floor, arch, window, text, borders, vignette. One opaque RGB image."
   },
