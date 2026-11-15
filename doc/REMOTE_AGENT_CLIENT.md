@@ -117,7 +117,7 @@ llm = "codex"
 
 ## 인증: 구글 Device Flow
 
-서버에는 이미 구글 경로가 있다 ([`connection.rs`](../server/src/connection.rs) `Authenticate { google_id_token }`). 브라우저 GSI는 헤드리스에서 못 쓰므로 CLI는 **Device Authorization Grant**(구글의 "TV·입력 제한 기기" 플로우)를 쓴다.
+서버에는 이미 구글 경로가 있다 ([`connection/account.rs`](../server/src/connection/account.rs) `authenticate`). 브라우저 GSI는 헤드리스에서 못 쓰므로 CLI는 **Device Authorization Grant**(구글의 "TV·입력 제한 기기" 플로우)를 쓴다.
 
 ```
 agent-client                     구글                      사용자
@@ -284,7 +284,7 @@ Online: 12 (9 web, 1 cli, 2 npc)
 - **Maid**: CHA +2 — 여관 접객 NPC용 마을 역할 클래스. 플레이어에게 줄 니치가 없어 함께 잠가 둔다.
 - **Guard**: STR +2 / CON +2에 히트다이스 d10 — 전 클래스 최고 사양. 웹 클라이언트가 7종(knight/barbarian/caveman/valkyrie/ranger/rogue/priest)만 노출하는 것도 같은 이유다
 
-**현재 구멍**: 서버 `CreateCharacter`는 클래스를 검증하지 않는다 ([`connection.rs`](../server/src/connection.rs)). 웹 UI가 버튼을 안 보여줄 뿐, 직접 만든 클라이언트는 지금도 merchant/guard 캐릭터를 만들 수 있다.
+**현재 구멍**: 서버 `CreateCharacter`는 클래스를 검증하지 않는다 ([`connection/account.rs`](../server/src/connection/account.rs)). 웹 UI가 버튼을 안 보여줄 뿐, 직접 만든 클라이언트는 지금도 merchant/guard 캐릭터를 만들 수 있다.
 
 **수정**: `shared/src/character.rs`에 `is_player_selectable()`을 두고, `CreateCharacter`와 `RollCharacterStats`에서 `!state.is_official_npc && !class.is_player_selectable()`이면 거부한다. 한 곳을 막으면 웹·agent-client·자작 클라이언트가 동시에 막히고, 지금 열려 있는 구멍도 같이 닫힌다.
 

@@ -16,4 +16,4 @@
 - 입장할 때와 반복할 때마다 파일을 다시 읽는다. 그래서 수정하거나 지우면 재시작 없이 바로 반영된다. 파일이 없으면 아무것도 보내지 않는다.
 - 보낼 때마다 서버 로그에 `Sent IP notices`가 남는다.
 
-코드: `server/src/ip_notices.rs`, 입장 처리와 반복은 `server/src/connection.rs`.
+코드: `server/src/ip_notices.rs`, 입장 처리는 `server/src/connection/entry.rs`, 반복은 `server/src/connection.rs`.

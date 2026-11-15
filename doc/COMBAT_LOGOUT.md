@@ -87,7 +87,7 @@
 
 ## 테스트
 
-`server/src/game_state/tests/combat_logout_tests.rs`와 `connection.rs`의 `reentry_resumes_a_body_left_mid_fight`:
+`server/src/game_state/tests/combat_logout_tests.rs`와 `connection/tests/entry.rs`의 `reentry_resumes_a_body_left_mid_fight`:
 
 - 전투 중 접속 종료 → 몸이 남고, 교전이 끝나면 정리·저장.
 - 전투 중이 아닐 때 접속 종료 → 즉시 정리.
