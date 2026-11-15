@@ -51,6 +51,10 @@ fn country_collection_started_at(conn: &Connection) -> Result<i64, rusqlite::Err
     )
 }
 
+fn active_cutoff(now: i64, active_days: u32) -> i64 {
+    now - i64::from(active_days) * 86_400
+}
+
 impl AuthService {
     pub(super) fn ensure_item_sales_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         let transaction = conn.unchecked_transaction()?;
@@ -1262,11 +1266,74 @@ impl AuthService {
         })?;
         Ok(rows.collect::<Result<Vec<_>, _>>()?)
     }
+
+    pub(super) fn ensure_server_starts_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS server_starts (
+                ts INTEGER PRIMARY KEY,
+                build TEXT NOT NULL
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn record_server_start(&self, now: i64, build: &str) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT OR REPLACE INTO server_starts (ts, build) VALUES (?1, ?2)",
+            params![now, build],
+        )?;
+        Ok(())
+    }
+
+    /// Hourly gold supply readings (doc/PRICING.md); `ts` is hour-aligned.
+    pub(super) fn ensure_gold_snapshots_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS gold_snapshots (
+                ts INTEGER PRIMARY KEY,
+                total_gold INTEGER NOT NULL,
+                characters INTEGER NOT NULL,
+                npc_gold INTEGER NOT NULL,
+                active_gold INTEGER NOT NULL,
+                active_characters INTEGER NOT NULL
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    /// Inserts this hour's gold totals; returns the hour, or None if it
+    /// already had a row. Active = seen within `active_days`. Estate
+    /// treasuries count toward the total only: they are escrowed, so the
+    /// per-active reading leaves them out.
+    pub fn record_gold_snapshot(
+        &self,
+        now: i64,
+        active_days: u32,
+    ) -> Result<Option<i64>, AuthError> {
+        let ts = now - now.rem_euclid(3600);
+        let cutoff = active_cutoff(now, active_days);
+        let conn = self.open_connection()?;
+        let written = conn.execute(
+            "INSERT OR IGNORE INTO gold_snapshots \
+             (ts, total_gold, characters, npc_gold, active_gold, active_characters) \
+             SELECT ?1, COALESCE(SUM(gold), 0) + (SELECT COALESCE(SUM(treasury), 0) FROM land_estates), COUNT(*), \
+                COALESCE(SUM(CASE WHEN account_name LIKE ?3 THEN gold END), 0), \
+                COALESCE(SUM(CASE WHEN last_seen_at >= ?2 THEN gold END), 0), \
+                COUNT(CASE WHEN last_seen_at >= ?2 THEN 1 END) \
+             FROM characters",
+            params![ts, cutoff, format!("{NPC_ACCOUNT_PREFIX}%")],
+        )?;
+        Ok((written > 0).then_some(ts))
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::tests::create;
+    use crate::test_util::temp_auth;
 
     #[test]
     fn land_history_starts_from_existing_plots_and_tracks_hourly_ownership_changes() {
@@ -3099,5 +3166,50 @@ mod tests {
             )
             .unwrap();
         assert_eq!(stored, 525600);
+    }
+
+    #[test]
+    fn gold_snapshot_adds_treasuries_to_total_and_splits_npc_and_active_gold() {
+        let (auth, _) = temp_auth("auth_snap");
+        let player = auth.login_google("sub-snap").unwrap();
+        let npc = auth.login_npc("npc_snap").unwrap();
+        let active = create(&auth, &player, "Active").unwrap().id;
+        let idle = create(&auth, &player, "Idle").unwrap().id;
+        let rica = create(&auth, &npc, "Rica").unwrap().id;
+
+        let now = 1_700_000_000;
+        let conn = auth.open_connection().unwrap();
+        for (id, gold, seen) in [
+            (active, 100, now - 3600),
+            (idle, 50, now - 40 * 86_400),
+            (rica, 7, now),
+        ] {
+            conn.execute(
+                "UPDATE characters SET gold = ?1, last_seen_at = ?2 WHERE id = ?3",
+                params![gold, seen, id],
+            )
+            .unwrap();
+        }
+
+        conn.execute(
+            "INSERT INTO land_estates (owner_id, account_name, grade, treasury, created_at) \
+             SELECT id, account_name, 1, 40, ?2 FROM characters WHERE id = ?1",
+            params![idle, now],
+        )
+        .unwrap();
+
+        let ts = auth.record_gold_snapshot(now, 30).unwrap().unwrap();
+        assert_eq!(ts, now - now % 3600);
+        let row: (i64, i64, i64, i64, i64) = conn
+            .query_row(
+                "SELECT total_gold, characters, npc_gold, active_gold, active_characters \
+                 FROM gold_snapshots WHERE ts = ?1",
+                params![ts],
+                |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+            )
+            .unwrap();
+        assert_eq!(row, (197, 3, 7, 107, 2));
+
+        assert_eq!(auth.record_gold_snapshot(now + 60, 30).unwrap(), None);
     }
 }

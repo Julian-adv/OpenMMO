@@ -2,9 +2,10 @@
 //! membership, ranks and estate links; every rule is re-checked inside the
 //! write transaction.
 
+use super::characters::class_from_row;
 use super::{
-    class_from_row, unix_now, valid_character_name, valid_name_char, AuthError, AuthService,
-    CharacterSaveData, ItemRow,
+    unix_now, valid_character_name, valid_name_char, AuthError, AuthService, CharacterSaveData,
+    ItemRow,
 };
 use onlinerpg_shared::character::CharacterClass;
 use onlinerpg_shared::family::{

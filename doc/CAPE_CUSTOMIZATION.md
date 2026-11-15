@@ -56,7 +56,7 @@ pub struct ItemInstance {
 | 자리 | 파일 | 한 일 |
 | ---- | ---- | ----- |
 | 인스턴스 | [shared/src/inventory.rs](../shared/src/inventory.rs) | 필드 2개 |
-| 저장 | [server/src/auth.rs](../server/src/auth.rs) `ensure_character_item_columns` | 컬럼 2개 (`enchant` 추가 방식 그대로) |
+| 저장 | [server/src/auth_migrations.rs](../server/src/auth_migrations.rs) `ensure_character_item_columns` | 컬럼 2개 (`enchant` 추가 방식 그대로) |
 | 바닥 | `GroundItem` | 드랍/줍기가 색을 지우지 않게 |
 | 거래·상점 | `player_trade.rs`, `trading.rs` | 인챈트가 지나가는 자리마다 색도 함께 — 유저 거래, 상인 판매, 되사기(`BuybackEntry`), 주민 재고 |
 | 방송 | `Player.back`, `PlayerBackChanged` | def id 옆에 색/텍스처 |

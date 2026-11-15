@@ -152,14 +152,14 @@ sturgeon_angler,Who Landed the Golden Sturgeon,황금 철갑상어를 낚은 자
   `TitleEarned` + `PlayerTitleChanged`(활성 칭호가 없던 캐릭터는 첫 칭호를 자동 활성;
   홀로 칭호를 새로 얻으면 같은 보스의 쓰러뜨린 자가 활성이던 경우 홀로로 올려준다).
   리셋(`reset_dungeons`)·디스폰에서 맵 정리.
-- `auth.rs`: 테이블·컬럼, `load/grant/set_active`.
+- `auth_titles.rs`: 테이블·컬럼, `load/grant/set_active`.
 - `Player`에 `title` 실어 보내는 곳(`PlayerJoined`/`PlayerAppeared`) 채우기.
 - 클라이언트: 위 표시 네 곳 + 토스트.
 
 ## 구현 메모 (2026-08-30)
 
 - 서버: `title_defs.rs`(정의·부팅 검증), `game_state/titles.rs`(피해 로그·부여·활성 선택·`/title`),
-  `auth.rs`(`character_titles`, `characters.active_title`). 보스 판정은 `dungeon_monsters`
+  `auth_titles.rs`(`character_titles`, `characters.active_title`). 보스 판정은 `dungeon_monsters`
   인덱스의 `is_boss`. 피해는 실제로 깎인 HP만 센다(오버킬 제외).
 - 봇(agent-client)은 상태 줄에 자기 칭호 목록을, 주변 플레이어 줄에 상대 칭호를 싣는다.
 - 오프라인 캐릭터도 보스 사망 시점의 피해 로그에 있으면 DB에 부여된다. 다음 접속 때 목록에

@@ -130,7 +130,7 @@ new_xp = NEW(L) + floor(frac × (NEW(L+1) − NEW(L)))
 - [x] K 실측 (prod journald, 위 "가정")
 - [x] `shared/src/xp.rs`: 2~50 const 표 + 50 이후 두 배 식, `xp_for_level_thresholds`·
       `level_from_xp_basic`·`xp_for_level_no_overflow` 테스트 갱신
-- [x] `auth.rs` 마이그레이션 + `migrations` 테이블 플래그 (`level_curve_2026_08`).
+- [x] `auth_migrations.rs` 마이그레이션 + `migrations` 테이블 플래그 (`level_curve_2026_08`).
       08-20 prod 백업 6,567명으로 드라이런: 레벨 전원 보존, 진행률 오차 ≤ 1/17
 - [x] `Player X reached level N` 로그 — 배포 후 레벨업 간격을 표와 대조하는 용도
 - [x] COMBAT.md의 레벨업 표를 이 문서 표로 교체

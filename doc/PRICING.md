@@ -109,7 +109,7 @@ P_new  = clamp(P_new, P_min, P_max)        -- 전체 범위
 
 ## 구현 단계
 
-1. `gold_snapshots` + 매시 기록. 실측만 하고 `P`는 1.0 고정. — 몇 주 관측. — **구현 완료 (2026-08-27)**: `record_gold_snapshot`(auth.rs), `tick_gold_snapshot`(pricing.rs), `pricing.activeDays`(world.json).
+1. `gold_snapshots` + 매시 기록. 실측만 하고 `P`는 1.0 고정. — 몇 주 관측. — **구현 완료 (2026-08-27)**: `record_gold_snapshot`(auth_metrics.rs), `tick_gold_snapshot`(pricing.rs), `pricing.activeDays`(world.json).
 2. 설정, 서버 달 위상, 삭 조정 틱, `pricing_state/history`, `ShopState` 필드, 서버 구매 검증. — **구현 완료 (2026-08-27)**: `tick_pricing_meeting`·`next_index_percent`(pricing.rs), 불변식에 `indexMin` 반영(`band_invariant_holds`). `gain`은 history를 보며 튜닝.
 3. 연출 1단계(프롬프트 주입) → 2단계(회의 일과) → 3단계(다음 회의 힌트). — **구현 완료 (2026-08-27)**, 프로토콜 v42.
 4. 품목군(물약/음식/주문서)별 개별 `P` — 단일 `P`로 시작하고, 운영 상황을 보고 도입한다.
