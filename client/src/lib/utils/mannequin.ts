@@ -1,7 +1,11 @@
 import * as THREE from 'three'
 import { getItemDef } from '../data/itemDefs'
 import { updatePeltPhysics } from '../effects/pelt-rig'
-import { ARMOR_SLOTS, type ArmorEquipment } from '../network/networkTypes'
+import {
+  ARMOR_SLOTS,
+  type ArmorEquipment,
+  type Gender,
+} from '../network/networkTypes'
 import {
   createCharacterModelRoot,
   getGltfAnimations,
@@ -15,6 +19,7 @@ import {
 import {
   CHARACTER_ANIMATION_PACK_PATHS,
   MODULAR_FEMALE_MODEL_PATH,
+  MODULAR_MALE_MODEL_PATH,
 } from './modelPaths'
 
 const STAND_HEIGHT = 0.06
@@ -57,7 +62,8 @@ function armorOf(items: string[]): ArmorEquipment {
 /** Stands a dressed character on the stand, frozen at the first frame of its idle. */
 export async function mountMannequin(
   holder: THREE.Object3D,
-  items: string[] = []
+  items: string[] = [],
+  body: Gender = 'female'
 ) {
   let disposed = false
   let root: THREE.Object3D | null = null
@@ -70,11 +76,13 @@ export async function mountMannequin(
     mixer?.uncacheRoot(root)
     disposeCharacterSkeletons(root)
   })
+  const path =
+    body === 'male' ? MODULAR_MALE_MODEL_PATH : MODULAR_FEMALE_MODEL_PATH
   try {
     const [model, pack] = await Promise.all([
-      loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, undefined, 'game'),
+      loadCharacterModel(path, undefined, 'game'),
       loadCharacterAnimationPack(
-        MODULAR_FEMALE_MODEL_PATH,
+        path,
         CHARACTER_ANIMATION_PACK_PATHS.locomotion
       ),
     ])

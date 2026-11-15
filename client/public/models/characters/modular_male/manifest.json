@@ -1,5 +1,5 @@
 {
-  "source": "Modular male body, knight, barbarian, rogue, caveman, ranger, priest and bard equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
+  "source": "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard and tuxedo equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
   "inputs": {
     "assets/modular_human_male_01/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "assets/modular_human_male_01/fitted/hair_crop.glb": "5e8acb389f575331008c36dd94afcbf3831c90f53ca21ab0a7bbe666539f2472",
@@ -54,7 +54,11 @@
     "client/public/models/animations/dagger_preview.glb": "59bc09327351ef0b16cf4c08cfc094e0e3a7e8a3e1c407f50f99532179902827",
     "assets/items/helm_of_brilliance/tripo_v2/fitted_v3/male/helmet_brilliance.glb": "0af2bd50efc53d764bf9435e1e4e872162081b06272644eae1ff2095b908ceb6",
     "assets/items/helm_of_brilliance/tripo_v2/fitted_v3/male/body-occlusion.json": "ae3a896b6c36035bb1659143190b590a653d095f7de908bd2e4308ee49f4bdb3",
-    "client/public/models/animations/cart_push.glb": "7f1e3507bd032bd33d98598279bb9b52fffa38be84c6537ffc3c44dfb3af6396"
+    "client/public/models/animations/cart_push.glb": "7f1e3507bd032bd33d98598279bb9b52fffa38be84c6537ffc3c44dfb3af6396",
+    "assets/modular_human_male_01/tuxedo/tripo_v1/top_tuxedo.glb": "422a2ed82da756e386e27a346635c080cb0c18382339c3619ad7158be3f41be3",
+    "assets/modular_human_male_01/tuxedo/tripo_v1/pants_tuxedo.glb": "d6a19940c0ee9a8cecf7710617d9088605db20e55967885750832bd837805c4d",
+    "assets/modular_human_male_01/tuxedo/tripo_v1/gloves_tuxedo.glb": "16a0574cf473b4e181152f17f909e3bd0a29a3d530947111ca9a8ecb78b11270",
+    "assets/modular_human_male_01/tuxedo/tripo_v1/boots_tuxedo.glb": "c7b625214d67b120824782d044e7c5db0ed3d519b3b0093dcd1324528b78619f"
   },
   "outputs": {
     "base.glb": "abf1a12178d5df11269afed6793e46ed16796c47174e356708ee73bdf590bdad",
@@ -189,6 +193,10 @@
     "animations/cart_push.glb": {
       "sha256": "acd477ce09a525ccd7f6023367f38aaccbd5438aa7f23ec9cb73f638ff9cd6ea",
       "clips": ["cart_push"]
-    }
+    },
+    "top_tuxedo.glb": "d053c5012b6c679298b552ceab43a3064875e3ce0b93ffd1a5e9addad8152b3b",
+    "pants_tuxedo.glb": "781a536daf4bd21b3647f5dd011e30449ef4e9f80b96bd213fd2945c30224e24",
+    "gloves_tuxedo.glb": "3167a2828eadf38627a05cc12db6f3d7d5493c4a2505d4650d6528a8c8259871",
+    "boots_tuxedo.glb": "5a6af693c2746249650abca4e2d4ce525f9abeff8c4c63c24da9fbddc926c0ca"
   }
 }

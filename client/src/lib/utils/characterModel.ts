@@ -35,11 +35,7 @@ import {
   DEFAULT_MODULAR_OUTFIT,
   KNIGHT_MODULAR_OUTFIT,
   BARBARIAN_MODULAR_OUTFIT,
-  ROGUE_MODULAR_OUTFIT,
-  CAVEMAN_MODULAR_OUTFIT,
-  RANGER_MODULAR_OUTFIT,
-  PRIEST_MODULAR_OUTFIT,
-  BARD_MODULAR_OUTFIT,
+  PROXIED_OUTFITS,
   SELECTABLE_HAIR_PARTS,
   type ModularOutfit,
   bindModularFace,
@@ -60,15 +56,7 @@ const animations = new Map<string, Promise<GLTF>>()
 // Load other parts when equipped.
 const eagerParts = modularOutfitParts(DEFAULT_MODULAR_OUTFIT)
 const lazyParts = new Set(
-  [
-    KNIGHT_MODULAR_OUTFIT,
-    BARBARIAN_MODULAR_OUTFIT,
-    ROGUE_MODULAR_OUTFIT,
-    CAVEMAN_MODULAR_OUTFIT,
-    RANGER_MODULAR_OUTFIT,
-    PRIEST_MODULAR_OUTFIT,
-    BARD_MODULAR_OUTFIT,
-  ]
+  [KNIGHT_MODULAR_OUTFIT, BARBARIAN_MODULAR_OUTFIT, ...PROXIED_OUTFITS]
     .flatMap((outfit) => [...modularOutfitParts(outfit)])
     .concat(...SELECTABLE_HAIR_PARTS, 'helmet_brilliance')
     .filter((id) => !eagerParts.has(id))

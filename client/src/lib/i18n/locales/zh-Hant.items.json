@@ -454,5 +454,13 @@
   "family_pennant.name": "家族掛旗",
   "family_pennant.description": "展示家族紋章的掛旗。在家族領地上升高掛在牆上。",
   "scroll_of_family_return.name": "家族傳送卷軸",
-  "scroll_of_family_return.description": "誦讀符文即可回到家族的本家：落在本家的歸鄉地毯上或安全的戶外地面。需要屬於擁有領地的家族。"
+  "scroll_of_family_return.description": "誦讀符文即可回到家族的本家：落在本家的歸鄉地毯上或安全的戶外地面。需要屬於擁有領地的家族。",
+  "tuxedo_top.name": "禮服晚宴外套",
+  "tuxedo_top.description": "帶緞面翻領的黑色外套，穿在白襯衫和金色背心外面，翻領上別著雙新月胸針。在家族合併儀式上穿著。",
+  "tuxedo_pants.name": "禮服西褲",
+  "tuxedo_pants.description": "兩側帶緞面條紋的黑色直筒褲。在家族合併儀式上穿著。",
+  "tuxedo_gloves.name": "禮服白手套",
+  "tuxedo_gloves.description": "長及手腕的素白手套。在家族合併儀式上穿戴。",
+  "tuxedo_boots.name": "禮服皮鞋",
+  "tuxedo_boots.description": "低跟的黑色亮面皮鞋。在家族合併儀式上穿著。"
 }

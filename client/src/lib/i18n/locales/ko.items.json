@@ -454,5 +454,13 @@
   "family_pennant.name": "가문 휘장",
   "family_pennant.description": "가문 문장을 보여 주는 휘장. 가문 영지의 벽에 높여 겁니다.",
   "scroll_of_family_return.name": "가문 귀환 주문서",
-  "scroll_of_family_return.description": "룬을 읽으면 가문의 본가로 돌아갑니다. 본가에 놓인 귀향의 깔개 위나 안전한 바깥 땅에 도착합니다. 영지가 있는 가문에 속해야 합니다."
+  "scroll_of_family_return.description": "룬을 읽으면 가문의 본가로 돌아갑니다. 본가에 놓인 귀향의 깔개 위나 안전한 바깥 땅에 도착합니다. 영지가 있는 가문에 속해야 합니다.",
+  "tuxedo_top.name": "예복 턱시도 재킷",
+  "tuxedo_top.description": "새틴 깃을 단 검은 재킷. 흰 셔츠와 금색 조끼 위에 입고 깃에 초승달 두 개 핀을 답니다. 가문 합병식에서 입습니다.",
+  "tuxedo_pants.name": "예복 정장 바지",
+  "tuxedo_pants.description": "옆선에 새틴 줄을 넣은 검은 일자 바지. 가문 합병식에서 입습니다.",
+  "tuxedo_gloves.name": "예복 흰 장갑",
+  "tuxedo_gloves.description": "손목까지 오는 무늬 없는 흰 장갑. 가문 합병식에서 낍니다.",
+  "tuxedo_boots.name": "예복 구두",
+  "tuxedo_boots.description": "굽이 낮고 윤을 낸 검은 가죽 구두. 가문 합병식에서 신습니다."
 }

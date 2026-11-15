@@ -819,7 +819,7 @@
   function structKeyOf(p: ObjectPlacement): string {
     const sel = isEditing() && p.id === selectedId ? 'S' : ''
     const emblem = p.emblem ? `${p.emblem.texture}/${p.emblem.color}` : ''
-    return `${p.type}:${p.text ?? ''}:${emblem}:${p.armor?.join() ?? ''}:${sel}`
+    return `${p.type}:${p.text ?? ''}:${emblem}:${p.armor?.join() ?? ''}:${p.body ?? ''}:${sel}`
   }
 
   function buildClone(
@@ -890,7 +890,8 @@
     }
     if (catDef?.noticeBoard)
       mountNoticePapers(clone, { Village: { object_id: p.id } })
-    if (catDef?.procedural === 'mannequin') void mountMannequin(clone, p.armor)
+    if (catDef?.procedural === 'mannequin')
+      void mountMannequin(clone, p.armor, p.body)
     return clone
   }
 

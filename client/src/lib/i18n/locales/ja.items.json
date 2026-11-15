@@ -454,5 +454,13 @@
   "family_pennant.name": "家門の垂れ幕",
   "family_pennant.description": "家門の紋章を掲げる垂れ幕。家門の領地の壁に高く掛けます。",
   "scroll_of_family_return.name": "家門帰還の巻物",
-  "scroll_of_family_return.description": "ルーンを読むと家門の本家に戻ります。本家の帰郷のラグの上か、安全な屋外に着きます。領地のある家門に属している必要があります。"
+  "scroll_of_family_return.description": "ルーンを読むと家門の本家に戻ります。本家の帰郷のラグの上か、安全な屋外に着きます。領地のある家門に属している必要があります。",
+  "tuxedo_top.name": "礼装のタキシードジャケット",
+  "tuxedo_top.description": "サテンの襟が付いた黒いジャケット。白いシャツと金色のベストの上に着て、襟に二つの三日月のピンを留めます。家門の合併式で着用します。",
+  "tuxedo_pants.name": "礼装のスラックス",
+  "tuxedo_pants.description": "脇にサテンの側章が入った黒いストレートのズボン。家門の合併式で着用します。",
+  "tuxedo_gloves.name": "礼装の白手袋",
+  "tuxedo_gloves.description": "手首までの無地の白い手袋。家門の合併式で着用します。",
+  "tuxedo_boots.name": "礼装の革靴",
+  "tuxedo_boots.description": "かかとの低い、磨かれた黒い革靴。家門の合併式で着用します。"
 }

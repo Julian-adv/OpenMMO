@@ -37,6 +37,9 @@ OUTFITS = {
         item: f"female_ceremony_outfit/{part}/fitted_v1/{part}_female_ceremony.glb"
         for item, part in (("helmet", "helmet"), ("top", "top"), ("pants", "bottom"), ("gloves", "gloves"), ("boots", "boots"))
     },
+    "tuxedo": {
+        part: f"../modular_human_male_01/tuxedo/tripo_v1/{part}_tuxedo.glb" for part in ("top", "pants", "gloves", "boots")
+    },
 }
 parser = argparse.ArgumentParser()
 parser.add_argument("--outfit", choices=OUTFITS, default="valkyrie")

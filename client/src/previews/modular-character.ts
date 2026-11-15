@@ -22,6 +22,8 @@ import {
   PRIEST_MODULAR_OUTFIT,
   RANGER_MODULAR_OUTFIT,
   RANGER_MODULAR_PARTS,
+  TUXEDO_MODULAR_OUTFIT,
+  TUXEDO_MODULAR_PARTS,
   ROGUE_MODULAR_OUTFIT,
   ROGUE_MODULAR_PARTS,
   showModularOutfit,
@@ -172,8 +174,10 @@ async function main() {
   const ranger = requestedOutfit === 'ranger'
   const priest = requestedOutfit === 'priest'
   const bard = requestedOutfit === 'bard'
-  if (tripo || caveman || ranger || priest || bard) showWeapon.checked = false
-  if (caveman || ranger || priest || bard) cameraSelect.value = 'full'
+  const tuxedo = requestedOutfit === 'tuxedo'
+  if (tripo || caveman || ranger || priest || bard || tuxedo)
+    showWeapon.checked = false
+  if (caveman || ranger || priest || bard || tuxedo) cameraSelect.value = 'full'
   const load = async (url: string) => {
     const gltf = await loader.loadAsync(url)
     if (disposed) {
@@ -219,6 +223,7 @@ async function main() {
     'boots_bard',
     'helmet_bard',
     'helmet_brilliance',
+    ...TUXEDO_MODULAR_PARTS,
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -264,6 +269,8 @@ async function main() {
   )
   el<HTMLButtonElement>('ranger-outfit').disabled = !rangerAvailable
   el<HTMLButtonElement>('bard-outfit').disabled = !ids.includes('top_bard')
+  const tuxedoAvailable = TUXEDO_MODULAR_PARTS.every((id) => ids.includes(id))
+  el<HTMLButtonElement>('tuxedo-outfit').disabled = !tuxedoAvailable
   const clips = [
     ...modularAnimationClips(base.scene, animations, 'corrected'),
     ...modularAnimationClips(base.scene, social, 'corrected').filter(
@@ -418,6 +425,7 @@ async function main() {
     helmet: parts.has('helmet_bard') ? 'bard' : 'none',
   }
   el('bard-outfit').onclick = () => wearOutfit(bardPreviewOutfit)
+  el('tuxedo-outfit').onclick = () => wearOutfit(TUXEDO_MODULAR_OUTFIT)
   hairColor.oninput = dress
   if (disposed) return
   const hand = body.getObjectByName('RightHand')
@@ -719,7 +727,8 @@ async function main() {
           : '얼굴 1,505'
       }`
   }
-  if (bard && parts.has('top_bard')) wearOutfit(bardPreviewOutfit)
+  if (tuxedo && tuxedoAvailable) wearOutfit(TUXEDO_MODULAR_OUTFIT)
+  else if (bard && parts.has('top_bard')) wearOutfit(bardPreviewOutfit)
   else if (priest && parts.has('top_priest'))
     wearOutfit({ ...PRIEST_MODULAR_OUTFIT, helmet: 'priest' })
   else if (ranger && rangerAvailable) wearOutfit(RANGER_MODULAR_OUTFIT)

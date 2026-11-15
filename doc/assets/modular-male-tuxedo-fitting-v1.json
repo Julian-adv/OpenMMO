@@ -1,0 +1,211 @@
+{
+  "date": "2026-11-15",
+  "source": {
+    "path": "assets/items/male_ceremony_tuxedo/tripo_front_v1/segmented.glb",
+    "sha256": "969191f300155d75f90604d4bd62457318ba3da7539c49e8dd99bb5da6750e2b"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "parts": {
+    "top": {
+      "placement": {
+        "sleeves": {
+          "left": {
+            "Arm": {
+              "shift_m": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "turn_degrees": 9.44,
+              "median_distance_m": 0.019
+            },
+            "ForeArm": {
+              "shift_m": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "turn_degrees": 1.41,
+              "median_distance_m": 0.0276,
+              "cuff_aim_degrees": 3.12
+            }
+          },
+          "right": {
+            "Arm": {
+              "shift_m": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "turn_degrees": 5.24,
+              "median_distance_m": 0.0188
+            },
+            "ForeArm": {
+              "shift_m": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "turn_degrees": 0.83,
+              "median_distance_m": 0.025,
+              "cuff_aim_degrees": 2.29
+            }
+          }
+        }
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/tuxedo/tripo_v1/top_tuxedo.glb",
+        "sha256": "422a2ed82da756e386e27a346635c080cb0c18382339c3619ad7158be3f41be3",
+        "triangles": 6941,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "Hips",
+          "LeftArm",
+          "LeftForeArm",
+          "LeftShoulder",
+          "Neck",
+          "RightArm",
+          "RightForeArm",
+          "RightShoulder",
+          "Spine",
+          "Spine1",
+          "Spine2"
+        ]
+      }
+    },
+    "pants": {
+      "placement": {
+        "pivot": "Hips",
+        "lean_degrees": 1.96,
+        "hem_forward_m": 0.0335
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/tuxedo/tripo_v1/pants_tuxedo.glb",
+        "sha256": "d6a19940c0ee9a8cecf7710617d9088605db20e55967885750832bd837805c4d",
+        "triangles": 1314,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 5.960464477539063e-08,
+        "active_bones": [
+          "Hips",
+          "LeftFoot",
+          "LeftLeg",
+          "LeftUpLeg",
+          "RightFoot",
+          "RightLeg",
+          "RightUpLeg"
+        ]
+      }
+    },
+    "gloves": {
+      "placement": {
+        "left": {
+          "shift_m": [
+            -0.0621,
+            0.0484,
+            -0.1206
+          ],
+          "turn_degrees": 10.39,
+          "median_distance_m": 0.003
+        },
+        "right": {
+          "shift_m": [
+            0.0673,
+            0.0491,
+            -0.1178
+          ],
+          "turn_degrees": 10.73,
+          "median_distance_m": 0.0029
+        }
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/tuxedo/tripo_v1/gloves_tuxedo.glb",
+        "sha256": "16a0574cf473b4e181152f17f909e3bd0a29a3d530947111ca9a8ecb78b11270",
+        "triangles": 3512,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "LeftForeArm",
+          "LeftHand",
+          "LeftHandIndex1",
+          "LeftHandIndex2",
+          "LeftHandIndex3",
+          "LeftHandMiddle1",
+          "LeftHandMiddle2",
+          "LeftHandMiddle3",
+          "LeftHandPinky1",
+          "LeftHandPinky2",
+          "LeftHandPinky3",
+          "LeftHandRing1",
+          "LeftHandRing2",
+          "LeftHandRing3",
+          "LeftHandThumb1",
+          "LeftHandThumb2",
+          "LeftHandThumb3",
+          "RightForeArm",
+          "RightHand",
+          "RightHandIndex1",
+          "RightHandIndex2",
+          "RightHandIndex3",
+          "RightHandMiddle1",
+          "RightHandMiddle2",
+          "RightHandMiddle3",
+          "RightHandPinky1",
+          "RightHandPinky2",
+          "RightHandPinky3",
+          "RightHandRing1",
+          "RightHandRing2",
+          "RightHandRing3",
+          "RightHandThumb1",
+          "RightHandThumb2",
+          "RightHandThumb3"
+        ]
+      }
+    },
+    "boots": {
+      "placement": {
+        "left": {
+          "shift_m": [
+            -0.0036,
+            -0.0041,
+            0.0338
+          ],
+          "turn_degrees": 0.0,
+          "median_distance_m": 0.0042
+        },
+        "right": {
+          "shift_m": [
+            0.0024,
+            -0.0042,
+            0.0332
+          ],
+          "turn_degrees": 0.0,
+          "median_distance_m": 0.0044
+        }
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/tuxedo/tripo_v1/boots_tuxedo.glb",
+        "sha256": "c7b625214d67b120824782d044e7c5db0ed3d519b3b0093dcd1324528b78619f",
+        "triangles": 3424,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "LeftFoot",
+          "LeftLeg",
+          "LeftToeBase",
+          "RightFoot",
+          "RightLeg",
+          "RightToeBase"
+        ]
+      }
+    }
+  }
+}

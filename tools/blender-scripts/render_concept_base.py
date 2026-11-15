@@ -1,6 +1,7 @@
-"""Render the female base in its symmetric bind A-pose, optionally on heels, as a concept-art underlay.
+"""Render a modular base body in its symmetric bind A-pose, optionally on heels, as a concept-art underlay.
 
-blender -b --python tools/blender-scripts/render_female_concept_base.py -- --out front.png --view front --heel 30
+blender -b --python tools/blender-scripts/render_concept_base.py -- --out front.png --view front --heel 30
+blender -b --python tools/blender-scripts/render_concept_base.py -- --character male --mannequin --out front.png
 """
 import argparse
 import math
@@ -12,19 +13,27 @@ from mathutils import Matrix, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
-parser.add_argument('--body', default=str(ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'))
+CHARACTERS = {
+    'female': {'body': 'assets/modular_human_female_01/rig_v1/female-base.glb', 'heel': 30, 'centre': .9, 'span': 1.95},
+    'male': {'body': 'assets/modular_human_male_01/fitted/base.glb', 'heel': 0, 'centre': .95, 'span': 2.05,
+             'skip': ['body_boot_ankles']},
+}
+parser.add_argument('--character', choices=list(CHARACTERS), default='female')
+parser.add_argument('--body')
 parser.add_argument('--out', required=True)
 parser.add_argument('--view', choices=['front', 'side', 'back'], default='front')
 parser.add_argument('--mannequin', action='store_true', help='Matte blue body, so a generated copy can be told from the outfit by colour')
-parser.add_argument('--heel', type=float, default=30, help='Foot pitch of the shared boot heel_pose, degrees')
+parser.add_argument('--heel', type=float, help='Foot pitch of the shared boot heel_pose, degrees')
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
+character = CHARACTERS[args.character]
+heel = character['heel'] if args.heel is None else args.heel
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=args.body)
-for obj in [o for o in bpy.data.objects if o.name == 'Icosphere']:
+bpy.ops.import_scene.gltf(filepath=args.body or str(ROOT / character['body']))
+for obj in [o for o in bpy.data.objects if o.name in ['Icosphere', *character.get('skip', [])]]:
     bpy.data.objects.remove(obj)
 rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
-body = next(o for o in bpy.data.objects if o.type == 'MESH')
+bodies = [o for o in bpy.data.objects if o.type == 'MESH']
 # The GLB's node pose and idle1 action are not the bind pose.
 rig.animation_data_clear()
 for pb in rig.pose.bones:
@@ -48,8 +57,8 @@ for side in ['Left', 'Right']:
     forward = toe.head - foot.head
     forward.z = 0
     axis = Vector((0, 0, 1)).cross(forward.normalized())
-    rotate_about_head(foot, axis, args.heel)
-    rotate_about_head(toe, axis, -args.heel)
+    rotate_about_head(foot, axis, heel)
+    rotate_about_head(toe, axis, -heel)
 
 mirror = Matrix.Diagonal((-1, 1, 1, 1))
 
@@ -75,8 +84,9 @@ for pb in rig.pose.bones:
     if pb.name.startswith('Right'):
         set_matrix(pb, mirror @ rig.pose.bones['Left' + pb.name[5:]].matrix @ mirror)
 
-evaluated = body.evaluated_get(bpy.context.evaluated_depsgraph_get())
-rig.location.z -= min((evaluated.matrix_world @ v.co).z for v in evaluated.data.vertices)
+depsgraph = bpy.context.evaluated_depsgraph_get()
+rig.location.z -= min((evaluated.matrix_world @ v.co).z for evaluated in (body.evaluated_get(depsgraph) for body in bodies)
+                      for v in evaluated.data.vertices)
 
 scene = bpy.context.scene
 scene.render.engine = 'CYCLES'
@@ -90,16 +100,12 @@ world.use_nodes = True
 world.node_tree.nodes['Background'].inputs[0].default_value = (.62, .62, .62, 1)
 camera = bpy.data.cameras.new('camera')
 camera.type = 'ORTHO'
-camera.ortho_scale = 1.95
+camera.ortho_scale = character['span']
 camera_obj = bpy.data.objects.new('camera', camera)
 scene.collection.objects.link(camera_obj)
 scene.camera = camera_obj
-if args.view == 'front':
-    camera_obj.location, camera_obj.rotation_euler = (0, -5, .9), (math.radians(90), 0, 0)
-elif args.view == 'back':
-    camera_obj.location, camera_obj.rotation_euler = (0, 5, .9), (math.radians(90), 0, math.radians(180))
-else:
-    camera_obj.location, camera_obj.rotation_euler = (5, 0, .9), (math.radians(90), 0, math.radians(90))
+x, y, turn = {'front': (0, -5, 0), 'back': (0, 5, 180), 'side': (5, 0, 90)}[args.view]
+camera_obj.location, camera_obj.rotation_euler = (x, y, character['centre']), (math.radians(90), 0, math.radians(turn))
 if args.mannequin:
     blue = bpy.data.materials.new('mannequin')
     blue.use_nodes = True

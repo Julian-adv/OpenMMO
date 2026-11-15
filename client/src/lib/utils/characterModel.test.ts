@@ -133,6 +133,37 @@ describe.skipIf(
     ).toBe(true)
   })
 
+  it('wears the ceremony tuxedo from its items and hides the body under it', async () => {
+    const source = await loadCharacterModel(MODULAR_MALE_MODEL_PATH)
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    await applyCharacterArmor(modelRoot, {
+      chest: 'tuxedo_top',
+      pants: 'tuxedo_pants',
+      hands: 'tuxedo_gloves',
+      boots: 'tuxedo_boots',
+    })
+    for (const part of ['top', 'pants', 'gloves', 'boots'])
+      expect(visible(modelRoot, `${part}_tuxedo`), part).toBe(true)
+    const meshes = skinnedParts(modelRoot)
+    for (const region of [
+      'torso',
+      'upper_arms',
+      'forearms',
+      'hands',
+      'legs',
+      'feet',
+    ])
+      expect(
+        bodyRegion(meshes, region).some((mesh) => mesh.visible),
+        region
+      ).toBe(false)
+    expect(bodyRegion(meshes, 'neck').some((mesh) => mesh.visible)).toBe(true)
+    expect(computeSoleGroundOffset(modelRoot)).toBeCloseTo(0, 6)
+    await applyCharacterArmor(modelRoot, {})
+    expect(visible(modelRoot, 'top_tuxedo')).toBe(false)
+    expect(bodyRegion(meshes, 'hands').every((mesh) => mesh.visible)).toBe(true)
+  })
+
   it('assembles every face onto the common body without loading full body variants', async () => {
     const { loadHeadlessGlb } = await import('./headless-glb.fixture')
     const common = await loadHeadlessGlb(MODULAR_MALE_MODEL_PATH.slice(1))
@@ -934,6 +965,7 @@ describe.skipIf(
       ranger: 'worn_ranger_boots',
       priest: 'worn_priest_boots',
       bard: 'worn_bard_boots',
+      tuxedo: 'tuxedo_boots',
     } satisfies Record<
       keyof typeof import('./modularSoleOffsets.json'),
       string | null

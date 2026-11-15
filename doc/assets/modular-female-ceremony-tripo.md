@@ -14,7 +14,7 @@
 
 ![세 시점 원화](../../assets/items/female_ceremony_outfit/concepts/sheet-v3.png)
 
-마네킹: `tools/blender-scripts/render_female_concept_base.py --mannequin --heel 30 --view front|side|back`로 여성 몸체를 파란 무광으로 렌더했다(Blender 5.2 Cycles, 생성 아님). 생성 모델에서 몸과 옷을 색으로 가르고 마네킹끼리 맞춰 올리기 위해서다([긴 생머리 기록](modular-female-long-straight-hair.md)과 같은 방식). 옷에는 파란색 계열을 쓰지 않았다.
+마네킹: `tools/blender-scripts/render_concept_base.py --mannequin --heel 30 --view front|side|back`로 여성 몸체를 파란 무광으로 렌더했다(Blender 5.2 Cycles, 생성 아님). 생성 모델에서 몸과 옷을 색으로 가르고 마네킹끼리 맞춰 올리기 위해서다([긴 생머리 기록](modular-female-long-straight-hair.md)과 같은 방식). 옷에는 파란색 계열을 쓰지 않았다.
 
 원화: OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**, 2026-11-14. OpenAI 생성 출력물 이용 조건을 따른다. 파일은 `assets/items/female_ceremony_outfit/concepts/`, 프롬프트는 같은 폴더의 `*-prompt.txt`.
 
@@ -133,5 +133,6 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_ite
 
 - 확인: 개발 서버에서 `/give ceremony_*` 다섯 개가 지급되고 가방에 아이콘이 보인다. 착용 모습은 게임에서 확인하지 않았다.
 - 판매(2026-11-15): 앨더마크 광장 서편 옷가게 Moonthread Tailor의 재봉사 Linnea가 판다. 베일 80은, 보디스 2금, 치마 2금 40은, 장갑 60은, 스타킹과 구두 1금. 매장 마네킹(`mannequin` 오브젝트, 배치 데이터의 `armor`에 아이템 ID)에 한 벌을 입혀 전시한다.
-- 남은 일: 남성 착용 시 표시, 팔 벌린 대기 자세, 치마 전용 본. 치마 메시에 손가락 본 가중치가 섞여 있다(Blender 확인 2026-11-15).
+- 남성용은 따로 만든 [턱시도](modular-male-ceremony-tuxedo-tripo.md) 아이템이다. 남성이 이 예복 아이템을 입으면 여전히 천 기본 외형이다.
+- 남은 일: 팔 벌린 대기 자세, 치마 전용 본. 치마 메시에 손가락 본 가중치가 섞여 있다(Blender 확인 2026-11-15).
 

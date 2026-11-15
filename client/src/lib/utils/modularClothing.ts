@@ -19,6 +19,9 @@ type Cut =
   | 'gloves'
   | 'ranger_gloves'
   | 'ranger_sleeves'
+  | 'tuxedo_glove_cuff'
+  | 'tuxedo_gloves'
+  | 'tuxedo_glove_rim'
   | 'greaves'
   | 'leather_boots'
   | 'plate_boots'
@@ -62,7 +65,8 @@ type HatHair = {
   then: (geometry: THREE.BufferGeometry) => void
 }
 
-function sleeveCut(fraction: number): Distance {
+// Distance toward the elbow from a plane `fraction` of the way to the wrist.
+function forearmPlane(fraction: number): Distance {
   const planes = [1, -1].map((side) => {
     const elbow = new THREE.Vector3(side * 0.311339, 1.247962, -0.056036)
     const wrist = new THREE.Vector3(side * 0.445653, 0.993593, -0.045557)
@@ -71,12 +75,16 @@ function sleeveCut(fraction: number): Distance {
       elbow.lerp(wrist, fraction)
     )
   })
-  return (point) =>
-    Math.max(
-      0.28 - Math.abs(point.x),
-      planes[point.x < 0 ? 1 : 0].distanceToPoint(point)
-    )
+  return (point) => planes[point.x < 0 ? 1 : 0].distanceToPoint(point)
 }
+
+function sleeveCut(fraction: number): Distance {
+  const plane = forearmPlane(fraction)
+  return (point) => Math.max(0.28 - Math.abs(point.x), plane(point))
+}
+
+const tuxedoGloveCuff = forearmPlane(0.97)
+const tuxedoGloveRim = forearmPlane(0.9)
 
 const rangerGloves = sleeveCut(0.4)
 
@@ -90,6 +98,12 @@ const cuts: Record<Cut, Clip | Reshape | Cuff | HatHair> = {
   gloves: sleeveCut(0.89),
   ranger_gloves: rangerGloves,
   ranger_sleeves: rangerGloves,
+  // Hiding the whole hand left a jagged wrist.
+  tuxedo_gloves: sleeveCut(0.92),
+  // The generated rim is dark and torn.
+  tuxedo_glove_rim: (point) => -tuxedoGloveRim(point),
+  // The cuff is wider than the jacket sleeve.
+  tuxedo_glove_cuff: (point) => -tuxedoGloveCuff(point),
   greaves: (point) => point.y - 0.46,
   leather_boots: (point) => point.y - 0.235,
   plate_boots: (point) => point.y - 0.22,

@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store'
 import type { Position } from '../utils/movementUtils'
+import type { Gender } from '../network/networkTypes'
 import type { TerrainHeightManager } from '../managers/terrainHeightManager'
 import type { TerrainSplatManager } from '../managers/terrainSplatManager'
 import type { TerrainGrassDataManager } from '../managers/terrainGrassDataManager'
@@ -233,6 +234,8 @@ export interface ObjectPlacement {
   emblem?: { texture: string | null; color: string | null }
   /** Armour item ids a mannequin wears. */
   armor?: string[]
+  /** Body a mannequin stands as; absent = female. */
+  body?: Gender
   /** Open doors by bit for collision (0 is the entrance, side doors follow); never saved. */
   openDoors?: number
   /** Placed by the server from data-src/field_bosses.csv; not editable. */

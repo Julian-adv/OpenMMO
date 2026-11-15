@@ -19,8 +19,8 @@
 베이스 렌더는 모든 본을 바인드 자세로 되돌리고, 부츠와 같은 30° `heel_pose`를 적용한 뒤 발바닥을 바닥에 맞췄다(뒤꿈치 약 10cm). 가운데 본을 좌우 대칭으로 투영하고 좌우 팔다리를 평균 자세로 맞춰 완전히 대칭이다.
 
 ```sh
-blender -b --python tools/blender-scripts/render_female_concept_base.py -- --out base-front.png --view front
-blender -b --python tools/blender-scripts/render_female_concept_base.py -- --out base-side.png --view side
+blender -b --python tools/blender-scripts/render_concept_base.py -- --out base-front.png --view front
+blender -b --python tools/blender-scripts/render_concept_base.py -- --out base-side.png --view side
 codex exec --sandbox workspace-write -i base-front.png -i base-side.png -i client/public/character_concepts/ranger.webp - < prompt.txt
 ```
 

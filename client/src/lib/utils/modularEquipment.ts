@@ -4,6 +4,7 @@ import { DEFAULT_MODULAR_OUTFIT, type ModularOutfit } from './modularCharacter'
 
 const ARMOR_STYLES = {
   chest: {
+    'armor/tuxedo_top.glb': 'tuxedo',
     'armor/bard_top.glb': 'bard',
     'armor/priest_top.glb': 'priest',
     'armor/ranger_top.glb': 'ranger',
@@ -13,6 +14,7 @@ const ARMOR_STYLES = {
     'armor/barbarian_armor.glb': 'barbarian',
   },
   pants: {
+    'armor/tuxedo_pants.glb': 'tuxedo',
     'armor/bard_pants.glb': 'bard',
     'armor/priest_pants.glb': 'priest',
     'armor/ranger_pants.glb': 'ranger',
@@ -22,6 +24,7 @@ const ARMOR_STYLES = {
     'armor/barbarian_pants.glb': 'barbarian',
   },
   boots: {
+    'armor/tuxedo_boots.glb': 'tuxedo',
     'armor/bard_boots.glb': 'bard',
     'armor/priest_boots.glb': 'priest',
     'armor/ranger_boots.glb': 'ranger',
@@ -31,6 +34,7 @@ const ARMOR_STYLES = {
     'armor/barbarian_boots.glb': 'barbarian',
   },
   hands: {
+    'armor/tuxedo_gloves.glb': 'tuxedo',
     'armor/ranger_gloves.glb': 'ranger',
     'armor/caveman_bracers.glb': 'caveman',
     'armor/rogue_gloves.glb': 'rogue',

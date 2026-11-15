@@ -398,6 +398,10 @@ function modularCharacterPreview(): Plugin {
       '../assets/modular_human_female_01/hair/tripo_knight_bob_v1/fitted_v1/hair_female_knight_bob.glb',
       import.meta.url
     ),
+    top_tuxedo: part('tuxedo/tripo_v1/top_tuxedo.glb'),
+    pants_tuxedo: part('tuxedo/tripo_v1/pants_tuxedo.glb'),
+    gloves_tuxedo: part('tuxedo/tripo_v1/gloves_tuxedo.glb'),
+    boots_tuxedo: part('tuxedo/tripo_v1/boots_tuxedo.glb'),
     helmet_bard: part('bard/tripo_hat_v1/helmet_bard.glb'),
     top_bard: part('bard/tripo_top_v1/top_bard.glb'),
     pants_bard: part('bard/tripo_pants_v1/pants_bard.glb'),

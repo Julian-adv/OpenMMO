@@ -94,6 +94,12 @@ const outfitSources = {
     boots_bard:
       "assets/modular_human_male_01/bard/tripo_boots_v1/boots_bard.glb",
   },
+  tuxedo: Object.fromEntries(
+    ["top", "pants", "gloves", "boots"].map((slot) => [
+      `${slot}_tuxedo`,
+      `assets/modular_human_male_01/tuxedo/tripo_v1/${slot}_tuxedo.glb`,
+    ]),
+  ),
   brilliance: {
     helmet_brilliance:
       "assets/items/helm_of_brilliance/tripo_v2/fitted_v3/male/helmet_brilliance.glb",
@@ -137,7 +143,7 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Modular male body, knight, barbarian, rogue, caveman, ranger, priest and bard equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
+    "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard and tuxedo equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
   inputs: {},
   outputs: {},
 };
