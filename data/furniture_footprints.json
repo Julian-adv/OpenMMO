@@ -6,6 +6,13 @@
     "maxZ": 0.4,
     "cellCoverage": 0.15
   },
+  "mannequin": {
+    "minX": -0.42,
+    "maxX": 0.42,
+    "minZ": -0.42,
+    "maxZ": 0.42,
+    "cellCoverage": 0.15
+  },
   "ysolde_field_cot": {
     "minX": -0.455,
     "maxX": 0.455,

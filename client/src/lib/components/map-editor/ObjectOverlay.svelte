@@ -79,6 +79,12 @@
     getShopSignStyle,
   } from '../../utils/shop-sign'
   import { buildNoticeBoard, mountNoticePapers } from '../../utils/notice-board'
+  import {
+    buildMannequinStand,
+    disposeMannequin,
+    mountMannequin,
+    updateMannequins,
+  } from '../../utils/mannequin'
   import type { Unsubscriber } from 'svelte/store'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
@@ -199,6 +205,7 @@
       return buildShopSignBoard(getShopSignStyle(def.shopSignStyle).board)
     }
     if (def.procedural === 'noticeBoard') return buildNoticeBoard()
+    if (def.procedural === 'mannequin') return buildMannequinStand()
     return null
   }
 
@@ -279,6 +286,7 @@
   let previewType: string | null = null
 
   function disposeClone(obj: THREE.Object3D) {
+    disposeMannequin(obj)
     obj.traverse((child) => {
       // Shop-sign text uses MeshBasicNodeMaterial + CanvasTexture, whose sampler
       // bindings crash the WebGPU backend if disposed (see TextLabel.svelte and
@@ -489,6 +497,7 @@
   })
 
   export function update(deltaTime: number, camera: THREE.Camera | undefined) {
+    updateMannequins(deltaTime / 1000)
     const viewer = debugInfo?.position
     for (const structure of structures) {
       const { placement, perimeter, annexes, panel, clone, ground } = structure
@@ -812,7 +821,7 @@
   function structKeyOf(p: ObjectPlacement): string {
     const sel = isEditing() && p.id === selectedId ? 'S' : ''
     const emblem = p.emblem ? `${p.emblem.texture}/${p.emblem.color}` : ''
-    return `${p.type}:${p.text ?? ''}:${emblem}:${sel}`
+    return `${p.type}:${p.text ?? ''}:${emblem}:${p.armor?.join() ?? ''}:${sel}`
   }
 
   function buildClone(
@@ -883,6 +892,7 @@
     }
     if (catDef?.noticeBoard)
       mountNoticePapers(clone, { Village: { object_id: p.id } })
+    if (catDef?.procedural === 'mannequin') mountMannequin(clone, p.armor)
     return clone
   }
 

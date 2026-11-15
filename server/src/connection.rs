@@ -1500,7 +1500,10 @@ async fn handle_client_message(
                 state.is_official_npc,
                 state.client_kind.unwrap_or_default(),
             );
-            player.appearance = selected_character.appearance;
+            player.appearance = match crate::npc_defs::npc_defs().get_by_npc_name(&player.name) {
+                Some(def) if state.is_official_npc => def.appearance(selected_character.appearance),
+                _ => selected_character.appearance,
+            };
             player.title = titles.1.clone();
             let family_id = family.as_ref().map(|(id, _)| *id);
             player.family = family.map(|(_, name)| name);

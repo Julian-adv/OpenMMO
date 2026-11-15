@@ -7,7 +7,7 @@ const WALK_SEGMENT_DISTANCE: f32 = 27.0;
 use std::time::{Duration, Instant};
 
 use onlinerpg_shared::door::DoorId;
-use onlinerpg_shared::housing::{WallDirection, WallVariant};
+use onlinerpg_shared::housing::WallDirection;
 use onlinerpg_shared::messages::MoveStatus;
 use onlinerpg_shared::pathfinding;
 use onlinerpg_shared::{ClientMessage, PlayerId, Position};
@@ -758,7 +758,7 @@ fn closed_doors_on_our_floor(s: &SharedState) -> Vec<DoorCandidate> {
             ] {
                 for (seg, wall) in room.wall(dir).iter().enumerate() {
                     // Windows are openable too, but they are not a way through.
-                    if wall.variant != WallVariant::WithDoor || wall.is_open {
+                    if !wall.variant.is_door() || wall.is_open {
                         continue;
                     }
                     let ((dx, dz, _), (adx, adz, _)) = pathfinding::door_cells(room, dir, seg);

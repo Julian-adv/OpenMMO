@@ -231,6 +231,8 @@ export interface ObjectPlacement {
   text?: string
   /** Picture and colour on a banner's cloth; `texture` is a hash or a built-in crest name. */
   emblem?: { texture: string | null; color: string | null }
+  /** Armour item ids a mannequin wears. */
+  armor?: string[]
   /** Open doors by bit for collision (0 is the entrance, side doors follow); never saved. */
   openDoors?: number
   /** Placed by the server from data-src/field_bosses.csv; not editable. */

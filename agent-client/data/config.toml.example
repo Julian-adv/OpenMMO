@@ -274,3 +274,10 @@ id = "maelis"
 account = "npc_maelis"
 gender = "female"
 llm = "codex"
+
+# Moonthread Tailor seamstress.
+[[npcs]]
+id = "clothier"
+account = "npc_clothier"
+gender = "female"
+llm = "codex"

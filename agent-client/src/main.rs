@@ -761,6 +761,7 @@ always_sprint = true
             "estate_architect",
             "grida",
             "tobin",
+            "clothier",
         ] {
             let config = parse(&format!(
                 "server = \"ws://127.0.0.1:10006\"\n\n[[npcs]]\nid = \"{id}\"\n"

@@ -58,6 +58,11 @@ pub struct NpcDefinition {
     /// Shown after the name; the client translates `rank.<id>`.
     #[serde(default)]
     pub rank: Option<String>,
+    /// Hair style and colour worn in place of the class default.
+    #[serde(default)]
+    pub hair: Option<onlinerpg_shared::HairStyle>,
+    #[serde(rename = "hairColor", default)]
+    pub hair_color: Option<onlinerpg_shared::AppearanceColor>,
 }
 
 impl NpcDefinition {
@@ -72,6 +77,17 @@ impl NpcDefinition {
 
     pub fn keeps(&self, item_def_id: &str) -> bool {
         self.keepsakes.iter().any(|id| id == item_def_id)
+    }
+
+    pub fn appearance(
+        &self,
+        appearance: onlinerpg_shared::CharacterAppearance,
+    ) -> onlinerpg_shared::CharacterAppearance {
+        onlinerpg_shared::CharacterAppearance {
+            hair: self.hair.unwrap_or(appearance.hair),
+            hair_color: self.hair_color.unwrap_or(appearance.hair_color),
+            ..appearance
+        }
     }
 
     pub fn in_loadout(&self, item_def_id: &str) -> bool {

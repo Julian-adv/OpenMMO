@@ -449,6 +449,19 @@
     }
   },
   {
+    "id": "mannequin",
+    "name": "Mannequin",
+    "procedural": "mannequin",
+    "solid": true,
+    "footprint": {
+      "minX": -0.42,
+      "maxX": 0.42,
+      "minZ": -0.42,
+      "maxZ": 0.42,
+      "cellCoverage": 0.15
+    }
+  },
+  {
     "id": "mailbox",
     "name": "Mailbox",
     "model": "objects/mailbox.glb",

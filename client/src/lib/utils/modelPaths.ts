@@ -103,6 +103,7 @@ const NPC_MODEL_OVERRIDES: Record<string, string> = {
   Grida: GRIDA_CHARACTER_MODEL_PATH,
   Tobin: TOBIN_CHARACTER_MODEL_PATH,
   Ysolde: YSOLDE_CHARACTER_MODEL_PATH,
+  Linnea: MODULAR_FEMALE_MODEL_PATH,
 }
 
 export function getNpcModelPath(npcName: string): string | undefined {
