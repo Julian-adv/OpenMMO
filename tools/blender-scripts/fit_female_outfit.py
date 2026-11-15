@@ -160,6 +160,8 @@ EDGE_CLEARANCE = .004
 # Skin up to EDGE_LIP in front of the cloth at the rim is tucked EDGE_TUCK behind it.
 EDGE_LIP = .008
 EDGE_TUCK = .002
+# `clip_hem` fits its plane to the open edges within this distance (m) of the cloth's extreme height.
+HEM_BAND = .04
 # Open-edge loops shorter than this (m) are slits, not openings.
 EDGE_LOOP = .5
 
@@ -997,19 +999,36 @@ if 'clip_cuff' in SPEC:
         cuff_clips.append({'point': (origin @ TO_GLTF.T).round(5).tolist(), 'normal': (-normal @ TO_GLTF.T).round(5).tolist(),
                            'triangle_indices': np.flatnonzero(arm & inside.any(1) & ~inside.all(1)).tolist()})
 if 'clip_hem' in SPEC:
-    # A level hem or top edge: skin is cut at its height instead of by whole triangles, whose corners showed as
+    # A flat hem or top edge: skin is cut along its plane instead of by whole triangles, whose corners showed as
     # teeth over the cloth. `keep` is the bare side, `within` the half width (m) of the body the edge goes round.
+    # The plane is fitted to the edge: a preview fit tilted the bodice hem 2 cm up at the back, and a level cut
+    # at its lowest point left that much of the waist missing above the hem.
     up = 1 if SPEC['clip_hem']['keep'] == 'above' else -1
     height = points[:, 2].max() if up == 1 else points[:, 2].min()
-    depth = (rest_points[:, 2] - height) * up
+    cloth_ids = np.unique(np.round(points, 5), axis=0, return_inverse=True)[1].ravel()
+    uses = {}
+    for face in cloth_ids[faces]:
+        for i in range(3):
+            key = tuple(sorted((face[i], face[(i + 1) % 3])))
+            uses[key] = uses.get(key, 0) + 1
+    cloth_points = np.zeros((cloth_ids.max() + 1, 3))
+    cloth_points[cloth_ids] = points
+    rim = np.array([(cloth_points[a] + cloth_points[b]) / 2 for (a, b), count in uses.items() if count == 1])
+    rim = rim[(rim[:, 2] - height) * up > -HEM_BAND]
+    hem_centre = rim.mean(0)
+    hem_normal = np.linalg.svd(rim - hem_centre)[2][2]
+    hem_normal *= np.sign(hem_normal[2]) * up
+    depth = (rest_points - hem_centre) @ hem_normal
     kept = (depth > 0)[bf]
     near = (np.abs(rest_points[:, 0]) < SPEC['clip_hem']['within'])[bf].all(1)
     if 'hide_underwear' in SPEC:
         near &= (islands[bf] == skin_island).all(1)
     straddling = near & kept.any(1) & ~kept.all(1)
     hidden[straddling | (near & kept.all(1) & (depth[bf].max(1) < .03))] = False
-    cuff_clips.append({'point': (np.array([0, 0, height]) @ TO_GLTF.T).round(5).tolist(),
-                       'normal': (np.array([0, 0, up]) @ TO_GLTF.T).tolist(),
+    # A triangle on the covered side with a corner on the edge is not cut, and coverage missed two on a thigh.
+    hidden[near & ~kept.any(1) & (depth[bf].max(1) > -.002)] = True
+    cuff_clips.append({'point': (hem_centre @ TO_GLTF.T).round(5).tolist(),
+                       'normal': (hem_normal @ TO_GLTF.T).round(5).tolist(),
                        'triangle_indices': np.flatnonzero(straddling).tolist()})
 if 'clip_edge' in SPEC:
     # A curved open edge such as a neckline: each skin triangle it crosses is cut by the plane through its nearest
