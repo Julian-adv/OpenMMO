@@ -458,10 +458,7 @@ mod tests {
             passability_floor_for_depth,
         };
         use crate::pathfinding::is_doorway;
-        let entrance = entrances()
-            .into_iter()
-            .find(|e| e.id == "thieves_den")
-            .unwrap();
+        let entrance = entrances().iter().find(|e| e.id == "thieves_den").unwrap();
         let position = crate::Position {
             x: entrance.x,
             y: entrance.y,
