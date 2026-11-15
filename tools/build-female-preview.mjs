@@ -7,7 +7,7 @@ import { ALL_EXTENSIONS, EXTTextureWebP } from '@gltf-transform/extensions'
 import sharp from 'sharp'
 import * as THREE from '../client/node_modules/three/build/three.module.js'
 import { headlessThree } from './lib/headless-three.mjs'
-import { root, directory, sources, dependencies, signature, output } from './lib/female-preview.mjs'
+import { root, directory, sources, dependencies, signature, output, bodySkin } from './lib/female-preview.mjs'
 
 const names = process.argv.slice(2)
 if (!names.length) names.push(...Object.keys(sources))
@@ -51,6 +51,11 @@ for (const name of names) {
   } else {
     const io = new NodeIO().registerExtensions(ALL_EXTENSIONS)
     const doc = await io.readBinary(source)
+    if (name === 'base') {
+      const skin = doc.getRoot().listMeshes()[0].listPrimitives()[0].getMaterial()
+      skin.getBaseColorTexture().setImage(await readFile(new URL(bodySkin.color, root))).setMimeType('image/png')
+      skin.getMetallicRoughnessTexture().setImage(await readFile(new URL(bodySkin.orm, root))).setMimeType('image/png')
+    }
     const colors = new Set(doc.getRoot().listMaterials().map(m => m.getBaseColorTexture()))
     const textures = []
     for (const texture of doc.getRoot().listTextures()) {

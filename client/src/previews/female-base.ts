@@ -11,6 +11,8 @@ import { poseMainHandProp, poseOffHandProp } from '../lib/utils/handProps'
 import { MODULAR_FEMALE_MODEL_PATH } from '../lib/utils/modelPaths'
 import {
   bindFemaleFacePart,
+  neckSlot,
+  neckStripMask,
   femaleFacePartPath,
   markFemaleBase,
   type FemaleFace,
@@ -911,9 +913,40 @@ export async function showFemaleBase(
     updateModularPoseCorrectives(model, motion.value)
   }
   const underwearColor = femaleUnderwearColor(base)
-  const outfitMask = femaleOutfitMask(base)
+  const bodyMask = femaleOutfitMask(base)
   const { female_face_part: facePartMask, female_face_name: faceName } =
     model.userData
+  const neckStrip = skinnedParts(model).find(
+    (mesh) => mesh.userData.female_neck
+  )
+  // As in the game, a body mask also cuts the face part's neck strip, which stands in for body triangles.
+  const necks = new Set<string>()
+  const outfitMask: typeof bodyMask = {
+    ...bodyMask,
+    register(name, value, mesh) {
+      bodyMask.register(name, value, mesh)
+      if (mesh || !neckStrip || name === faceName) return
+      bodyMask.register(
+        neckSlot(name),
+        neckStripMask(
+          facePartMask,
+          (value as { hide_triangle_indices: number[] }).hide_triangle_indices
+        ),
+        neckStrip
+      )
+      necks.add(name)
+    },
+    unregister(name) {
+      bodyMask.unregister(name)
+      if (necks.delete(name)) bodyMask.unregister(neckSlot(name))
+    },
+    setEquipped(name, enabled) {
+      bodyMask.setEquippedAll({
+        [name]: enabled,
+        ...(necks.has(name) ? { [neckSlot(name)]: enabled } : {}),
+      })
+    },
+  }
   outfitMask.register(
     faceName,
     {

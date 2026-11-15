@@ -31,7 +31,7 @@ ARMS = ('LeftArm', 'LeftForeArm', 'RightArm', 'RightForeArm')
 LEGS = ('LeftLeg', 'LeftFoot', 'LeftToe', 'RightLeg', 'RightFoot', 'RightToe')
 FEET = ('LeftFoot', 'LeftToe', 'RightFoot', 'RightToe')
 CEREMONY_V2 = dict(source='tripo_multiview_v2/segmented.glb',
-                   sha256='f6272edd9cf5c614d715172d4b472ec6dc583e5471a63636524b07786e56b2ee', scale=1)
+                   sha256='c1f2f134b29268b6671362923eb4114d6965fedff6495dd130b969a4691d9b90', scale=1)
 OUTFITS = {
     'priest': dict(
         source='tripo_segmented_v1/segmented.glb',
@@ -157,6 +157,11 @@ SNUG_COVER = .003
 EDGE_REACH = .025
 EDGE_OVERLAP = .002
 EDGE_CLEARANCE = .004
+# Skin up to EDGE_LIP in front of the cloth at the rim is tucked EDGE_TUCK behind it.
+EDGE_LIP = .008
+EDGE_TUCK = .002
+# Open-edge loops shorter than this (m) are slits, not openings.
+EDGE_LOOP = .5
 
 argv = sys.argv[sys.argv.index('--') + 1:]
 OUTFIT = argv[argv.index('--outfit') + 1]
@@ -976,6 +981,7 @@ for side, cut in sleeve_cut.items():
     arm = bw[:, forearm_hand_columns(side)].sum(1)[bf].min(1) > .5
     hidden[past & arm] = False
 cuff_clips = []
+tucked = {}
 if 'clip_cuff' in SPEC:
     # A full glove ends in a flat rim: arm skin is cut along the rim's plane, `clip_cuff` metres inside it, instead of by
     # whole triangles, which left notches above the rim and slivers below it. After the motion pokes, which
@@ -1016,9 +1022,25 @@ if 'clip_edge' in SPEC:
     for face in garment_ids[faces]:
         for i in range(3):
             users.setdefault(tuple(sorted((face[i], face[(i + 1) % 3]))), []).append(face[(i + 2) % 3])
+    # Open edges form loops. A short loop is a slit in the cloth, not an opening: the slits beside the neckline
+    # trim bared skin through the bodice.
+    rims = [edge for edge, opposite in users.items() if len(opposite) == 1]
+    loop = np.arange(len(garment_points))
+
+    def loop_of(i):
+        while loop[i] != i:
+            loop[i] = loop[loop[i]]
+            i = loop[i]
+        return i
+
+    for a, b in rims:
+        loop[loop_of(a)] = loop_of(b)
+    lengths = {}
+    for a, b in rims:
+        lengths[loop_of(a)] = lengths.get(loop_of(a), 0) + np.linalg.norm(garment_points[a] - garment_points[b])
     middles, outward = [], []
     for (a, b), opposite in users.items():
-        if len(opposite) != 1:
+        if len(opposite) != 1 or lengths[loop_of(a)] < EDGE_LOOP:
             continue
         middle = (garment_points[a] + garment_points[b]) / 2
         along = garment_points[b] - garment_points[a]
@@ -1038,22 +1060,27 @@ if 'clip_edge' in SPEC:
     samples = np.concatenate([centres[near][:, None], rest_points[bf[near]]], axis=1)
     distance = np.linalg.norm(samples[:, :, None] - middles[None, None], axis=3).min(1)
     crossed = {}
+
+    def against_cloth(point, normal):
+        behind, facing, _, _ = garment.ray_cast(Vector(point), Vector(-normal), POKE_DEPTH)
+        return (behind is not None and np.dot(np.array(facing), normal) > 0) or \
+            garment.ray_cast(Vector(point + normal * .0005), Vector(normal), EDGE_CLEARANCE)[0] is not None
+
     for f, edge in zip(near[distance.min(1) < EDGE_REACH], distance.argmin(1)[distance.min(1) < EDGE_REACH]):
         bare = (rest_points[bf[f]] - middles[edge]) @ outward[edge] > -EDGE_OVERLAP
+        normal = rest_normals[bf[f]].mean(0)
+        normal /= np.linalg.norm(normal)
+        # Where the cloth stands off the body the skin just inside the rim shows from above: it stays unless
+        # it lies outside the cloth or against it. Cutting it there left a hole in the cleavage.
         if bare.any():
             hidden[f] = False
-            if not bare.all():
+            inside = rest_points[bf[f]][~bare] * .7 + centres[f] * .3
+            if not bare.all() and any(against_cloth(point, normal) for point in inside):
                 crossed.setdefault(int(edge), []).append(int(f))
-        elif hidden[f]:
-            # Where the cloth stands off the body the skin just inside the rim shows from above: it stays unless
-            # it lies outside the cloth or against it.
-            normal = rest_normals[bf[f]].mean(0)
-            normal /= np.linalg.norm(normal)
-            behind, facing, _, _ = garment.ray_cast(Vector(centres[f]), Vector(-normal), POKE_DEPTH)
-            if not (behind is not None and np.dot(np.array(facing), normal) > 0) and \
-                    garment.ray_cast(Vector(centres[f] + normal * .0005), Vector(normal), EDGE_CLEARANCE)[0] is None:
-                hidden[f] = False
-    # A hidden triangle with bare skin on two sides is a notch in the bare skin and joins it.
+        elif hidden[f] and not against_cloth(centres[f], normal):
+            hidden[f] = False
+    # A hidden triangle with bare skin on two sides is a notch in the bare skin and joins it, unless it lies
+    # against the cloth: joined, those showed as skin patches on the bodice.
     shared = {}
     for f in near:
         for i in range(3):
@@ -1064,9 +1091,45 @@ if 'clip_edge' in SPEC:
             beside[f] += [other for other in group if other != f]
     for _ in range(2):
         for f in near[hidden[near]]:
-            if sum(not hidden[other] for other in beside[f]) >= 2:
+            normal = rest_normals[bf[f]].mean(0)
+            if sum(not hidden[other] for other in beside[f]) >= 2 and \
+                    not against_cloth(centres[f], normal / np.linalg.norm(normal)):
                 hidden[f] = False
+    # Skin standing a little in front of the cloth at the rim cannot be hidden or cut there without a gap between
+    # the skin above and the cloth: it is tucked behind the cloth instead and stays whole.
+    for f in near[distance.min(1) < EDGE_REACH]:
+        moved = {}
+        for v in bf[f]:
+            # The nearest point also finds skin beside the rim, where no ray along the normal meets the cloth.
+            point, facing, _, gap = garment.find_nearest(Vector(rest_points[v]), EDGE_LIP)
+            if point is not None and np.dot(rest_points[v] - np.array(point), np.array(facing)) > 0 \
+                    and np.dot(np.array(facing), rest_normals[v]) > 0:
+                moved[int(v)] = np.array(point) - np.array(facing) * EDGE_TUCK
+            else:
+                # Skin in front of a fold of the trim has its nearest cloth point on the fold's far side.
+                point, facing, _, _ = garment.ray_cast(Vector(rest_points[v]), Vector(-rest_normals[v]), EDGE_LIP)
+                if point is not None and np.dot(np.array(facing), rest_normals[v]) > 0:
+                    moved[int(v)] = np.array(point) - rest_normals[v] * EDGE_TUCK
+        normal = rest_normals[bf[f]].mean(0)
+        normal /= np.linalg.norm(normal)
+        hit, facing, _, _ = garment.ray_cast(Vector(centres[f]), Vector(-normal), EDGE_LIP)
+        cut = [triangles for triangles in crossed.values() if f in triangles]
+
+        def pokes(v):
+            behind, cloth, _, _ = garment.ray_cast(Vector(rest_points[v]), Vector(-rest_normals[v]), POKE_DEPTH)
+            return behind is not None and np.dot(np.array(cloth), rest_normals[v]) > 0
+
+        # A cut triangle whose corners all end up behind the cloth needs no cut: the cloth covers it, and the cut
+        # opened a hole where the rim stands off the skin.
+        if (cut and not any(pokes(v) for v in bf[f] if int(v) not in moved)) or len(moved) > 1 \
+                or (moved and hit is not None and np.dot(np.array(facing), normal) > 0):
+            tucked.update(moved)
+            hidden[f] = False
+            for triangles in cut:
+                triangles.remove(f)
     for edge, triangles in crossed.items():
+        if not triangles:
+            continue
         cuff_clips.append({'point': ((middles[edge] - outward[edge] * EDGE_OVERLAP) @ TO_GLTF.T).round(5).tolist(),
                            'normal': (outward[edge] @ TO_GLTF.T).round(5).tolist(), 'triangle_indices': triangles})
 brush = json.loads(PREVIEW_FIT.read_text())['parts'].get(PART, {}).get('brush', {}) if PREVIEW_FIT.exists() else {}
@@ -1118,6 +1181,14 @@ mask = {'body': str(BODY.relative_to(ROOT)), 'body_sha256': body_sha256, 'mesh_i
                  + (f', plus triangles weighted over half to {", ".join(SPEC["hide_bones"])} bones.' if hide_columns else '.')}
 if cuff_clips:
     mask['clip_planes'] = cuff_clips
+if tucked:
+    # Every copy of a moved vertex across UV seams moves with it.
+    copies = {}
+    for v, position in tucked.items():
+        copies.setdefault(int(welded_body[v]), []).append(position)
+    mask['vertex_adjustments'] = [{'vertex': int(v), 'position': (np.mean(copies[int(w)], 0) @ TO_GLTF.T).round(5).tolist(),
+                                   'normal': (rest_normals[v] @ TO_GLTF.T).round(5).tolist()}
+                                  for v, w in enumerate(welded_body) if int(w) in copies]
 (OUTPUT / 'body-occlusion.json').write_text(json.dumps(mask, indent=2) + '\n')
 
 mesh_obj.modifiers.new('Female rig', 'ARMATURE').object = rig

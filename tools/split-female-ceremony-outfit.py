@@ -33,6 +33,10 @@ SOURCE = DIRECTORY / 'model_url.glb'
 STOCKING_TOP = .78
 # Metres above the gold belt's top edge where the bodice is cut from the skirt.
 BELT_MARGIN = .002
+# Open-edge loops at the front neckline shorter than this (m) are slits and get closed.
+SLIT_LOOP = .5
+# Rings of triangles the front neckline may lose.
+NECKLINE_PEEL = 4
 # Metres past the gold cuff band where each glove is cut.
 CUFF_MARGIN = .001
 
@@ -222,6 +226,58 @@ parts['top'], parts['skirt'] = dress[above], dress[~above]
 # Loose scraps: pieces of a few triangles joined to nothing else.
 labels = components(points, parts['top'])
 parts['top'] = parts['top'][np.bincount(labels)[labels] >= 20]
+
+# Pale mannequin triangles stayed above the front neckline as teeth, with gaps between them where the skin under
+# them was hidden: the rim is peeled back while its triangles are cool white, which stops at the gold trim.
+cool_texel = warmth < 0
+for _ in range(NECKLINE_PEEL):
+    top = parts['top']
+    used = {}
+    welded = weld(points)[top]
+    for index, triangle in enumerate(welded):
+        for i in range(3):
+            used.setdefault(tuple(sorted((triangle[i], triangle[(i + 1) % 3]))), []).append(index)
+    open_edges = [edge for edge, group in used.items() if len(group) == 1]
+    rim = np.zeros(len(top), bool)
+    rim[[used[edge][0] for edge in open_edges]] = True
+    # A strip one triangle wide also hung off the trim across a slit: every corner of it lies on an open edge.
+    sliver = np.isin(welded, np.unique(open_edges)).all(1)
+    centres = points[top].mean(1)
+    # Short of the sleeve joins, whose thin bridges to the bodice would go too.
+    front = (centres[:, 1] > 1.3 + lift) & (np.abs(centres[:, 0]) < .125) & (centres[:, 2] > 0)
+    teeth = rim & front & (sliver | (face_share(cool_texel, top) >= .8))
+    if not teeth.any():
+        break
+    parts['top'] = top[~teeth]
+
+# Dropping the mannequin also tore slits in the bodice beside the trim, and the skin behind them showed or left a
+# hole. Each short loop of open edges at the front neckline is closed with a fan from its centre.
+top = parts['top']
+welded = weld(points)
+used = {}
+for triangle in top:
+    for i in range(3):
+        a, b = triangle[i], triangle[(i + 1) % 3]
+        used.setdefault(tuple(sorted((welded[a], welded[b]))), []).append((a, b))
+open_edges = [group[0] for group in used.values() if len(group) == 1]
+labels = connected_components(coo_matrix((np.ones(len(open_edges)), ([welded[a] for a, _ in open_edges],
+                                                                   [welded[b] for _, b in open_edges])),
+                                         shape=(welded.max() + 1,) * 2), directed=False)[1]
+patches = []
+for label in np.unique([labels[welded[a]] for a, _ in open_edges]):
+    loop = [(a, b) for a, b in open_edges if labels[welded[a]] == label]
+    corners = points[[a for a, _ in loop]]
+    centre = corners.mean(0)
+    length = sum(np.linalg.norm(points[a] - points[b]) for a, b in loop)
+    if length < SLIT_LOOP and centre[1] > 1.3 + lift and centre[2] > 0:
+        nearest = loop[int(np.linalg.norm(corners - centre, axis=1).argmin())][0]
+        points = np.vstack([points, centre])
+        normals = np.vstack([normals, normals[[a for a, _ in loop]].mean(0) / np.linalg.norm(normals[[a for a, _ in loop]].mean(0))])
+        uv = np.vstack([uv, uv[nearest]])
+        # Open edges run against their triangle's winding, so the fan keeps the cloth's facing.
+        patches += [[b, a, len(points) - 1] for a, b in loop]
+if patches:
+    parts['top'] = np.vstack([top, patches])
 
 # Pale mannequin triangles stayed on the arm above each glove: the glove ends at the plane of its gold band's far edge.
 for name in ('left_glove', 'right_glove'):

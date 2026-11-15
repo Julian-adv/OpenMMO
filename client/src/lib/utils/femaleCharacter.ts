@@ -517,7 +517,7 @@ function registerLazyPart(
   registerBodyMask(scene, state.mask, name)
 }
 
-const neckSlot = (name: string) => `${name}:neck`
+export const neckSlot = (name: string) => `${name}:neck`
 
 /** Registers an outfit's body mask and, on a custom face, the same cut on the neck strip that stands in for those body triangles. */
 function registerBodyMask(
@@ -535,19 +535,27 @@ function registerBodyMask(
   const face: FacePart | undefined = scene.userData.female_face_part
   const neck = meshes.find((mesh) => mesh.userData.female_neck)
   if (!face || !neck) return
-  const hidden = new Set<number>(value.hide_triangle_indices)
   mask.register(
     neckSlot(name),
-    {
-      mesh_index: 0,
-      primitive_index: 0,
-      primitive_triangles: face.strip_source_triangles.length,
-      hide_triangle_indices: face.strip_source_triangles.flatMap((source, i) =>
-        hidden.has(source) ? [i] : []
-      ),
-    },
+    neckStripMask(face, value.hide_triangle_indices),
     neck
   )
+}
+
+/** The cut a body mask makes on the neck strip that stands in for those body triangles. */
+export function neckStripMask(
+  face: Pick<FacePart, 'strip_source_triangles'>,
+  hide: number[]
+) {
+  const hidden = new Set<number>(hide)
+  return {
+    mesh_index: 0,
+    primitive_index: 0,
+    primitive_triangles: face.strip_source_triangles.length,
+    hide_triangle_indices: face.strip_source_triangles.flatMap((source, i) =>
+      hidden.has(source) ? [i] : []
+    ),
+  }
 }
 
 function femaleOutfit(armor?: ArmorEquipment): Outfit {

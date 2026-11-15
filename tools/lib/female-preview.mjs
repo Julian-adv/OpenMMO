@@ -11,8 +11,15 @@ export const sources = {
   animations: 'assets/modular_human_female_01/rig_v1/female-base.glb',
 }
 
+// Body colour and ORM maps matched to the face's skin (tools/match-female-body-skin.py), as the game build uses.
+export const bodySkin = {
+  color: 'assets/modular_human_female_01/rig_v1/skin_tone_v1/body-albedo.png',
+  orm: 'assets/modular_human_female_01/rig_v1/skin_tone_v1/body-orm.png',
+}
+
 export function dependencies(name) {
   return [sources[name], 'tools/build-female-preview.mjs', 'tools/lib/female-preview.mjs',
+    ...(name === 'base' ? Object.values(bodySkin) : []),
     ...(name === 'animations' ? [
       'client/public/models/characters/modular_male/animations/offhand.glb',
       'client/src/previews/female-torch.ts',

@@ -74,7 +74,7 @@
 
 ![대기·걷기·달리기](../../assets/items/female_ceremony_outfit/preview-idle-walk-run.png)
 
-미리보기 `/modular-character-preview.html?character=female&top=ceremony&bottom=ceremony&gloves=ceremony&boots=ceremony&helmet=ceremony`. 미리보기는 얼굴 파츠의 목 띠에 의상 가림을 적용하지 않아 속옷 끈 윗부분이 남아 보인다. 게임은 `registerBodyMask`가 목 띠도 가린다.
+미리보기 `/modular-character-preview.html?character=female&top=ceremony&bottom=ceremony&gloves=ceremony&boots=ceremony&helmet=ceremony`.
 
 남은 일:
 
@@ -98,3 +98,14 @@ v1은 베일이 등을 덮은 채 생성돼 보디스 등판이 톱니 모양으
 - 장갑: 사용자가 앞뒤 6.5°, 옆 1.5° 기울여 맞췄다. 분리 때 금색 띠 끝 평면에서 자른다.
 - 피부 자르기: 장갑 입구(`clip_cuff`), 상의 아랫단과 스타킹 윗단(`clip_hem`)은 걸친 몸체 삼각형을 그 평면에서 잘라 쓴다(가림 정보의 `clip_planes`, `female-outfit-mask.ts`). 삼각형 단위 가림은 톱니와 구멍을 남겼다.
 - 베일: 헤어별 조절값은 `client/src/lib/data/femaleHelmetFits.json`([기록](female-helmet-hair-brush.md)). 단발 기준 107%는 피팅에 구웠다.
+
+## 목선 구멍과 미리보기 피부색 — 2026-11-15
+
+- 가슴골 구멍: `clip_edge`가 목선에 걸친 몸체 삼각형을 가장 가까운 목선 평면에서 잘랐는데, 가슴골에서는 목선이 피부에서 2cm 떠 있어 잘려 나간 피부가 옷 뒤로 보였다. 잘려 나갈 쪽이 옷에 닿아 있을 때만 자른다. 삼각형 42개가 자르지 않고 통째로 남는다. 가린 삼각형 수와 상의 GLB는 그대로다.
+- 미리보기 피부색: 미리보기 몸체(`preview/base.glb`)가 보정 전 `female-base.glb` 텍스처를 그대로 써서 얼굴 파츠의 목 띠보다 창백하고 번들거렸다. 게임 빌드처럼 `skin_tone_v1`의 색·ORM을 쓴다(`tools/build-female-preview.mjs`). 게임 몸체는 원래 보정본이다.
+- 보디스 위 피부 조각과 목선 구멍(v2 분리·상의 피팅 다시):
+  - 분리: 마네킹을 떼어낸 자리에 목선 금 장식 위로 톱니가, 장식 옆으로 짧은 틈이 남아 있었다. 앞 목선(|x| < 12.5cm, 소매 이음새 제외)의 가장자리에서 찬 흰색 삼각형과 한 삼각형 폭 띠를 네 겹까지 벗기고(`NECKLINE_PEEL`), 둘레 0.5m 미만 틈은 가운데 점에서 부채꼴로 메운다(`SLIT_LOOP`). 상의 3,135 → 3,094 triangles. `segmented.glb` SHA-256 `c1f2f134b29268b6671362923eb4114d6965fedff6495dd130b969a4691d9b90`.
+  - 피팅: 목선에서 옷보다 8mm 이내로 앞에 나온 피부는 가리거나 자르지 않고 정점을 옷 뒤 2mm로 밀어 넣는다(가림 정보의 `vertex_adjustments` 42개, `EDGE_LIP`·`EDGE_TUCK`). 가리면 위에서 볼 때 피부와 옷 사이가 비고, 두면 옷 위로 비쳤다. 잘릴 쪽이 모두 옷 뒤에 있는 삼각형은 자르지 않고, 옷에 닿은 삼각형은 홈 메우기로 되살리지 않는다. 둘레 0.5m 미만 고리는 목선으로 치지 않는다(`EDGE_LOOP`).
+  - 결과: 가린 몸체 삼각형 3,226개, 목선 자르기 평면 없음(아랫단 평면만 남음). 기본 자세 여섯 방향 렌더와 미리보기 대기 자세 네 각도에서 구멍·피부 조각 없음. 걷기·달리기는 확인하지 않았다.
+- 어깨 속옷 끈: 미리보기가 얼굴 파츠의 목 띠에 의상 가림을 적용하지 않아 끈 윗부분이 남아 보였다. 게임의 `registerBodyMask`처럼 목 띠도 가린다(`neckStripMask`).
+- 남은 일: 소매 이음새 옆 톱니는 그대로다.
