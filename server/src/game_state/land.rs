@@ -139,12 +139,23 @@ impl GameState {
         } else {
             (0, amount)
         };
-        self.estate_gold_write(player_id, held, credit, move |character, rows| {
-            Ok(auth
-                .transfer_land_gold(character, &rows, amount, deposit)?
-                .map(|(_, account)| account))
-        })
-        .await
+        let account = self
+            .estate_gold_write(player_id, held, credit, move |character, rows| {
+                Ok(auth
+                    .transfer_land_gold(character, &rows, amount, deposit)?
+                    .map(|(_, account)| account))
+            })
+            .await?;
+        let player = self.player_name_of(player_id).await;
+        let action = if deposit { "deposit" } else { "withdraw" };
+        tracing::info!(
+            %player,
+            action,
+            amount,
+            treasury = account.treasury,
+            "estate tax account transfer"
+        );
+        Ok(account)
     }
 
     /// Move gold between a player and an estate tax account. `held` leaves

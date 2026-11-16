@@ -733,6 +733,11 @@ pub enum ClientMessage {
     PatrolScout,
     /// Guard NPC only: one swing at the fence, shown to those nearby.
     PatrolStrike,
+    /// Guard NPC only: pulls down the estate fences penning the guard in.
+    /// `recall` sends the guard back to town instead.
+    PatrolBreakOut {
+        recall: bool,
+    },
     ImpoundQuery {
         npc_player_id: PlayerId,
     },
@@ -1200,6 +1205,7 @@ impl ClientMessage {
             | PatrolSweep { .. }
             | PatrolScout
             | PatrolStrike
+            | PatrolBreakOut { .. }
             | ImpoundReclaim { .. }
             | StartLandscapingMode { .. }
             | EditLandscape { .. }
@@ -1896,6 +1902,12 @@ pub enum ServerMessage {
     PatrolScouted {
         target: Option<Position>,
         warned: Vec<String>,
+    },
+    /// Answer to `PatrolBreakOut`: fences forfeited for penning the guard in,
+    /// and whether the guard was sent back to town.
+    PatrolBrokeOut {
+        seized: Vec<PatrolSeizure>,
+        recalled: bool,
     },
     /// Nearby: a swing with no monster on the other end.
     PlayerSwung {
@@ -2755,6 +2767,7 @@ impl ServerMessage {
             | Self::FenceEditResult { .. }
             | Self::PatrolSweepResult { .. }
             | Self::PatrolScouted { .. }
+            | Self::PatrolBrokeOut { .. }
             | Self::ImpoundState { .. }
             | Self::EstateChestMode { .. }
             | Self::EstateFurnitureMoveMode { .. }

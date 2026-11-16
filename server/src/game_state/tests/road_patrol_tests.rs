@@ -293,3 +293,167 @@ async fn a_scout_warns_before_enforcement_and_names_the_nearest_road_fence_after
         .count();
     assert_eq!(swings, 1);
 }
+
+fn ring(min: (i32, i32), max: (i32, i32)) -> Vec<FenceEdge> {
+    let mut edges = Vec::new();
+    for x in min.0..=max.0 {
+        for z in [min.1, max.1 + 1] {
+            edges.push(FenceEdge {
+                x,
+                z,
+                axis: FenceAxis::X,
+            });
+        }
+    }
+    for z in min.1..=max.1 {
+        for x in [min.0, max.0 + 1] {
+            edges.push(FenceEdge {
+                x,
+                z,
+                axis: FenceAxis::Z,
+            });
+        }
+    }
+    edges
+}
+
+fn break_out_result(rx: &mut DirectRx) -> (Vec<PatrolSeizure>, bool) {
+    drain(rx)
+        .into_iter()
+        .find_map(|message| match message {
+            ServerMessage::PatrolBrokeOut { seized, recalled } => Some((seized, recalled)),
+            _ => None,
+        })
+        .expect("break-out result")
+}
+
+async fn stand_guard_at(game: &GameState, x: f32, z: f32) {
+    game.teleport_player(&pid("Karl"), pos3(x, 5.05, z), 0.0, 0)
+        .await;
+}
+
+#[tokio::test]
+async fn a_penned_guard_forfeits_every_ring_around_it_without_warning() {
+    let (game, auth, mut owner_rx, mut guard_rx) = setup("patrol_break_out").await;
+    let pen: Vec<FenceEdge> = ring((20, 1), (20, 1))
+        .into_iter()
+        .chain(ring((19, 0), (21, 2)))
+        .collect();
+    for edge in pen.iter().copied().chain([edge(30)]) {
+        game.edit_fence(&pid("Builder"), edge, true, &auth, false)
+            .await;
+    }
+    assert_eq!(auth.load_fences().unwrap().len(), 17);
+    stand_guard_at(&game, 20.5, 1.5).await;
+    drain(&mut owner_rx);
+
+    game.patrol_break_out(&pid("Karl"), false, &auth).await;
+    assert_eq!(
+        break_out_result(&mut guard_rx),
+        (
+            vec![PatrolSeizure {
+                owner: "Builder".into(),
+                fences: 16,
+                forfeited: true
+            }],
+            false
+        )
+    );
+    let left = auth.load_fences().unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].edge, edge(30));
+    assert!(!is_movement_blocked(
+        &game.passability_read(),
+        20.5,
+        1.5,
+        17.5,
+        1.5,
+        0,
+        Some(5.05)
+    ));
+    let owner_id = game.player_characters.read().await[&pid("Builder")].0;
+    assert!(auth.impounded_items(owner_id).unwrap().is_empty());
+    assert_eq!(fences(&game, "Builder").await, 83);
+    let mail = drain(&mut owner_rx)
+        .iter()
+        .filter(|message| matches!(message, ServerMessage::MailNotice { .. }))
+        .count();
+    assert_eq!(mail, 1);
+    assert_eq!(player_xz(&game, &pid("Karl")).await, (20.5, 1.5));
+}
+
+#[tokio::test]
+async fn a_guard_with_a_way_to_the_road_takes_no_fences() {
+    let (game, auth, _owner_rx, mut guard_rx) = setup("patrol_break_out_free").await;
+    let mut open_pen = ring((20, 1), (20, 1));
+    open_pen.pop();
+    for edge in open_pen {
+        game.edit_fence(&pid("Builder"), edge, true, &auth, false)
+            .await;
+    }
+    stand_guard_at(&game, 20.5, 1.5).await;
+
+    game.patrol_break_out(&pid("Karl"), false, &auth).await;
+    assert_eq!(break_out_result(&mut guard_rx), (vec![], false));
+    assert_eq!(auth.load_fences().unwrap().len(), 3);
+
+    game.patrol_break_out(&pid("Builder"), true, &auth).await;
+    assert_eq!(player_xz(&game, &pid("Builder")).await, (1.5, 1.5));
+}
+
+#[tokio::test]
+async fn a_guard_asking_for_recall_is_sent_back_to_town() {
+    let (game, auth, _owner_rx, mut guard_rx) = setup("patrol_recall").await;
+    stand_guard_at(&game, 20.5, 1.5).await;
+
+    game.patrol_break_out(&pid("Karl"), true, &auth).await;
+    assert_eq!(break_out_result(&mut guard_rx), (vec![], true));
+    let spawn = crate::world_config::world_config()
+        .spawn_position
+        .position();
+    assert_eq!(player_xz(&game, &pid("Karl")).await, (spawn.x, spawn.z));
+}
+
+#[tokio::test]
+async fn a_guard_penned_by_what_it_cannot_take_down_is_sent_back_to_town() {
+    let (game, auth, _owner_rx, mut guard_rx) = setup("patrol_break_out_stuck").await;
+    for edge in ring((60, 1), (60, 1)) {
+        game.edit_fence(&pid("Builder"), edge, true, &auth, true)
+            .await;
+    }
+    assert_eq!(auth.load_fences().unwrap().len(), 4);
+    stand_guard_at(&game, 60.5, 1.5).await;
+
+    game.patrol_break_out(&pid("Karl"), false, &auth).await;
+    assert_eq!(break_out_result(&mut guard_rx), (vec![], true));
+    assert_eq!(auth.load_fences().unwrap().len(), 4);
+    let spawn = crate::world_config::world_config()
+        .spawn_position
+        .position();
+    assert_eq!(player_xz(&game, &pid("Karl")).await, (spawn.x, spawn.z));
+}
+
+#[tokio::test]
+async fn a_guard_on_furniture_is_left_alone_even_inside_a_ring_of_fences() {
+    use onlinerpg_shared::pathfinding::{build_furniture_passability, FurniturePiece};
+    let (game, auth, _owner_rx, mut guard_rx) = setup("patrol_break_out_seated").await;
+    for edge in ring((20, 1), (20, 1)) {
+        game.edit_fence(&pid("Builder"), edge, true, &auth, false)
+            .await;
+    }
+    let chair = build_furniture_passability(&[FurniturePiece {
+        cells: vec![(20, 1)],
+        floor_level: 0,
+        y_base: 5.05,
+        wall_height: onlinerpg_shared::furniture::FURNITURE_BLOCK_HEIGHT,
+    }])
+    .unwrap();
+    game.passability_write()
+        .insert(onlinerpg_shared::furniture::region_cache_key(0, 0), chair);
+    stand_guard_at(&game, 20.5, 1.5).await;
+
+    game.patrol_break_out(&pid("Karl"), false, &auth).await;
+    assert_eq!(break_out_result(&mut guard_rx), (vec![], false));
+    assert_eq!(auth.load_fences().unwrap().len(), 4);
+    assert_eq!(player_xz(&game, &pid("Karl")).await, (20.5, 1.5));
+}

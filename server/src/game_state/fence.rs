@@ -43,7 +43,7 @@ impl FenceIndex {
             .collect()
     }
 
-    fn get(&self, edge: &FenceEdge) -> Option<&Fence> {
+    pub(super) fn get(&self, edge: &FenceEdge) -> Option<&Fence> {
         self.buckets.get(&Self::bucket(*edge))?.get(edge)
     }
 

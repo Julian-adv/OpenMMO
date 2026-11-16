@@ -233,6 +233,12 @@ impl GameState {
             .await;
     }
 
+    pub(super) async fn teleport_to_town_with_effects(&self, player_id: &PlayerId) {
+        let spawn = &crate::world_config::world_config().spawn_position;
+        self.teleport_player_with_effects(player_id, spawn.position(), spawn.rotation, 0)
+            .await;
+    }
+
     pub(super) async fn publish_teleport_effect(
         &self,
         player_id: &PlayerId,

@@ -1185,6 +1185,25 @@ impl SharedState {
                     ));
                 }
             }
+            ServerMessage::PatrolBrokeOut { seized, recalled } => {
+                self.patrol_breakouts += 1;
+                self.patrol_broke_out = *recalled || !seized.is_empty();
+                for seizure in seized {
+                    self.push_ambient_event(format!(
+                        "[Patrol] {}'s fences penned you in on duty. You pulled {} of them \
+                         down; they are forfeit and the owner has been sent a letter. Say so \
+                         aloud if anyone is near.",
+                        seizure.owner, seizure.fences
+                    ));
+                }
+                if *recalled {
+                    self.push_ambient_event(
+                        "[Patrol] You could not get free and were brought back to Aldermark \
+                         to resume your duty."
+                            .to_string(),
+                    );
+                }
+            }
             ServerMessage::FenceVisibility { added, removed } => {
                 if let Some(id) = self.self_player_id {
                     self.world_cache

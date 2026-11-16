@@ -289,6 +289,11 @@ pub struct SharedState {
     /// The fence the last scout found, and how many scouts were answered.
     pub patrol_target: Option<onlinerpg_shared::Position>,
     pub patrol_scouts: u64,
+    /// Break-outs answered, whether the last one freed us, and walks blocked
+    /// in a row since anything last worked.
+    pub patrol_breakouts: u64,
+    pub patrol_broke_out: bool,
+    pub patrol_blocked: u32,
     /// Keeps the weapon out while a fence is struck; lapses if the lap is cut short.
     pub patrol_strike_until: Option<tokio::time::Instant>,
     /// Pending cast acknowledgement or a pause between attempts.
@@ -524,6 +529,9 @@ impl SharedState {
             patrol_reached: 0,
             patrol_target: None,
             patrol_scouts: 0,
+            patrol_breakouts: 0,
+            patrol_broke_out: false,
+            patrol_blocked: 0,
             patrol_strike_until: None,
             fishing_retry_at: None,
             recited_this_turn: false,

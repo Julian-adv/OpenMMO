@@ -13,12 +13,20 @@ use crate::metrics::GoldSink;
 use crate::npc_defs::npc_defs;
 use crate::road_index::RoadIndex;
 use crate::types::{PlayerId, Position, ServerMessage};
-use onlinerpg_shared::fence::{self, FenceEdge};
+use onlinerpg_shared::fence::{self, FenceAxis, FenceEdge};
 use onlinerpg_shared::messages::{ImpoundedItem, PatrolSeizure};
+use onlinerpg_shared::pathfinding::{
+    is_cardinal_move_blocked, is_cell_under_furniture, is_doorway, PassabilityCache, DIRS,
+};
+use std::collections::{HashSet, VecDeque};
 
 /// How far around a guard one sweep reaches.
 const SWEEP_RADIUS_M: f32 = 24.0;
 const GUARD_CLASS: &str = "guard";
+/// A walk that gets this many cells from the guard is not penned in.
+const PEN_REACH_CELLS: i32 = 48;
+/// Nested pens one break-out works through.
+const BREAK_OUT_ROUNDS: usize = 8;
 pub(crate) use onlinerpg_shared::schedule::GUARD_CAPTAIN;
 
 fn reclaim_fee(base_price: i64, quantity: u32) -> i64 {
@@ -26,7 +34,14 @@ fn reclaim_fee(base_price: i64, quantity: u32) -> i64 {
 }
 
 fn seizure_letter(seizure: &RoadSeizure, captain: &str) -> String {
-    if seizure.forfeited() {
+    if seizure.obstruction {
+        format!(
+            "Your fences penned in a guard of the road patrol on duty. They have been pulled \
+             down and are forfeit.\n\
+             귀하의 목책이 근무 중인 순찰대원을 가두었습니다. 철거했으며 경고 없이 몰수합니다.\n\
+             — {captain}, Captain of the Guard"
+        )
+    } else if seizure.forfeited() {
         format!(
             "The road patrol is pulling your fences off the public road. This is offence {k}; \
              they are forfeit.\n\
@@ -47,6 +62,46 @@ fn seizure_letter(seizure: &RoadSeizure, captain: &str) -> String {
 
 const RECORDS_UNAVAILABLE: &str = "Patrol records are unavailable.";
 
+/// The fences around the surface cells walkable from `start`, or `None` when
+/// the walk reaches a road or gets `PEN_REACH_CELLS` away. Doorways count as
+/// open.
+fn penning_fences(
+    cache: &PassabilityCache,
+    fences: &super::fence::FenceIndex,
+    roads: Option<&RoadIndex>,
+    start: (i32, i32),
+) -> Option<Vec<FenceEdge>> {
+    let floor = onlinerpg_shared::dungeon::passability_floor_for_level(0);
+    let mut seen = HashSet::from([start]);
+    let mut queue = VecDeque::from([start]);
+    let mut edges = HashSet::new();
+    while let Some((x, z)) = queue.pop_front() {
+        let away = (x - start.0).abs().max((z - start.1).abs());
+        if away > PEN_REACH_CELLS
+            || roads.is_some_and(|roads| roads.on_road(x as f32 + 0.5, z as f32 + 0.5))
+        {
+            return None;
+        }
+        for (dx, dz) in DIRS {
+            let walled = is_cardinal_move_blocked(cache, x, z, dx, dz, floor)
+                && !is_doorway(cache, x, z, dx, dz, floor);
+            if walled {
+                let edge = FenceEdge {
+                    x: x + dx.max(0),
+                    z: z + dz.max(0),
+                    axis: if dx == 0 { FenceAxis::X } else { FenceAxis::Z },
+                };
+                if fences.get(&edge).is_some() {
+                    edges.insert(edge);
+                }
+            } else if seen.insert((x + dx, z + dz)) {
+                queue.push_back((x + dx, z + dz));
+            }
+        }
+    }
+    Some(edges.into_iter().collect())
+}
+
 fn is_guard_captain(npc: &crate::types::Player) -> bool {
     npc.is_official_npc
         && npc_defs()
@@ -59,7 +114,7 @@ impl GameState {
         let _ = self.roads.set(roads);
     }
 
-    async fn guard_on_road(&self, player_id: &PlayerId) -> Result<Position, &'static str> {
+    async fn surface_guard(&self, player_id: &PlayerId) -> Result<Position, &'static str> {
         let players = self.players.read().await;
         let guard = players.get(player_id).ok_or("Character not found.")?;
         let is_guard = guard.is_official_npc
@@ -67,10 +122,10 @@ impl GameState {
                 .get_by_npc_name(&guard.name)
                 .is_some_and(|def| def.class == GUARD_CLASS);
         if !is_guard {
-            return Err("Only the guard clears the road.");
+            return Err("Only the guard does this.");
         }
         if guard.health == 0 || guard.floor_level != 0 {
-            return Err("Stand on the road to clear it.");
+            return Err("Stand on the surface, alive.");
         }
         Ok(guard.position)
     }
@@ -82,7 +137,7 @@ impl GameState {
         player_id: &PlayerId,
         auth: &AuthService,
     ) -> Result<(Position, Vec<FenceEdge>, bool), &'static str> {
-        let guard = self.guard_on_road(player_id).await?;
+        let guard = self.surface_guard(player_id).await?;
         let Some(roads) = self.roads.get() else {
             return Ok((guard, Vec::new(), false));
         };
@@ -151,7 +206,7 @@ impl GameState {
     }
 
     pub async fn patrol_strike(&self, player_id: &PlayerId) {
-        let Ok(position) = self.guard_on_road(player_id).await else {
+        let Ok(position) = self.surface_guard(player_id).await else {
             return;
         };
         let swung = ServerMessage::PlayerSwung {
@@ -188,9 +243,25 @@ impl GameState {
         if !enforcing {
             return Ok((Self::fence_owners(auth, edges).await?, Vec::new()));
         }
+        let seizures = self.seize_fences(edges, patrol_id, false, auth).await?;
+        Ok((
+            Vec::new(),
+            seizures.iter().map(RoadSeizure::report).collect(),
+        ))
+    }
+
+    /// Take estate fences on `edges` down, log each owner's loss and write to
+    /// owners newly in offence.
+    async fn seize_fences(
+        &self,
+        edges: Vec<FenceEdge>,
+        patrol_id: i64,
+        obstruction: bool,
+        auth: &AuthService,
+    ) -> Result<Vec<RoadSeizure>, &'static str> {
         let db = auth.clone();
         let _persistence = self.persistence_lock.lock().await;
-        let seizures = auth_db(move || db.seize_road_fences(&edges, patrol_id))
+        let seizures = auth_db(move || db.seize_road_fences(&edges, patrol_id, obstruction))
             .await
             .map_err(|error| {
                 tracing::warn!(%error, "Failed to seize road fences");
@@ -220,23 +291,94 @@ impl GameState {
                 fences = seizure.edges.len(),
                 offence = seizure.offence,
                 forfeited = seizure.forfeited(),
+                obstruction,
                 "road patrol seized fences"
             );
             if seizure.new_offence {
                 self.send_seizure_letter(seizure, auth).await;
             }
         }
-        Ok((
-            Vec::new(),
-            seizures
-                .iter()
-                .map(|seizure| PatrolSeizure {
-                    owner: seizure.owner_name.clone(),
-                    fences: seizure.edges.len() as u32,
-                    forfeited: seizure.forfeited(),
-                })
-                .collect(),
-        ))
+        Ok(seizures)
+    }
+
+    pub async fn patrol_break_out(&self, player_id: &PlayerId, recall: bool, auth: &AuthService) {
+        let (seized, recalled) = match self.try_patrol_break_out(player_id, recall, auth).await {
+            Ok(result) => result,
+            Err(reason) => {
+                tracing::warn!(?player_id, reason, "patrol break-out refused");
+                Default::default()
+            }
+        };
+        self.send_direct_message(
+            player_id,
+            ServerMessage::PatrolBrokeOut { seized, recalled },
+        )
+        .await;
+    }
+
+    async fn penning_fences_at(&self, start: (i32, i32)) -> Option<Vec<FenceEdge>> {
+        let cache = self.passability.snapshot();
+        let fences = self.fences.read().await;
+        penning_fences(&cache, &fences, self.roads.get(), start)
+    }
+
+    /// Forfeit the estate fences penning in whoever stands at `start`, ring by
+    /// ring. Returns each owner's loss and whether the pen still holds.
+    async fn clear_pen(
+        &self,
+        start: (i32, i32),
+        auth: &AuthService,
+    ) -> Result<(Vec<PatrolSeizure>, bool), &'static str> {
+        let patrol_id = unix_now();
+        let mut seized: Vec<PatrolSeizure> = Vec::new();
+        for _ in 0..BREAK_OUT_ROUNDS {
+            let Some(edges) = self.penning_fences_at(start).await else {
+                return Ok((seized, false));
+            };
+            let taken = if edges.is_empty() {
+                Vec::new()
+            } else {
+                self.seize_fences(edges, patrol_id, true, auth).await?
+            };
+            if taken.is_empty() {
+                return Ok((seized, true));
+            }
+            for seizure in taken.iter().map(RoadSeizure::report) {
+                match seized.iter_mut().find(|s| s.owner == seizure.owner) {
+                    Some(entry) => entry.fences += seizure.fences,
+                    None => seized.push(seizure),
+                }
+            }
+        }
+        let penned = self.penning_fences_at(start).await.is_some();
+        Ok((seized, penned))
+    }
+
+    /// A guard on furniture stands in a walled cell without being penned, so
+    /// it is left alone. Any other guard still penned once its pen is
+    /// cleared, or one asking for `recall`, goes back to town.
+    async fn try_patrol_break_out(
+        &self,
+        player_id: &PlayerId,
+        recall: bool,
+        auth: &AuthService,
+    ) -> Result<(Vec<PatrolSeizure>, bool), &'static str> {
+        let guard = self.surface_guard(player_id).await?;
+        let floor = onlinerpg_shared::dungeon::passability_floor_for_level(0);
+        let seated = is_cell_under_furniture(&self.passability.snapshot(), guard.x, guard.z, floor);
+        let (seized, penned) = if seated {
+            Default::default()
+        } else {
+            let start = (guard.x.floor() as i32, guard.z.floor() as i32);
+            self.clear_pen(start, auth).await?
+        };
+        let recalled = recall || penned;
+        if recalled {
+            let guard = self.player_name_of(player_id).await;
+            tracing::info!(%guard, recall, "penned guard recalled to town");
+            self.teleport_to_town_with_effects(player_id).await;
+        }
+        Ok((seized, recalled))
     }
 
     async fn send_seizure_letter(&self, seizure: &RoadSeizure, auth: &AuthService) {

@@ -227,6 +227,19 @@ async fn send_patrol(state: &Arc<Mutex<SharedState>>, msg: ClientMessage) {
     }
 }
 
+/// Blocked walks in a row before a guard asks to be brought back to town.
+const RECALL_AFTER_BLOCKED: u32 = 3;
+
+/// Ask for the fences penning this guard in to come down, or with `recall`
+/// to be brought back to town. True when either happened.
+async fn break_out(state: &Arc<Mutex<SharedState>>, recall: bool) -> bool {
+    let seen = state.lock().await.patrol_breakouts;
+    send_patrol(state, ClientMessage::PatrolBreakOut { recall }).await;
+    super::execute::wait_for_answer(state, seen, |s| s.patrol_breakouts).await;
+    let s = state.lock().await;
+    s.patrol_breakouts != seen && s.patrol_broke_out
+}
+
 /// Scout the road here; the answer carries any warnings. A fence due to come
 /// down is walked up to and struck, then a sweep clears every such fence around.
 async fn clear_road(state: &Arc<Mutex<SharedState>>, patrol_id: i64, floor: u8) {
@@ -304,16 +317,29 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
                 floor: entry.floor_level,
             };
             go_on = false;
-            for _ in 0..2 {
+            for attempt in 0..3 {
                 if patrol.sweeps {
                     clear_road(&state, patrol_id, entry.floor_level).await;
                 }
                 match execute_walk(&state, &to, Some(false)).await {
                     MoveResult::Arrived => {
                         go_on = true;
+                        state.lock().await.patrol_blocked = 0;
                         break;
                     }
                     MoveResult::Died => break 'lap,
+                    MoveResult::Blocked | MoveResult::Error if attempt == 0 => {}
+                    MoveResult::Blocked | MoveResult::Error if attempt == 1 => {
+                        let recall = {
+                            let mut s = state.lock().await;
+                            s.patrol_blocked += 1;
+                            s.patrol_blocked >= RECALL_AFTER_BLOCKED
+                        };
+                        if !break_out(&state, recall).await {
+                            break;
+                        }
+                        state.lock().await.patrol_blocked = 0;
+                    }
                     MoveResult::Blocked | MoveResult::Error => {}
                 }
             }
@@ -374,7 +400,13 @@ pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry
     };
     match execute_walk(state, &to, Some(false)).await {
         MoveResult::Arrived => {}
-        MoveResult::Blocked | MoveResult::Died => return,
+        MoveResult::Blocked => {
+            if state.lock().await.protects() {
+                break_out(state, false).await;
+            }
+            return;
+        }
+        MoveResult::Died => return,
         MoveResult::Error => {
             error!("Schedule move error");
             return;

@@ -1668,9 +1668,7 @@ impl super::GameState {
         }
 
         self.consume_one_and_sync(player_id, instance_id).await;
-        let spawn = &crate::world_config::world_config().spawn_position;
-        self.teleport_player_with_effects(player_id, spawn.position(), spawn.rotation, 0)
-            .await;
+        self.teleport_to_town_with_effects(player_id).await;
         true
     }
 

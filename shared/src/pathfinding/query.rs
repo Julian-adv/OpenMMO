@@ -327,6 +327,25 @@ pub fn blocking_entry_for_mover<'a>(
     Some(info)
 }
 
+/// Whether furniture walls the cell at `(x, z)` in on all four sides, as it
+/// does every cell it stands on.
+pub fn is_cell_under_furniture(cache: &PassabilityCache, x: f32, z: f32, floor_level: u8) -> bool {
+    let cx = x.floor() + 0.5;
+    let cz = z.floor() + 0.5;
+    super::DIRS.iter().all(|&(dx, dz)| {
+        blocking_entries(
+            cache,
+            cx,
+            cz,
+            cx + dx as f32,
+            cz + dz as f32,
+            floor_level,
+            None,
+        )
+        .any(|(rp, _)| rp.yields_to_trapped_mover)
+    })
+}
+
 /// Bool wrapper over [`blocking_entry_for_mover`] for continuous movement.
 pub fn is_movement_blocked_for_mover(
     cache: &PassabilityCache,

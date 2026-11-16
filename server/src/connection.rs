@@ -1149,6 +1149,11 @@ async fn handle_client_message(
                 game_state.patrol_strike(id).await;
             }
         }
+        ClientMessage::PatrolBreakOut { recall } => {
+            if let Some(id) = &state.player_id {
+                game_state.patrol_break_out(id, recall, auth_service).await;
+            }
+        }
         ClientMessage::ImpoundQuery { npc_player_id } => {
             if let Some(id) = &state.player_id {
                 game_state

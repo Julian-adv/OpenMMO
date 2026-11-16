@@ -15,12 +15,22 @@ pub struct RoadSeizure {
     pub offence: u32,
     /// False when an earlier sweep of the same patrol already counted it.
     pub new_offence: bool,
+    /// Taken for penning a guard in: forfeited whatever the offence count.
+    pub obstruction: bool,
     pub edges: Vec<FenceEdge>,
 }
 
 impl RoadSeizure {
     pub fn forfeited(&self) -> bool {
-        self.offence >= FORFEIT_FROM_OFFENCE
+        self.obstruction || self.offence >= FORFEIT_FROM_OFFENCE
+    }
+
+    pub fn report(&self) -> onlinerpg_shared::messages::PatrolSeizure {
+        onlinerpg_shared::messages::PatrolSeizure {
+            owner: self.owner_name.clone(),
+            fences: self.edges.len() as u32,
+            forfeited: self.forfeited(),
+        }
     }
 }
 
@@ -108,11 +118,12 @@ impl AuthService {
     }
 
     /// Remove estate fences on `edges`. One patrol is one offence per account;
-    /// the first is impounded, later ones forfeited.
+    /// the first is impounded, later ones and any `obstruction` forfeited.
     pub fn seize_road_fences(
         &self,
         edges: &[FenceEdge],
         patrol_id: i64,
+        obstruction: bool,
     ) -> Result<Vec<RoadSeizure>, AuthError> {
         let mut conn = self.open_connection()?;
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
@@ -131,6 +142,7 @@ impl AuthService {
                     owner_name,
                     offence: 0,
                     new_offence: false,
+                    obstruction,
                     edges: Vec::new(),
                 })
                 .edges

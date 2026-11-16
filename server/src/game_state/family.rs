@@ -988,6 +988,8 @@ impl super::GameState {
             .await;
         match outcome {
             Ok(family_id) => {
+                let player = self.player_name_of(player_id).await;
+                tracing::info!(%player, family_id, estate_id, amount, "family estate deposit");
                 self.family_note(
                     player_id,
                     format!("paid {amount} gold into the estate's tax account."),

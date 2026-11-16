@@ -13,6 +13,20 @@
 - 2회차부터는 몰수한다.
 - 철거할 때마다 Karl 명의의 편지가 주인에게 간다.
 
+## 갇힌 경비병
+
+구현: 2026-11-16, 프로토콜 160. 11/14 Brenna가 영지 안에서 목책 격자에 45시간 갇힌 일에서 나왔다.
+
+- 경비병의 이동이 막히면 `PatrolBreakOut`을 보낸다. 서버는 경비병이 선 칸에서 걸어서 닿는 지상 칸을 훑는다. 문은 열린 것으로 친다.
+- 도로에 닿거나 48칸 밖으로 나가면 갇힌 것이 아니다. 아무것도 철거하지 않는다.
+- 닿는 칸이 막혀 있으면 그 둘레의 영지 목책을 전부 철거한다. 겹겹이 둘렀으면 한 요청에서 8겹까지 걷는다.
+- 이 철거는 경고 기간과 위반 횟수에 상관없이 몰수다. 돌려주지 않는다(사용자 결정 2026-11-16). 위반 횟수는 1회 올라가고 Karl의 편지가 간다.
+- 가구(침대·의자) 위의 경비병은 먼저 걸러 낸다. 가구는 자기 칸의 네 변을 막으므로 갇힌 것으로 읽히기 때문이다. 이때는 철거도 귀환도 하지 않는다.
+- 목책을 철거하고도 갇혀 있으면(집 벽, 운영자 목책 등) 마을 시작 지점으로 순간이동시킨다.
+- 순찰 중인 경비병이 경유지 이동에 세 번 연달아 실패하면 `recall`을 붙여 보내고, 서버는 갇힘 여부와 상관없이 마을로 보낸다. 한 번이라도 도착하면 횟수는 0으로 돌아간다. 식사·취침 같은 일정 이동은 `recall`을 보내지 않는다.
+- 순찰 중에는 네 명 모두, 그 밖의 일정 이동에서는 `protects`가 켜진 NPC가 보낸다. 서버는 `guard` 클래스 공식 NPC의 요청만 받는다.
+- 로그: `road patrol seized fences … obstruction=true`, `penned guard recalled to town`.
+
 ## 순찰대
 
 | 시각 | 주간조(Garrick, Brenna)·Karl | 야간조(Osric, Halda) |
@@ -56,6 +70,7 @@
 
 - `server/src/road_index.rs`: `data/terrain/worldgen.json`의 도로 선분을 16m 격자에 담아 거리 판정.
 - `server/src/game_state/road_patrol.rs`: `PatrolSweep`은 `guard` 클래스 공식 NPC만 보낼 수 있고, 경비병 주변 24m의 대상 목책을 철거한다. `ImpoundQuery`·`ImpoundReclaim`은 Karl 곁에서만 받는다.
+- `server/src/game_state/road_patrol.rs`의 `penning_fences`·`patrol_break_out`: 갇힘 판정과 몰수 철거, 마을 귀환. `agent-client/src/driver/movement.rs`의 `break_out`이 요청한다.
 - `server/src/auth_road_patrol.rs`: `guard_offences`(계정별 횟수·마지막 순찰), `guard_impounds`(계정·아이템별 수량), `road_patrol_state`.
 - `shared/src/schedule.rs`: 일정 항목의 `patrol { partner, sweeps, lap_minutes }`. `waypoints`는 편도 경로다.
 - 일정 항목의 `cue`: 도착 직후 `check_schedule_transition`이 `[Duty] {cue}`를 넣는다.
