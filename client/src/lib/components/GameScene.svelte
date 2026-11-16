@@ -181,6 +181,7 @@
   import {
     setupCsmShadow,
     applyGraphicsPreset,
+    sunShadowNormalBias,
   } from './game-scene/renderer-quality'
   import {
     runRenderPasses,
@@ -1367,7 +1368,7 @@
   intensity={SUN_MAX_INTENSITY}
   castShadow={graphicsPreset.enableDirectionalShadows}
   shadow.bias={-0.0002}
-  shadow.normalBias={0.15}
+  shadow.normalBias={sunShadowNormalBias(graphicsPreset.shadowMapSize)}
   shadow.mapSize.width={graphicsPreset.shadowMapSize}
   shadow.mapSize.height={graphicsPreset.shadowMapSize}
 />

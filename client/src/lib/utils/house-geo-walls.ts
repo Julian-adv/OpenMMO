@@ -57,6 +57,9 @@ const FLOWER_BOX_DEPTH = 0.14
 const FLOWER_HEIGHT = 0.3
 const LANTERN_REACH = 0.22
 const SURROUND_JAMB = 0.07
+// Proud of the corner posts and lapped over the reveal, so no face is coplanar.
+const SURROUND_DEPTH = FRAME_DEPTH + 0.02
+const SURROUND_LAP = 0.005
 const DOOR_STEP_HEIGHT = 0.14
 const DOOR_STEP_DEPTH = 0.4
 const IVY_WIDTH = 1.1
@@ -333,7 +336,7 @@ function addWindowSurround(
   const beam = (w: number, h: number, along: number, y: number) =>
     target.push({
       geo: bakedGeo(
-        new THREE.BoxGeometry(w, h, FRAME_DEPTH),
+        new THREE.BoxGeometry(w, h, SURROUND_DEPTH),
         x + (isNS ? along : 0),
         yBase + y,
         z + (isNS ? 0 : along),
@@ -346,12 +349,14 @@ function addWindowSurround(
     })
   beam(outerW, railH, 0, wh * FRAME_BEAM_Y_FRAC)
   beam(outerW, SURROUND_JAMB, 0, WINDOW_BOTTOM + WINDOW_HEIGHT)
+  const jambBot = wh * FRAME_BEAM_Y_FRAC + railH / 2
+  const jambTop = WINDOW_BOTTOM + WINDOW_HEIGHT - SURROUND_JAMB / 2
   for (const side of [-1, 1])
     beam(
       SURROUND_JAMB,
-      WINDOW_HEIGHT,
-      side * (WINDOW_WIDTH / 2 + SURROUND_JAMB / 2),
-      WINDOW_BOTTOM + WINDOW_HEIGHT / 2
+      jambTop - jambBot,
+      side * (WINDOW_WIDTH / 2 + SURROUND_JAMB / 2 - SURROUND_LAP),
+      (jambTop + jambBot) / 2
     )
 }
 
@@ -789,8 +794,9 @@ export function collectWallSegments(
         )
         part(0.13, 0.02, 0.13, LANTERN_REACH, 2.375, frameTex)
       }
+      const frameOut = (stoneWall ? SURROUND_DEPTH : FRAME_DEPTH) / 2
       if (win?.decor) {
-        const out = FRAME_DEPTH / 2 + SHUTTER_THICKNESS / 2 + 0.005
+        const out = frameOut + SHUTTER_THICKNESS / 2 + 0.005
         for (const side of [-1, 1] as const) {
           // Only over plain wall, so shutters never cross a neighbouring opening.
           if (segments[i + side]?.variant !== 'solid') continue
@@ -816,7 +822,7 @@ export function collectWallSegments(
       const sillTop =
         yBase + wh * FRAME_BEAM_Y_FRAC + (wh * FRAME_BEAM_FRAC) / 2
       if (win?.decor) {
-        const boxOut = FRAME_DEPTH / 2 + FLOWER_BOX_DEPTH / 2
+        const boxOut = frameOut + FLOWER_BOX_DEPTH / 2
         target.push({
           geo: bakedGeo(
             new THREE.BoxGeometry(
@@ -833,7 +839,7 @@ export function collectWallSegments(
           ),
           textureIndex: frameTex,
         })
-        const flowerOut = FRAME_DEPTH / 2 + FLOWER_BOX_DEPTH + 0.01
+        const flowerOut = frameOut + FLOWER_BOX_DEPTH + 0.01
         target.push({
           geo: bakedGeo(
             new THREE.PlaneGeometry(WINDOW_WIDTH, FLOWER_HEIGHT),

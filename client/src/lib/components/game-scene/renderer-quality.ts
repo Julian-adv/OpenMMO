@@ -50,6 +50,11 @@ export function setDirectionalShadowIntensity(
   }
 }
 
+/** Wide enough to hide acne at each map size; wider lifts shadows off slopes. */
+export function sunShadowNormalBias(shadowMapSize: number): number {
+  return Math.min(0.15, (0.06 * 4096) / shadowMapSize)
+}
+
 const _tmpVec2 = new THREE.Vector2()
 
 export function applyGraphicsPreset(
@@ -69,6 +74,17 @@ export function applyGraphicsPreset(
     if (cur.x !== preset.shadowMapSize) {
       cur.set(preset.shadowMapSize, preset.shadowMapSize)
       directionalLight.shadow.needsUpdate = true
+    }
+    directionalLight.shadow.normalBias = sunShadowNormalBias(
+      preset.shadowMapSize
+    )
+    const csm = directionalLight.shadow.shadowNode
+    if (csm instanceof CSMShadowNode) {
+      // Cascades keep the map size they were cloned with.
+      for (const { shadow } of csm.lights) {
+        if (shadow)
+          shadow.normalBias = sunShadowNormalBias(shadow.mapSize.width)
+      }
     }
   }
 }
