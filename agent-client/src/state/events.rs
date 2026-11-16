@@ -136,6 +136,15 @@ impl SharedState {
             // Urgent: verdict on our haggling offer — the NPC should follow
             // up in the ongoing conversation (e.g. correct a clamped price).
             ServerMessage::DealResult { .. } => EventUrgency::Urgent,
+            // Urgent when something happened to our outfit offer; a bare
+            // standing reply only feeds the prompt.
+            ServerMessage::OutfitStatus { note, .. } => {
+                if note.is_some() {
+                    EventUrgency::Urgent
+                } else {
+                    EventUrgency::Noise
+                }
+            }
 
             // Urgent: a player traded with us, or our trade request failed —
             // both deserve an in-character reaction.
@@ -944,6 +953,27 @@ impl SharedState {
                         from: me.position,
                     });
                 }
+            }
+            ServerMessage::OutfitStatus {
+                player_name,
+                status,
+                sales_reopen_in_secs,
+                gifts_reopen_in_secs,
+                ..
+            } => {
+                let at = |secs: &Option<u32>| {
+                    secs.map(|secs| {
+                        std::time::Instant::now() + std::time::Duration::from_secs(secs.into())
+                    })
+                };
+                self.outfit_sales_reopen_at = at(sales_reopen_in_secs);
+                self.outfit_gifts_reopen_at = at(gifts_reopen_in_secs);
+                let key = player_name.to_lowercase();
+                self.outfit_asked.remove(&key);
+                if *status != OutfitGrant::Open {
+                    self.outfit_offered.remove(&key);
+                }
+                self.outfit_status.insert(key, *status);
             }
             ServerMessage::TradeDeclined { player_id, .. } => {
                 // Prune on insert so the map cannot grow one dead entry per

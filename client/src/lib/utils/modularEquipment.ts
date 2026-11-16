@@ -50,6 +50,9 @@ const ARMOR_STYLES = {
   },
 } as const
 
+/** Female-only clothes show the default outfit on the male body. */
+const FEMALE_ONLY_MODEL = /^armor\/(ceremony|shopkeeper)_/
+
 const MATERIAL_STYLES = { metal: 'plate', leather: 'rogue' } as const
 const HELMET_MATERIAL_STYLES = { metal: 'plate', leather: 'plate' } as const
 
@@ -62,6 +65,7 @@ export function modularOutfitForArmor(
     materials: Record<string, Style>
   ) => {
     const item = getItemDef(id ?? '')
+    if (FEMALE_ONLY_MODEL.test(item?.worldModel ?? '')) return undefined
     return models[item?.worldModel ?? ''] ?? materials[item?.material ?? '']
   }
   return {

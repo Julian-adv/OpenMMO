@@ -10,6 +10,8 @@ mod friends;
 mod login;
 #[path = "auth_migrations.rs"]
 mod migrations;
+#[path = "auth_npc_outfits.rs"]
+mod npc_outfits;
 #[path = "auth_persistence.rs"]
 mod persistence;
 #[path = "auth_pricing.rs"]
@@ -22,6 +24,7 @@ pub use bans::{ban_message, DEFAULT_BAN_REASON};
 pub use characters::CharacterListing;
 #[cfg(test)]
 pub use characters::CharacterRecord;
+pub use npc_outfits::{OutfitClaim, OutfitHandover};
 pub use persistence::{CharacterSaveData, ItemRow, SkillRow, TradeLedgerEntry};
 pub use pricing::{PricingMeeting, PricingState};
 #[path = "auth_character_deletion.rs"]
@@ -204,6 +207,7 @@ impl AuthService {
         Self::ensure_dungeon_chest_schema(&conn)?;
         Self::ensure_dungeon_discovery_schema(&conn)?;
         Self::ensure_titles_schema(&conn)?;
+        Self::ensure_npc_outfits_schema(&conn)?;
         Self::ensure_trade_ledger_schema(&conn)?;
         Self::ensure_gold_snapshots_schema(&conn)?;
         Self::ensure_server_starts_schema(&conn)?;

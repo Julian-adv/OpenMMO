@@ -244,6 +244,7 @@ mod monster;
 mod monster_ai;
 mod mounts;
 mod notice_board;
+mod npc_outfit;
 mod object_door;
 mod party;
 mod passability;
@@ -514,6 +515,12 @@ pub struct GameState {
     deals: Arc<RwLock<HashMap<deals::DealKey, deals::DealEntry>>>,
     /// Daily haggling budgets and cooldowns.
     deal_ledgers: Arc<RwLock<deals::DealLedgers>>,
+    /// Each online account's NPC outfit standing. Leaf lock.
+    outfit_ledgers: Arc<RwLock<HashMap<PlayerId, npc_outfit::OutfitLedger>>>,
+    /// (NPC, player) → an outfit sale offer awaiting an answer. Leaf lock.
+    outfit_offers: Arc<RwLock<HashMap<(PlayerId, PlayerId), npc_outfit::PendingOutfitOffer>>>,
+    /// (NPC id, sale or gift) → the game day that share ran out. Leaf lock.
+    outfit_handovers_closed: Arc<RwLock<HashMap<(&'static str, crate::auth::OutfitHandover), i64>>>,
     /// Last game day NPC salaries were paid for; `None` until the first
     /// salary tick after boot.
     npc_salary_last_day: Arc<RwLock<Option<i64>>>,
@@ -857,6 +864,9 @@ impl GameState {
             next_item_instance_id: Arc::new(RwLock::new(1)),
             deals: Arc::new(RwLock::new(HashMap::new())),
             deal_ledgers: Arc::new(RwLock::new(deals::DealLedgers::default())),
+            outfit_ledgers: Arc::new(RwLock::new(HashMap::new())),
+            outfit_offers: Arc::new(RwLock::new(HashMap::new())),
+            outfit_handovers_closed: Arc::new(RwLock::new(HashMap::new())),
             npc_salary_last_day: Arc::new(RwLock::new(None)),
             land_tax_last_month: Arc::new(tokio::sync::Mutex::new(None)),
             estate_chests: Arc::new(RwLock::new(estate_storage::EstateChestIndex::default())),

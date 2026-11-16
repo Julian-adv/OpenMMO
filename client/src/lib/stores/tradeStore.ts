@@ -77,6 +77,17 @@ export function declineTradeOffer() {
   pendingTradeOffer.set(null)
 }
 
+/** An NPC's once-only offer of its spare outfit. */
+export interface PendingOutfitOffer {
+  npcPlayerId: number
+  npcName: string
+  itemDefIds: string[]
+  price: number
+  offeredAt: number
+}
+
+export const pendingOutfitOffer = writable<PendingOutfitOffer | null>(null)
+
 /** Which side of a trade a haggled deal applies to (mirrors DealKind). */
 export type DealKind = 'buy' | 'sell'
 

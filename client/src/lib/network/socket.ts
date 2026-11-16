@@ -1045,6 +1045,12 @@ class NetworkManager {
     this.sendMessage({ DeclineTrade: { merchant_player_id: merchantPlayerId } })
   }
 
+  sendRespondOutfitOffer(npcPlayerId: number, accept: boolean) {
+    this.sendMessage({
+      RespondOutfitOffer: { npc_player_id: npcPlayerId, accept },
+    })
+  }
+
   /** Ask a nearby player to trade (`/trade <name>`). */
   sendPlayerTradeRequest(targetName: string) {
     this.sendMessage({ PlayerTradeRequest: { target_name: targetName } })

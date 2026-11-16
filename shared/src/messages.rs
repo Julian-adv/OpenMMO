@@ -93,6 +93,15 @@ pub enum DealKind {
     Sell,
 }
 
+/// Where an account stands with one NPC's outfit: offered for sale at most
+/// once, handed over at most once.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum OutfitGrant {
+    Open,
+    Declined,
+    Received,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TeleportPhase {
     Departing,
@@ -947,6 +956,21 @@ pub enum ClientMessage {
         /// LLM's stated reason for the decision (logged server-side).
         reason: String,
     },
+    /// NPC-only: offer the sender's outfit to a nearby player for sale, or
+    /// hand it over as a gift.
+    OfferOutfit {
+        target_player_id: PlayerId,
+        gift: bool,
+    },
+    /// NPC-only: ask where a nearby player stands with the sender's outfit.
+    QueryOutfit {
+        target_player_id: PlayerId,
+    },
+    /// Buy or wave off an NPC's outfit offer.
+    RespondOutfitOffer {
+        npc_player_id: PlayerId,
+        accept: bool,
+    },
     /// NPC-only: push the sender's trade window (`ShopState`) onto a nearby
     /// player's client — the conversational entry point for trading
     /// ("LLM opens the trade window", doc/ECONOMY.md).
@@ -1230,6 +1254,8 @@ impl ClientMessage {
             | SellItems { .. }
             | BuybackItems { .. }
             | OfferDeal { .. }
+            | OfferOutfit { .. }
+            | RespondOutfitOffer { .. }
             | OpenTrade { .. }
             | PlayerTradeRequest { .. }
             | PlayerTradeRespond { .. }
@@ -2299,6 +2325,23 @@ pub enum ServerMessage {
         player_id: PlayerId,
         player_name: String,
     },
+    /// Direct to a player: an NPC offers its outfit for `price` copper.
+    OutfitOffered {
+        npc_player_id: PlayerId,
+        npc_name: String,
+        item_def_ids: Vec<String>,
+        price: i64,
+    },
+    /// Direct to an outfit NPC: where a player stands, with what just
+    /// happened in words when something did. The reopen fields are set while
+    /// the NPC has used its game day's share of sales or gifts.
+    OutfitStatus {
+        player_name: String,
+        status: OutfitGrant,
+        note: Option<String>,
+        sales_reopen_in_secs: Option<u32>,
+        gifts_reopen_in_secs: Option<u32>,
+    },
     /// Direct to the offering NPC: the server's verdict on its `OfferDeal`.
     DealResult {
         target_player_id: PlayerId,
@@ -2814,6 +2857,8 @@ impl ServerMessage {
             | Self::ImpoundOffered { .. }
             | Self::FamilyEmblemShown { .. }
             | Self::TradeDeclined { .. }
+            | Self::OutfitOffered { .. }
+            | Self::OutfitStatus { .. }
             | Self::DealResult { .. }
             | Self::PlayerMovePath { .. }
             | Self::PlayerMoveProgress { .. }

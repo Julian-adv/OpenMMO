@@ -1471,6 +1471,12 @@ async fn run_prompt(
     let memory = load_memory_tail(&memory_file);
     let prompt = {
         let mut s = state.lock().await;
+        for target_player_id in s.outfit_queries_due() {
+            let cmd = onlinerpg_shared::ClientMessage::QueryOutfit { target_player_id };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send outfit query: {e}");
+            }
+        }
         s.queued_llm_priority = None;
         s.take_wake_urgency();
         let events = s.drain_events();

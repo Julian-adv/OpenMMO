@@ -95,6 +95,14 @@ pub(super) fn build_prompt(
         }
     }
 
+    if let Some(p) = state.self_player.as_ref() {
+        let (sale, gift) = state.outfit_candidates();
+        if let Some(section) = crate::shop_info::outfit_prompt_for(&p.name, &sale, &gift) {
+            prompt.push('\n');
+            prompt.push_str(&section);
+        }
+    }
+
     if let (Some(info), Some(p)) = (state.pricing.as_ref(), state.self_player.as_ref()) {
         if !dialogue_only && crate::shop_info::merchant_shop(&p.name).is_some() {
             let at_meeting = active_schedule_idx.is_some_and(|i| {
@@ -738,6 +746,7 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             if *accepted { "GRANTED" } else { "REJECTED" }
         )),
         ServerMessage::MergerRiteCue { cue } => Some(format!("[Rite] {cue}")),
+        ServerMessage::OutfitStatus { note, .. } => note.as_ref().map(|n| format!("[Outfit] {n}")),
         ServerMessage::FurnitureSelectionNotice {
             player_id,
             player_name,

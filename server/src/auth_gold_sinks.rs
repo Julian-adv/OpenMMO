@@ -111,6 +111,9 @@ impl AuthService {
                 "stall_tax" => GoldSink::StallTax,
                 "land_tax" => GoldSink::LandTax,
                 "land_recovery" => GoldSink::LandRecovery,
+                "npc_outfit" => GoldSink::NpcOutfit {
+                    npc_id: item_def_id,
+                },
                 _ => {
                     tracing::warn!(sink = %kind, "skipping gold sink samples of an unknown kind");
                     continue;
@@ -120,6 +123,7 @@ impl AuthService {
                 GoldSink::StallTax => "가판 판매 수수료".into(),
                 GoldSink::LandTax => "토지세".into(),
                 GoldSink::LandRecovery => "토지 체납 복구 비용".into(),
+                GoldSink::NpcOutfit { npc_id } => format!("{npc_id}의 옷 한 벌"),
                 GoldSink::ItemPurchase { item_def_id }
                 | GoldSink::ItemBuyback { item_def_id }
                 | GoldSink::ImpoundFee { item_def_id } => defs

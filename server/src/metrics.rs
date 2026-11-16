@@ -120,6 +120,7 @@ pub enum GoldSink {
     StallTax,
     LandTax,
     LandRecovery,
+    NpcOutfit { npc_id: String },
 }
 
 impl GoldSink {
@@ -131,6 +132,7 @@ impl GoldSink {
             Self::StallTax => ("stall_tax", ""),
             Self::LandTax => ("land_tax", ""),
             Self::LandRecovery => ("land_recovery", ""),
+            Self::NpcOutfit { npc_id } => ("npc_outfit", npc_id),
         }
     }
 }

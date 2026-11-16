@@ -701,6 +701,39 @@ pub(super) async fn handle_response(
             continue;
         }
 
+        if let AgentAction::OfferOutfit { target } | AgentAction::GiftOutfit { target } = action {
+            let gift = matches!(action, AgentAction::GiftOutfit { .. });
+            let mut s = state.lock().await;
+            let (sale, gifts) = s.outfit_candidates();
+            let allowed = if gift { &gifts } else { &sale };
+            let Some(name) = allowed
+                .iter()
+                .find(|n| n.eq_ignore_ascii_case(target.trim()))
+                .cloned()
+            else {
+                s.push_agent_event(format!(
+                    "[Outfit] {target} is not someone you may {} your outfit right now.",
+                    if gift { "give" } else { "offer" }
+                ));
+                continue;
+            };
+            let Some((target_player_id, _)) = s.resolve_nearby_player(&name) else {
+                continue;
+            };
+            if !gift {
+                s.outfit_offered
+                    .insert(name.to_lowercase(), std::time::Instant::now());
+            }
+            let cmd = onlinerpg_shared::ClientMessage::OfferOutfit {
+                target_player_id,
+                gift,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send {}: {e}", action.label());
+            }
+            continue;
+        }
+
         if let AgentAction::OfferPledge { player } | AgentAction::OpenImpound { player } = action {
             let pledge = matches!(action, AgentAction::OfferPledge { .. });
             let mut s = state.lock().await;

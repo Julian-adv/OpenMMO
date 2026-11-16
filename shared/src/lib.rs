@@ -297,7 +297,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v160: `PatrolBreakOut`/`PatrolBrokeOut`, a penned-in guard forfeiting the
 /// fences around it or being sent back to town.
 /// v161: female `HairStyle::LongWavy`.
-pub const PROTOCOL_VERSION: u32 = 161;
+/// v162: NPC outfits: `OfferOutfit`/`QueryOutfit`/`RespondOutfitOffer`,
+/// `OutfitOffered`/`OutfitStatus`.
+pub const PROTOCOL_VERSION: u32 = 162;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

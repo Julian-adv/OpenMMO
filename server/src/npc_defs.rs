@@ -52,6 +52,13 @@ pub struct NpcDefinition {
     /// into free slots. Never sellable, unlike keepsakes.
     #[serde(default, deserialize_with = "crate::semicolon_list::deserialize")]
     pub loadout: Vec<String>,
+    /// A spare set of the NPC's clothes, sold or given once per account to
+    /// players of the NPC's gender.
+    #[serde(default, deserialize_with = "crate::semicolon_list::deserialize")]
+    pub outfit: Vec<String>,
+    /// Price of the whole outfit (smallest unit).
+    #[serde(rename = "outfitPrice", default)]
+    pub outfit_price: i64,
     /// Built-in crest printed on the cape in the loadout.
     #[serde(rename = "capeCrest", default)]
     pub cape_crest: Option<String>,
@@ -148,10 +155,17 @@ impl NpcDefs {
                 "NPC {} lists an item as both loadout and keepsake",
                 def.npc_name
             );
-            for id in &def.loadout {
+            if !def.outfit.is_empty() {
+                assert!(
+                    def.gender.is_some() && def.outfit_price > 0,
+                    "NPC {} has an outfit without a gender or a price",
+                    def.npc_name
+                );
+            }
+            for id in def.loadout.iter().chain(&def.outfit) {
                 assert!(
                     item_defs().get(id).is_some(),
-                    "NPC {} loadout item {id} is not in items.csv",
+                    "NPC {} loadout or outfit item {id} is not in items.csv",
                     def.npc_name
                 );
             }

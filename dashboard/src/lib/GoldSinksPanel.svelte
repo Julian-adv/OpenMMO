@@ -35,7 +35,7 @@
   {#if sinks && sinks.entries.length > 0}
     <GoldRankingTable entries={sinks.entries} totalGold={sinks.total_gold}
       titleId="gold-sinks-title" label="골드 소모 순위 표" entryHeading="골드 소모 항목" goldHeading="소모 골드"
-      entryKey={goldSinkKey} category={(entry) => 'item_def_id' in entry && entry.item_def_id ? itemSinkLabels[entry.sink as keyof typeof itemSinkLabels] : ''}
+      entryKey={goldSinkKey} category={(entry) => entry.npc_id ? 'NPC 옷' : entry.item_def_id ? itemSinkLabels[entry.sink as keyof typeof itemSinkLabels] : ''}
       quantityUnit={(entry) => entry.item_def_id !== undefined ? '개' : '회'} />
   {:else}
     <div class="chart-empty" role="status">

@@ -23,6 +23,7 @@
   import FishingPrompt from './FishingPrompt.svelte'
   import ChargeTargetPrompt from './ChargeTargetPrompt.svelte'
   import TradeOfferToast from './TradeOfferToast.svelte'
+  import OutfitOfferToast from './OutfitOfferToast.svelte'
   import PartyInviteToast from './PartyInviteToast.svelte'
   import PlayerTradeWindow from './PlayerTradeWindow.svelte'
   import StallWindow from './StallWindow.svelte'
@@ -274,6 +275,7 @@
     <PlayerTradeWindow />
     <StallWindow />
     <TradeOfferToast />
+    <OutfitOfferToast />
     <PartyInviteToast />
     <PlayerTradeRequestToast />
     <PartySummonToast />

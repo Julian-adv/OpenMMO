@@ -1066,5 +1066,13 @@
   "trade.requestTitle": "Trade request",
   "trade.requestMessage": "{{name}} wants to trade with you",
   "trade.requestAccept": "Trade",
-  "trade.dealNote": "— holding a price for you"
+  "trade.dealNote": "— holding a price for you",
+  "outfit.offerTitle": "Outfit offer",
+  "outfit.offerMessage": "{{name}} offers you a set of their clothes ({{items}}) for {{price}}. It is offered only once.",
+  "outfit.buy": "Buy",
+  "outfit.notNow": "No thanks",
+  "server.outfitLapsed": "That offer has lapsed.",
+  "server.outfitBought": "You bought the outfit for {{price}}.",
+  "server.outfitGifted": "You received an outfit as a gift.",
+  "server.outfitSoldOut": "That outfit has already been sold today."
 }

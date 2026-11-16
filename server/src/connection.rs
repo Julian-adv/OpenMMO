@@ -1896,6 +1896,36 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::OfferOutfit {
+            target_player_id,
+            gift,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .offer_outfit(id, &target_player_id, gift, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::QueryOutfit { target_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .query_outfit(id, &target_player_id, auth_service)
+                    .await;
+            }
+        }
+
+        ClientMessage::RespondOutfitOffer {
+            npc_player_id,
+            accept,
+        } => {
+            if let Some(id) = &state.require_in_game("answer outfit offer") {
+                game_state
+                    .respond_outfit_offer(id, &npc_player_id, accept, auth_service)
+                    .await;
+            }
+        }
+
         ClientMessage::OpenTrade { target_player_id } => {
             if let Some(id) = &state.player_id {
                 game_state.open_trade(id, &target_player_id).await;

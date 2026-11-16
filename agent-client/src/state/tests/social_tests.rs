@@ -498,3 +498,82 @@ fn a_family_refusal_reaches_the_model_as_a_system_line() {
         Some("[System] Family: no one called jake9 is online.")
     );
 }
+
+/// Rica's outfit goes to regulars of her gender: a sale from favor 3, a gift
+/// at the favor cap only after a declined sale, nothing until the server
+/// reports their standing.
+#[test]
+fn outfit_candidates_follow_favor_gender_and_standing() {
+    use onlinerpg_shared::messages::OutfitGrant;
+    use onlinerpg_shared::Gender;
+    let (mut s, _rx) = test_state();
+    let mut me = test_player(0.0, 0.0);
+    me.name = "Rica".to_string();
+    me.gender = Gender::Female;
+    s.self_player_id = Some(me.id);
+    s.self_player = Some(me);
+    for (id, name, gender, favor) in [
+        (2, "Mina", Gender::Female, 3),
+        (3, "Lea", Gender::Female, 5),
+        (4, "Bob", Gender::Male, 5),
+        (5, "Newbie", Gender::Female, 1),
+        (6, "Ava", Gender::Female, 5),
+    ] {
+        let mut p = test_player(2.0, 0.0);
+        p.id = PlayerId::from(id);
+        p.name = name.to_string();
+        p.gender = gender;
+        s.nearby_players.insert(p.id, p);
+        s.favor.insert(name.to_string(), favor);
+    }
+
+    let mut due: Vec<u64> = s.outfit_queries_due().iter().map(|id| id.get()).collect();
+    due.sort();
+    assert_eq!(due, [2, 3, 6]);
+    assert!(s.outfit_queries_due().is_empty(), "paced");
+    assert_eq!(s.outfit_candidates(), (vec![], vec![]));
+
+    for (name, status) in [
+        ("Mina", OutfitGrant::Open),
+        ("Lea", OutfitGrant::Declined),
+        ("Ava", OutfitGrant::Open),
+    ] {
+        s.push_event(ServerMessage::OutfitStatus {
+            player_name: name.to_string(),
+            status,
+            note: None,
+            sales_reopen_in_secs: None,
+            gifts_reopen_in_secs: None,
+        });
+    }
+    let (mut sale, gift) = s.outfit_candidates();
+    sale.sort();
+    assert_eq!(sale, ["Ava", "Mina"], "favor 5 still starts with the sale");
+    assert_eq!(gift, ["Lea"]);
+    let section =
+        crate::shop_info::outfit_prompt_for("Rica", &["Mina".into()], &["Lea".into()]).unwrap();
+    assert!(section.contains("offer_outfit") && section.contains("gift_outfit"));
+    assert!(section.contains("Shopkeeper's Apron Skirt"));
+
+    s.push_event(ServerMessage::OutfitStatus {
+        player_name: "Mina".to_string(),
+        status: OutfitGrant::Received,
+        note: Some("Mina bought your outfit.".to_string()),
+        sales_reopen_in_secs: Some(600),
+        gifts_reopen_in_secs: None,
+    });
+    assert_eq!(
+        s.outfit_candidates(),
+        (vec![], vec!["Lea".to_string()]),
+        "sold out for the game day; gifts still go"
+    );
+
+    s.push_event(ServerMessage::OutfitStatus {
+        player_name: "Lea".to_string(),
+        status: OutfitGrant::Declined,
+        note: Some("You have already given your outfit away today.".to_string()),
+        sales_reopen_in_secs: Some(600),
+        gifts_reopen_in_secs: Some(600),
+    });
+    assert_eq!(s.outfit_candidates(), (vec![], vec![]));
+}

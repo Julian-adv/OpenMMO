@@ -1066,5 +1066,13 @@
   "trade.requestTitle": "取引申請",
   "trade.requestMessage": "{{name}}さんから取引の申請が届きました。",
   "trade.requestAccept": "取引",
-  "trade.dealNote": "— 交渉した価格が適用されます"
+  "trade.dealNote": "— 交渉した価格が適用されます",
+  "outfit.offerTitle": "服の申し出",
+  "outfit.offerMessage": "{{name}}が自分の服一式（{{items}}）を{{price}}で譲ると言っています。この申し出は一度きりです。",
+  "outfit.buy": "買う",
+  "outfit.notNow": "遠慮する",
+  "server.outfitLapsed": "申し出はもう終わっています。",
+  "server.outfitBought": "服一式を{{price}}で買いました。",
+  "server.outfitGifted": "服一式を贈り物として受け取りました。",
+  "server.outfitSoldOut": "その服は今日はもう売れてしまいました。"
 }

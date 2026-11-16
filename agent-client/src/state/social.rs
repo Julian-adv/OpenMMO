@@ -194,6 +194,79 @@ impl SharedState {
             .collect()
     }
 
+    /// Nearby regulars of our gender who may be offered our outfit for sale,
+    /// and those who turned the sale down and may now receive it as a gift.
+    /// Players whose standing the server has not told us yet appear in neither.
+    pub fn outfit_candidates(&self) -> (Vec<String>, Vec<String>) {
+        let (mut sale, mut gift) = (Vec::new(), Vec::new());
+        let Some(me) = self.self_player.as_ref() else {
+            return (sale, gift);
+        };
+        if !crate::shop_info::has_outfit(&me.name) {
+            return (sale, gift);
+        }
+        let now = std::time::Instant::now();
+        let sold_out = self.outfit_sales_reopen_at.is_some_and(|at| now < at);
+        let given_out = self.outfit_gifts_reopen_at.is_some_and(|at| now < at);
+        for (_, p) in self
+            .nearby_human_players()
+            .filter(|(_, p)| p.gender == me.gender)
+        {
+            let key = p.name.to_lowercase();
+            let favor = self.favor.get(&p.name).copied().unwrap_or(0);
+            let waiting = self
+                .outfit_offered
+                .get(&key)
+                .is_some_and(|at| now.duration_since(*at) < OUTFIT_ASK_PACE);
+            match self.outfit_status.get(&key) {
+                Some(OutfitGrant::Declined) if favor >= FAVOR_MAX && !given_out => {
+                    gift.push(p.name.clone())
+                }
+                Some(OutfitGrant::Open)
+                    if favor >= TRADE_FAVOR_THRESHOLD && !waiting && !sold_out =>
+                {
+                    sale.push(p.name.clone())
+                }
+                _ => {}
+            }
+        }
+        (sale, gift)
+    }
+
+    /// Nearby regulars of our gender whose outfit standing we should ask the
+    /// server about; marks them asked.
+    pub fn outfit_queries_due(&mut self) -> Vec<PlayerId> {
+        let Some(me) = self.self_player.as_ref() else {
+            return Vec::new();
+        };
+        if !crate::shop_info::has_outfit(&me.name) {
+            return Vec::new();
+        }
+        let now = std::time::Instant::now();
+        let due: Vec<(PlayerId, String)> = self
+            .nearby_human_players()
+            .filter(|(_, p)| {
+                let key = p.name.to_lowercase();
+                p.gender == me.gender
+                    && self.favor.get(&p.name).copied().unwrap_or(0) >= TRADE_FAVOR_THRESHOLD
+                    && !self.outfit_status.contains_key(&key)
+                    && self
+                        .outfit_asked
+                        .get(&key)
+                        .is_none_or(|at| now.duration_since(*at) >= OUTFIT_ASK_PACE)
+            })
+            .map(|(id, p)| (*id, p.name.to_lowercase()))
+            .collect();
+        self.outfit_asked
+            .retain(|_, at| now.duration_since(*at) < OUTFIT_ASK_PACE);
+        due.into_iter()
+            .map(|(id, key)| {
+                self.outfit_asked.insert(key, now);
+                id
+            })
+            .collect()
+    }
+
     /// Resolve a same-floor name or id, then an exact visible name with its title.
     pub fn resolve_nearby_player(&self, name_or_id: &str) -> Option<(PlayerId, bool)> {
         let name_or_id = name_or_id.trim();

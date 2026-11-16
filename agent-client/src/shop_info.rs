@@ -86,6 +86,10 @@ pub struct NpcRow {
     wallet_cap: i64,
     #[serde(default)]
     keepsakes: String,
+    #[serde(default)]
+    outfit: String,
+    #[serde(rename = "outfitPrice", default)]
+    outfit_price: i64,
 }
 
 impl NpcRow {
@@ -116,6 +120,55 @@ pub fn trades(npc_name: &str) -> bool {
         .any(|m| m.npc_name.eq_ignore_ascii_case(npc_name))
         || npc_by_name(npc_name)
             .is_some_and(|row| !row.wishlist.is_empty() || !row.keepsakes.is_empty())
+}
+
+pub fn has_outfit(npc_name: &str) -> bool {
+    npc_by_name(npc_name).is_some_and(|row| !row.outfit.is_empty())
+}
+
+/// The NPC's spare outfit (item ids) and its price, if it has one.
+pub fn outfit_of(npc_name: &str) -> Option<(Vec<&'static str>, i64)> {
+    let row = npc_by_name(npc_name).filter(|row| !row.outfit.is_empty())?;
+    Some((id_list(&row.outfit).collect(), row.outfit_price))
+}
+
+/// The per-turn "## Your Outfit" section: who may be offered the NPC's spare
+/// clothes for sale and who may receive them as a gift.
+pub fn outfit_prompt_for(npc_name: &str, sale: &[String], gift: &[String]) -> Option<String> {
+    if sale.is_empty() && gift.is_empty() {
+        return None;
+    }
+    let (items, price) = outfit_of(npc_name)?;
+    let names: Vec<&str> = items
+        .iter()
+        .map(|id| crate::item_defs::get(id).map_or(*id, |item| item.name.as_str()))
+        .collect();
+    let mut section = format!(
+        "## Your Outfit\n\
+         You keep one spare set of the clothes you wear ({}). Each person \
+         can get it from you only once, by buying it or as a gift. Bring it \
+         up only when the moment suits, and say it in your own words too.\n",
+        names.join(", ")
+    );
+    if !sale.is_empty() {
+        section.push_str(&format!(
+            "You may offer it for {} to: {}. A purchase window opens on their \
+             screen; if they turn it down, do not offer it for sale again:\n\
+             {{\"type\": \"offer_outfit\", \"target\": \"{}\"}}\n",
+            format_price(price),
+            sale.join(", "),
+            sale[0],
+        ));
+    }
+    if !gift.is_empty() {
+        section.push_str(&format!(
+            "They have become dear to you, so you may give it as a gift to: {}.\n\
+             {{\"type\": \"gift_outfit\", \"target\": \"{}\"}}\n",
+            gift.join(", "),
+            gift[0],
+        ));
+    }
+    Some(section)
 }
 
 pub fn dialogue_only(npc_name: &str) -> bool {

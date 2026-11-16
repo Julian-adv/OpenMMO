@@ -192,6 +192,7 @@ import {
   setMerchantDeals,
   wasShopRequested,
   pendingTradeOffer,
+  pendingOutfitOffer,
   type BuybackEntry,
 } from '../stores/tradeStore'
 import {
@@ -2073,6 +2074,15 @@ export function handleServerMessage(
       break
     case 'ImpoundOffered':
       openImpound(data.npc_player_id)
+      break
+    case 'OutfitOffered':
+      pendingOutfitOffer.set({
+        npcPlayerId: data.npc_player_id,
+        npcName: data.npc_name,
+        itemDefIds: data.item_def_ids ?? [],
+        price: data.price,
+        offeredAt: Date.now(),
+      })
       break
     case 'ImpoundState':
       applyImpoundState(data)

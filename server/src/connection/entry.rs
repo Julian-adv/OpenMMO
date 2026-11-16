@@ -358,18 +358,32 @@ pub(super) async fn enter_game(
         );
         return vec![];
     }
-    let auth = Arc::clone(auth_service);
+    let (auth, account) = (Arc::clone(auth_service), authed_account_name.clone());
+    let human = !state.is_official_npc;
     match crate::game_state::auth_db(move || {
         Ok((
             auth.load_blocked_names(character_id)?,
             auth.load_friends(character_id)?,
+            human.then(|| auth.load_npc_outfits(&account)),
         ))
     })
     .await
     {
-        Ok((blocked, friends)) => {
+        Ok((blocked, friends, outfits)) => {
             game_state.set_player_blocks(&id, blocked).await;
             game_state.set_player_friends(&id, friends).await;
+            match outfits {
+                Some(Ok(outfits)) => {
+                    game_state
+                        .set_outfit_ledger(&id, authed_account_name.clone(), character_id, outfits)
+                        .await
+                }
+                Some(Err(err)) => warn!(
+                    "Failed to load NPC outfits for character {}: {}",
+                    character_id, err
+                ),
+                None => {}
+            }
         }
         Err(err) => warn!(
             "Failed to load block/friend lists for character {}: {}",

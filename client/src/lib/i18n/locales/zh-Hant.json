@@ -1066,5 +1066,13 @@
   "trade.requestTitle": "交易請求",
   "trade.requestMessage": "{{name}}想與你交易。",
   "trade.requestAccept": "交易",
-  "trade.dealNote": "— 已為你保留議價優惠"
+  "trade.dealNote": "— 已為你保留議價優惠",
+  "outfit.offerTitle": "衣服提議",
+  "outfit.offerMessage": "{{name}}願意以{{price}}把自己的一套衣服（{{items}}）賣給你。這個提議只有一次。",
+  "outfit.buy": "購買",
+  "outfit.notNow": "婉拒",
+  "server.outfitLapsed": "這個提議已經結束了。",
+  "server.outfitBought": "你以{{price}}買下了這套衣服。",
+  "server.outfitGifted": "你收到了一套衣服作為禮物。",
+  "server.outfitSoldOut": "這套衣服今天已經賣出了。"
 }

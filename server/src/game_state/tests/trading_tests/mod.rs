@@ -6,6 +6,7 @@ mod exchange_tests;
 mod gold_sinks_tests;
 mod item_sales_tests;
 mod merchant_tests;
+mod outfit_tests;
 mod resident_tests;
 
 // --- Haggling (economy phase 2) ---

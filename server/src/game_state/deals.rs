@@ -8,7 +8,7 @@
 use std::collections::HashMap;
 
 use onlinerpg_shared::messages::{ActiveDeal, DealKind};
-const DEAL_OFFER_MAX_DISTANCE: f32 = 27.0;
+pub(super) const DEAL_OFFER_MAX_DISTANCE: f32 = 27.0;
 use tracing::info;
 
 use crate::types::{PlayerId, ServerMessage};

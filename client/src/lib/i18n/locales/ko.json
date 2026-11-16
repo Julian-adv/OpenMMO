@@ -1066,5 +1066,13 @@
   "trade.requestTitle": "거래 요청",
   "trade.requestMessage": "{{name}} 님이 거래를 요청했습니다.",
   "trade.requestAccept": "거래",
-  "trade.dealNote": "— 흥정한 가격이 적용됩니다"
+  "trade.dealNote": "— 흥정한 가격이 적용됩니다",
+  "outfit.offerTitle": "옷 제안",
+  "outfit.offerMessage": "{{name}}$이 자기 옷 한 벌({{items}})을 {{price}}에 팔겠다고 합니다. 이 제안은 한 번뿐입니다.",
+  "outfit.buy": "구매",
+  "outfit.notNow": "사양하기",
+  "server.outfitLapsed": "제안이 이미 끝났습니다.",
+  "server.outfitBought": "옷 한 벌을 {{price}}에 샀습니다.",
+  "server.outfitGifted": "옷 한 벌을 선물로 받았습니다.",
+  "server.outfitSoldOut": "그 옷은 오늘 이미 팔렸습니다."
 }

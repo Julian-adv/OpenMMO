@@ -132,6 +132,18 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    /// Offer a nearby regular our spare outfit for sale (outfit NPCs only).
+    #[serde(rename = "offer_outfit")]
+    OfferOutfit {
+        #[serde(alias = "player", alias = "player_name", alias = "target_player")]
+        target: String,
+    },
+    /// Give a dear regular our spare outfit (outfit NPCs only).
+    #[serde(rename = "gift_outfit")]
+    GiftOutfit {
+        #[serde(alias = "player", alias = "player_name", alias = "target_player")]
+        target: String,
+    },
     /// Open the reclaim window for a nearby player (the guard captain only).
     #[serde(rename = "open_impound")]
     OpenImpound {
@@ -612,6 +624,8 @@ pub(crate) struct Roles {
     pub(crate) bard: bool,
     /// Holds impounded goods for buy-back.
     pub(crate) guard_captain: bool,
+    /// Keeps a spare outfit for regulars.
+    pub(crate) outfitter: bool,
 }
 
 impl Roles {
@@ -622,6 +636,7 @@ impl Roles {
             "offer_deal" | "open_trade" => Some(self.trader),
             "offer_pledge" => Some(self.officiant),
             "open_impound" => Some(self.guard_captain),
+            "offer_outfit" | "gift_outfit" => Some(self.outfitter),
             "serve" => Some(self.inn_staff),
             "recite" => Some(self.bard),
             _ => None,
@@ -911,6 +926,14 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         doc: r#"- Open the merger pledge form on a nearby family
   head's screen when they ask in words to merge families:
   {"type": "offer_pledge", "target": "darkcocoa"}"#,
+    },
+    ActionSpec {
+        names: &["offer_outfit", "gift_outfit"],
+        aliases: &[],
+        doc: r#"- Offer the spare set of your clothes for sale, or give it
+  as a gift, to a player named under Your Outfit:
+  {"type": "offer_outfit", "target": "darkcocoa"}
+  {"type": "gift_outfit", "target": "darkcocoa"}"#,
     },
     ActionSpec {
         names: &["open_impound"],
@@ -1274,6 +1297,8 @@ impl AgentAction {
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
             | Self::OfferPledge { .. }
+            | Self::OfferOutfit { .. }
+            | Self::GiftOutfit { .. }
             | Self::OpenImpound { .. }
             | Self::PartyInvite { .. }
             | Self::PartyAccept { .. }
@@ -1451,6 +1476,8 @@ impl AgentAction {
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
             | Self::OfferPledge { .. }
+            | Self::OfferOutfit { .. }
+            | Self::GiftOutfit { .. }
             | Self::OpenImpound { .. }
             | Self::PartyInvite { .. }
             | Self::PartyAccept { .. }
@@ -1502,6 +1529,8 @@ impl AgentAction {
             Self::OpenTrade { .. } => "open_trade",
             Self::OfferPledge { .. } => "offer_pledge",
             Self::OpenImpound { .. } => "open_impound",
+            Self::OfferOutfit { .. } => "offer_outfit",
+            Self::GiftOutfit { .. } => "gift_outfit",
             Self::OpenStall { .. } => "open_stall",
             Self::CloseStall => "close_stall",
             Self::BuyFromStall { .. } => "buy_from_stall",
@@ -2140,6 +2169,7 @@ pub(super) fn action_to_command(
         AgentAction::OpenTrade { .. } => None,
         AgentAction::OfferPledge { .. } => None,
         AgentAction::OpenImpound { .. } => None,
+        AgentAction::OfferOutfit { .. } | AgentAction::GiftOutfit { .. } => None,
         // Needs the bag and worn gear from SharedState; likewise handled there.
         AgentAction::Use { .. } => None,
         AgentAction::Sell { .. } => None,
@@ -3308,6 +3338,7 @@ mod tests {
                         inn_staff: true,
                         bard: true,
                         guard_captain: true,
+                        outfitter: true,
                     }),
                 );
             let text = if name.ends_with(".rs") {
@@ -3399,6 +3430,12 @@ mod tests {
         assert!(shown(inn_staff, "serve") && !shown(player, "serve"));
         assert!(!shown(inn_staff, "open_trade"));
         assert!(shown(bard, "recite") && !shown(player, "recite"));
+        let outfitter = Roles {
+            outfitter: true,
+            ..player
+        };
+        assert!(shown(outfitter, "offer_outfit") && shown(outfitter, "gift_outfit"));
+        assert!(!shown(trader, "offer_outfit"));
 
         let added = role_action_reference(&officiant);
         assert!(added.contains("offer_pledge") && !added.contains(r#""type": "move""#));

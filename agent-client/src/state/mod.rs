@@ -92,6 +92,9 @@ const FAVOR_MAX: i32 = 5;
 /// their wishlist, and keepsake offers, only around such players —
 /// strangers get small talk, not personal business.
 const TRADE_FAVOR_THRESHOLD: i32 = 3;
+/// How long an outfit query or sale offer waits for the server before we
+/// may send another.
+const OUTFIT_ASK_PACE: std::time::Duration = std::time::Duration::from_secs(70);
 
 /// An order the LLM accepted: who gets what, at which chair. A meal and a
 /// drink ordered together merge into one request and ride one trip.
@@ -143,7 +146,7 @@ const MAX_PENDING_FRIEND_REQUESTS: usize = 3;
 const TRADE_OFFER_TTL: std::time::Duration = std::time::Duration::from_secs(30);
 /// From the shared crate so the server's invite TTL and the agent's pruning
 /// are guaranteed equal.
-use onlinerpg_shared::messages::{PARTY_INVITE_TTL, PARTY_SUMMON_TTL};
+use onlinerpg_shared::messages::{OutfitGrant, PARTY_INVITE_TTL, PARTY_SUMMON_TTL};
 /// NPC sight distance for deciding which nearby human and monster activity
 /// matters. Re-exported from the shared crate so the server's event-delivery
 /// radius and the agent's perception radius are guaranteed equal.
@@ -278,6 +281,17 @@ pub struct SharedState {
     /// Until when trade pushes at each player stay blocked after they waved
     /// off our trade window (`TradeDeclined` → `TRADE_DECLINE_COOLDOWN`).
     trade_declined_until: HashMap<PlayerId, std::time::Instant>,
+    /// The server's word on each player's standing with our outfit, keyed by
+    /// lowercased name.
+    pub outfit_status: HashMap<String, OutfitGrant>,
+    /// When we last asked the server about a player, keyed by lowercased name.
+    pub outfit_asked: HashMap<String, std::time::Instant>,
+    /// When we offered a player the outfit for sale, until they answer.
+    pub outfit_offered: HashMap<String, std::time::Instant>,
+    /// Until when we have sold, and given away, our share of outfits for
+    /// the game day.
+    pub outfit_sales_reopen_at: Option<std::time::Instant>,
+    pub outfit_gifts_reopen_at: Option<std::time::Instant>,
     /// True between our own FishingCasted and FishingEnded. Suppresses LLM
     /// movement (like `trade_busy`) and adds a stay-put prompt line;
     /// `stop_fishing` stays the deliberate exit.
@@ -524,6 +538,11 @@ impl SharedState {
             trade_busy: false,
             player_trade: Default::default(),
             trade_declined_until: HashMap::new(),
+            outfit_status: HashMap::new(),
+            outfit_asked: HashMap::new(),
+            outfit_offered: HashMap::new(),
+            outfit_sales_reopen_at: None,
+            outfit_gifts_reopen_at: None,
             self_fishing: false,
             patrol_warned: Default::default(),
             patrol_reached: 0,
