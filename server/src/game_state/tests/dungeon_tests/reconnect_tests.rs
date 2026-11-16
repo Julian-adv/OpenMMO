@@ -90,9 +90,10 @@ async fn dungeon_reconnect_after_offline_reset_returns_to_own_entrance() {
     );
     assert_eq!(player.health, 7);
     assert_eq!(record.gold, 123);
-    assert!(game.dungeons.read().await[DUNGEON].floors[&20]
-        .players
-        .is_empty());
+    assert!(game.dungeons.read().await[DUNGEON]
+        .floors
+        .get(&20)
+        .is_none_or(|floor| floor.players.is_empty()));
 }
 
 #[tokio::test(start_paused = true)]

@@ -1844,27 +1844,50 @@ impl GameState {
             return false;
         };
         let epoch = Self::night_epoch(self.current_total_game_seconds());
-        if saved_epoch.is_none_or(|saved| saved < epoch) {
+        let to_entrance = |player: &mut Player| {
             player.position = entrance.position();
             player.rotation = 0.0;
             player.floor_level = 0;
+        };
+        if saved_epoch.is_none_or(|saved| saved < epoch) {
+            to_entrance(player);
             info!(player = %player.name, dungeon = %entrance.id, "Offline dungeon visit reset");
             return true;
         }
         self.ensure_dungeon_runtime(&entrance.id).await;
         let depth = (-i16::from(player.floor_level)) as usize;
-        let valid = {
+        let known_floor = {
             let dungeons = self.dungeons.read().await;
             dungeons
                 .get(&entrance.id)
                 .is_some_and(|d| depth >= 1 && depth <= d.layouts.len())
         };
-        if valid {
-            info!(
-                "Player {} rehydrated in dungeon '{}' at depth {}",
-                player.name, entrance.id, depth
-            );
+        if !known_floor {
+            return false;
         }
-        valid
+        // The maze can differ within one night across a restart; rock and
+        // prop cells are sealed on every side.
+        let sealed = onlinerpg_shared::pathfinding::is_cell_sealed(
+            &self.passability_read(),
+            player.position.x,
+            player.position.z,
+            onlinerpg_shared::dungeon::passability_floor_for_level(player.floor_level),
+            None,
+        );
+        if sealed {
+            info!(
+                player = %player.name,
+                dungeon = %entrance.id,
+                depth,
+                "Dungeon visit reset: saved cell is sealed in tonight's maze"
+            );
+            to_entrance(player);
+            return true;
+        }
+        info!(
+            "Player {} rehydrated in dungeon '{}' at depth {}",
+            player.name, entrance.id, depth
+        );
+        true
     }
 }

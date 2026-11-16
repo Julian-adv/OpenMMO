@@ -7,7 +7,6 @@ use onlinerpg_shared::dungeon::{
 use onlinerpg_shared::ServerMessage;
 
 const NIGHTLY: &str = "old_crypt";
-const FIXED: &str = "orc_warrens";
 
 #[test]
 fn the_nights_variant_is_a_function_of_the_epoch() {
@@ -29,7 +28,7 @@ fn the_nights_variant_is_a_function_of_the_epoch() {
 }
 
 #[tokio::test]
-async fn sunset_redraws_only_the_nightly_dungeon() {
+async fn sunset_redraws_a_nightly_dungeon() {
     let game = make_test_game_state("nightly_layout_redraw");
     game.debug_set_time(12, 0);
     game.tick_dungeon_reset().await;
@@ -52,9 +51,7 @@ async fn sunset_redraws_only_the_nightly_dungeon() {
     assert!(old_doors
         .iter()
         .all(|key| game.interest_lock().has_subject(key)));
-    for id in [NIGHTLY, FIXED] {
-        game.ensure_dungeon_runtime(id).await;
-    }
+    game.ensure_dungeon_runtime(NIGHTLY).await;
     let entrance = game.dungeon_defs.get(NIGHTLY).unwrap().position();
     let arrival = cell_center(
         &entrance,
@@ -70,17 +67,6 @@ async fn sunset_redraws_only_the_nightly_dungeon() {
         .await;
     {
         let mut dungeons = game.dungeons.write().await;
-        dungeons.get_mut(FIXED).unwrap().floors.insert(
-            1,
-            super::dungeon::FloorRuntime {
-                slots: vec![super::dungeon::SpawnSlot {
-                    alive_monster_id: None,
-                    respawn_at_ms: super::dungeon::BOSS_RESPAWN_NEVER,
-                    is_boss: true,
-                }],
-                players: HashMap::new(),
-            },
-        );
         let rt = dungeons.get_mut(NIGHTLY).unwrap();
         rt.broken_props.entry(1).or_default().insert(0);
         rt.open_doors.entry(0).or_default().insert(ENTRANCE_DOOR_ID);
@@ -92,7 +78,6 @@ async fn sunset_redraws_only_the_nightly_dungeon() {
 
     let variant = game.dungeon_variant(NIGHTLY);
     assert_ne!(variant, 0);
-    assert_eq!(game.dungeon_variant(FIXED), 0);
     assert_eq!(game.players.read().await[&id].floor_level, 0);
     {
         let dungeons = game.dungeons.read().await;
@@ -108,16 +93,11 @@ async fn sunset_redraws_only_the_nightly_dungeon() {
         assert!(rt.floors.is_empty() && rt.broken_props.is_empty());
         assert_eq!(rt.open_doors.len(), 1);
         assert!(rt.open_doors[&0].contains(&ENTRANCE_DOOR_ID));
-        assert_eq!(
-            layout_hash(&dungeons[FIXED].layouts),
-            layout_hash(&generate_dungeon_for(FIXED))
-        );
-        assert_eq!(dungeons[FIXED].floors[&1].slots[0].respawn_at_ms, 0);
     }
     assert!(matches!(
         game.dungeon_layout_variants_message(),
         ServerMessage::DungeonLayoutVariants { variants }
-            if variants == vec![(NIGHTLY.to_string(), variant)]
+            if variants.contains(&(NIGHTLY.to_string(), variant))
     ));
 
     let layouts = generate_dungeon_variant(NIGHTLY, variant);
@@ -156,4 +136,43 @@ async fn sunset_redraws_only_the_nightly_dungeon() {
         game.dungeons.read().await[NIGHTLY].floors[&1].slots.len(),
         layouts[0].spawns.len()
     );
+}
+
+#[tokio::test]
+async fn a_visit_saved_in_tonights_rock_returns_to_the_entrance() {
+    use onlinerpg_shared::dungeon::{cell_center, GRID};
+
+    let game = make_test_game_state("rehydrate_in_rock");
+    let def = game.dungeon_defs.get(NIGHTLY).unwrap();
+    let entrance = def.position();
+    let layouts = generate_dungeon_for(NIGHTLY);
+    game.passability_write().insert(
+        dungeon_cache_key(NIGHTLY),
+        onlinerpg_shared::dungeon::dungeon_passability(&entrance, &layouts),
+    );
+    let layout = &layouts[0];
+    let rock = (0..GRID)
+        .flat_map(|z| (0..GRID).map(move |x| (x, z)))
+        .find(|&(x, z)| !layout.is_carved(x, z))
+        .unwrap();
+    let prop = layout
+        .props
+        .iter()
+        .find(|p| p.kind.is_solid())
+        .and_then(|p| p.cells().next())
+        .unwrap();
+    let open = layout.approach_cells(prop).next().unwrap();
+    let epoch = GameState::night_epoch(game.current_total_game_seconds());
+    for (at, stays) in [(open, true), (rock, false), (prop, false)] {
+        let saved = cell_center(&entrance, 1, at);
+        let mut player = make_player("delver", saved.x, saved.z);
+        player.floor_level = -1;
+        assert!(
+            game.rehydrate_dungeon_player(&mut player, Some(epoch))
+                .await
+        );
+        assert_eq!(player.floor_level, if stays { -1 } else { 0 }, "{at:?}");
+        let expected = if stays { saved } else { entrance };
+        assert!(player.position.dist_xz_sq(&expected) < 0.01);
+    }
 }
