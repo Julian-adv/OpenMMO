@@ -48,4 +48,4 @@ node tools/prepare-female-knight.mjs --part long_wavy_hair
 
 - 투구 헤어 마스크는 칠하지 않았다. 은빛 기사 투구는 미리보기 정면에서 큰 문제가 없었고 다른 투구는 보지 않았다.
 - 동작 검토(`review_female_long_hair.py`)는 돌리지 않았다. 미리보기의 걷기·달리기에서만 봤다.
-- 게임 내 확인, `assets.lock`·HF 미반영.
+- 중간 산출물 `hair-split.glb`·`hair-fitted-unskinned.glb`는 사용자 요청(2026-11-16)으로 지웠다. 위 명령을 차례로 실행하면 다시 생긴다.

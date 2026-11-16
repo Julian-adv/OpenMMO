@@ -69,11 +69,10 @@ OpenAI Codex built-in ImageGen, **ChatGPT Pro 20x**. OpenAI 생성 출력물 이
 - 아이템 `shopkeeper_top`, `shopkeeper_pants`, `shopkeeper_boots`: 거래 불가, 가격·판매처 없음. 아이콘과 바닥 모델은 `export_outfit_items.py --outfit shopkeeper --texture-size 512`.
 - `data-src/npcs.csv`의 Rica: 위 세 아이템 착용, 헤어 `long_wavy`([제작 기록](modular-female-long-wavy-hair.md)), 머리색 `#d9d5cd`, 기본 얼굴.
 - `modelPaths.ts`에서 Rica의 `npc_woman.glb` 지정을 지웠다.
-- v1 의상으로는 개발 서버에서 Rica가 가게에 서서 인사하는 것을 확인했다. v2로 바꾼 뒤에는 미리보기만 확인했다.
+- 개발 서버에서 Rica가 이 의상과 `long_wavy` 헤어로 가게에 서서 인사하는 것을 확인했다(2026-11-16).
 
 ## 남은 일
 
-- v2 의상의 게임 내 확인.
 - 달릴 때 뒤로 찬 다리의 부츠가 치마 뒤를 뚫는다. 걸을 때 치마가 넓게 벌어진다.
 - 수면·앉기 동작(밤에는 2층으로 올라가 확인하지 못했다), 거래 창 열기, 거래 창 초상화와의 차이(치마 색, 초커)는 확인하지 않았다.
-- `assets.lock`·HF 미반영.
+- 2026-11-16 HF에 올렸다. 쓰지 않는 v1의 `segmented.glb`·`split.json`은 사용자 요청으로 지웠다. `split-female-shopkeeper-outfit.py`는 v2만 다룬다.
