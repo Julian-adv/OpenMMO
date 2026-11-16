@@ -8,6 +8,7 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use onlinerpg_shared::furniture::FurniturePlacement;
+use onlinerpg_shared::messages::MoveStatus;
 use onlinerpg_shared::ClientMessage;
 use onlinerpg_terrain::coords::{tile_to_region, world_to_tile};
 use rand::Rng;
@@ -149,6 +150,53 @@ async fn send_interact_if_needed(s: &mut SharedState, entry: &ScheduleEntry) {
         };
         if let Err(e) = s.send_command(cmd).await {
             error!("Failed to send InteractObject: {e}");
+        }
+    }
+}
+
+/// How far (m) from its post an NPC still counts as standing there, and the turn (rad) not worth correcting.
+const POST_RANGE_M: f32 = 0.75;
+const POST_TURN_SLACK: f32 = 0.05;
+
+/// The turn `entry` still owes: the server has been seen to lose the one sent on arrival, leaving the NPC
+/// facing the way it walked in.
+pub(super) fn post_facing_owed(s: &SharedState, entry: &ScheduleEntry) -> Option<f32> {
+    let me = s.self_player.as_ref()?;
+    let wanted = entry.rotation.to_radians();
+    let standing_post = entry.action.is_none()
+        && entry.patrol.is_none()
+        && entry.waypoints.is_empty()
+        && !s.player_trade_in_progress()
+        && !s.schedule_combat_active()
+        && !s.teleport_pending()
+        && !matches!(
+            s.move_status,
+            Some(MoveStatus::Moving | MoveStatus::Searching)
+        )
+        && me.health > 0
+        && !me.petrified
+        && me.mount.is_none()
+        && crate::geom::PlanarDelta::to_xz(&me.position, entry.pos[0], entry.pos[2]).dist
+            <= POST_RANGE_M;
+    (standing_post
+        && onlinerpg_shared::mount_movement::angle_delta(me.rotation, wanted).abs()
+            > POST_TURN_SLACK)
+        .then_some(wanted)
+}
+
+pub(super) async fn keep_post_facing(
+    state: &Arc<Mutex<SharedState>>,
+    entry: &ScheduleEntry,
+    label: &str,
+) {
+    let mut s = state.lock().await;
+    if let Some(rotation) = post_facing_owed(&s, entry) {
+        info!("[{label}] Turning back to the post's facing");
+        if let Err(e) = s
+            .send_background_command(ClientMessage::PlayerFace { rotation })
+            .await
+        {
+            error!("Failed to face schedule target: {e}");
         }
     }
 }
@@ -735,6 +783,59 @@ mod tests {
             .insert(EquipSlot::MainHand, bag_item(1, "fishing_rod", 1));
         assert!(rx.try_recv().is_err());
         (Arc::new(Mutex::new(s)), rx)
+    }
+
+    #[tokio::test]
+    async fn a_post_left_facing_the_walk_in_is_turned_back() {
+        let entry = ScheduleEntry {
+            pos: [-1473.3, 1.1, 4732.8],
+            rotation: 0.0,
+            ..Default::default()
+        };
+        let (mut s, mut rx) = test_state();
+        let mut me = test_player(-1473.5, 4732.5);
+        me.rotation = -std::f32::consts::FRAC_PI_2;
+        s.self_player_id = Some(me.id);
+        s.self_player = Some(me);
+        s.in_game = true;
+        let state = Arc::new(Mutex::new(s));
+
+        keep_post_facing(&state, &entry, "test").await;
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerFace { rotation }) if rotation == 0.0
+        ));
+
+        // The server's reply sets the facing, and nothing more is sent.
+        {
+            let mut s = state.lock().await;
+            let me = s.self_player.as_ref().unwrap();
+            let moved = ServerMessage::PlayerMoved {
+                player_id: me.id,
+                position: me.position,
+                rotation: 0.0,
+                floor_level: 0,
+                sprinting: false,
+            };
+            s.push_event(moved);
+        }
+        keep_post_facing(&state, &entry, "test").await;
+        assert!(rx.try_recv().is_err());
+
+        // Away from the post, seated, or walking, the facing is not the schedule's to set.
+        let mut s = state.lock().await;
+        s.self_player.as_mut().unwrap().rotation = 1.0;
+        let seated = ScheduleEntry {
+            action: Some("chair".into()),
+            ..entry.clone()
+        };
+        assert_eq!(post_facing_owed(&s, &seated), None);
+        s.move_status = Some(MoveStatus::Moving);
+        assert_eq!(post_facing_owed(&s, &entry), None);
+        s.move_status = None;
+        assert_eq!(post_facing_owed(&s, &entry), Some(0.0));
+        s.self_player.as_mut().unwrap().position.x += 2.0;
+        assert_eq!(post_facing_owed(&s, &entry), None);
     }
 
     #[tokio::test(start_paused = true)]

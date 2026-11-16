@@ -23,6 +23,7 @@ DB는 고치지 않는다. 프로토콜은 **136**이며 서버·웹 WASM·에�
 
 2026-11-11 긴 생머리(`long`)를 옆 가르마 긴 생머리로 바꾸고 네 번째 여성 헤어 `long_bangs`(긴 생머리 · 앞머리, `long_bangs_hair`)를 더했다.
 `long`의 텍스처 평균색은 `#cbac91`(선형 밝기 0.442), `long_bangs`는 `#dbb99d`(0.522)다. 프로토콜은 **145**다.
+2026-11-16 다섯 번째 여성 헤어 `long_wavy`(긴 웨이브 · 땋은 머리, 평균색 `#b9aca3`)를 추가했다. 프로토콜은 **161**이다. [제작 기록](assets/modular-female-long-wavy-hair.md).
 긴 머리 두 종의 얼굴별 보정은 어깨 아래로 줄어든다. [긴 생머리 기록](assets/modular-female-long-straight-hair.md).
 
 2026-10-10 게임용 몸체를 공통 `base.glb`와 얼굴별 `face_default.glb`, `face_rugged.glb`,

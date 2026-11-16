@@ -195,6 +195,7 @@ impl AuthService {
         }
         Self::migrate_item_definition_ids(&conn)?;
         Self::strip_npc_starter_weapons(&conn)?;
+        Self::sync_npc_genders(&conn)?;
         Self::ensure_blocks_schema(&conn)?;
         Self::ensure_friends_schema(&conn)?;
         Self::ensure_bans_schema(&conn)?;

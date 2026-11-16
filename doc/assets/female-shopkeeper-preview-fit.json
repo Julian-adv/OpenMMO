@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "parts": {
+    "boots": {
+      "saved_at": "2026-11-16T10:25:47.990Z",
+      "brush": {
+        "hide": [],
+        "show": []
+      },
+      "baked": [
+        {
+          "left": {
+            "move-x": -1.6,
+            "move-y": 0,
+            "move-z": 2,
+            "scale": 100,
+            "scale-x": 100,
+            "scale-y": 100,
+            "scale-z": 100,
+            "rotate-x": 0,
+            "rotate-y": 0,
+            "rotate-z": 0
+          },
+          "right": {
+            "move-x": -1.6,
+            "move-y": 0,
+            "move-z": 2,
+            "scale": 100,
+            "scale-x": 100,
+            "scale-y": 100,
+            "scale-z": 100,
+            "rotate-x": 0,
+            "rotate-y": 0,
+            "rotate-z": 0
+          },
+          "baked_at": "2026-11-16T10:26:01.793673+00:00"
+        }
+      ]
+    },
+    "top": {
+      "saved_at": "2026-11-16T10:37:33.194Z",
+      "brush": {
+        "hide": [],
+        "show": []
+      },
+      "baked": [
+        {
+          "move-x": 0,
+          "move-y": 0,
+          "move-z": 0.2,
+          "scale": 100,
+          "scale-x": 100,
+          "scale-y": 100,
+          "scale-z": 100,
+          "rotate-x": -2,
+          "rotate-y": 0,
+          "rotate-z": 0,
+          "baked_at": "2026-11-16T10:37:50.477117+00:00"
+        }
+      ]
+    }
+  }
+}

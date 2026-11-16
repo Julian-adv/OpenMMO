@@ -14,7 +14,7 @@ import { loadHelmetHairBrush } from './lib/helmet-hair-brush.mjs'
 
 const output = 'client/public/models/characters/modular_female'
 // Parts the client loads on first equip: packed separately with 1024 px colour textures.
-const separatePart = name => /^(caveman|priest|ranger|bard|ceremony)_/.test(name)
+const separatePart = name => /^(caveman|priest|ranger|bard|ceremony|shopkeeper)_/.test(name)
 // Fur panels share the waist rig and colliders.
 function bakeSkirtRobe(doc) {
   const panels = doc.getRoot().listNodes().filter(node => node.getExtras().pelt_physics)
@@ -74,8 +74,11 @@ const sources = {
     [`bard_${slot}`, `assets/items/female_bard_outfit/${slot}/fitted_v1/${slot}_female_bard.glb`])),
   ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
     [`ceremony_${slot}`, `assets/items/female_ceremony_outfit/${slot}/fitted_v1/${slot}_female_ceremony.glb`])),
+  ...Object.fromEntries(['top', 'bottom', 'boots'].map(slot =>
+    [`shopkeeper_${slot}`, `assets/items/female_shopkeeper_outfit/${slot}/fitted_v1/${slot}_female_shopkeeper.glb`])),
   valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_long_side_v3/fitted_v1/hair_female_long_side.glb',
   long_bangs_hair: 'assets/modular_human_female_01/hair/tripo_long_bangs_v2/fitted_v1/hair_female_long_bangs.glb',
+  long_wavy_hair: 'assets/modular_human_female_01/hair/tripo_rica_wavy_v1/fitted_v1/hair_female_long_wavy.glb',
   valkyrie_wings: 'assets/items/valkyrie_starter/tripo_wing_v1/fitted_patch_v3/wings-armor-fit.glb',
   valkyrie_top: 'assets/items/valkyrie_starter/tripo_top_v1/fitted_v11/top_female_valkyrie.glb',
   valkyrie_bottom: 'assets/items/valkyrie_starter/tripo_bottom_v1/fitted_v8/bottom_female_valkyrie.glb',
@@ -167,7 +170,7 @@ for (const [name, source] of Object.entries(sources)) {
   const doc = await io.read(source)
   const scene = doc.getRoot().listScenes()[0]
   const metadata = { ...scene.getExtras(), female_part: name }
-  if (!/^(base|((barbarian|valkyrie|long_bangs)_)?hair|valkyrie_wings|rogue_garters)$/.test(name)) {
+  if (!/^(base|((barbarian|valkyrie|long_bangs|long_wavy)_)?hair|valkyrie_wings|rogue_garters)$/.test(name)) {
     const path = name === 'valkyrie_top' ? source.replace('fitted_v11/top_female_valkyrie.glb', 'fitted_v8/body-occlusion.json') : source.replace(/[^/]+$/, 'body-occlusion.json')
     record(path)
     metadata.body_mask = JSON.parse(readFileSync(path))

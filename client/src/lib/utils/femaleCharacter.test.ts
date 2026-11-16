@@ -489,28 +489,31 @@ describe('female modular starter outfits', () => {
         const ranger = item.worldModel?.startsWith('armor/ranger_')
         const bard = item.worldModel?.startsWith('armor/bard_')
         const ceremony = item.worldModel?.startsWith('armor/ceremony_')
+        const shopkeeper = item.worldModel?.startsWith('armor/shopkeeper_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||
           ['leather_armor', 'leather_gloves', 'leather_boots'].includes(id)
-        const [shown, hidden] = ceremony
-          ? [`ceremony_${part}`, part]
-          : bard
-            ? [`bard_${part}`, part]
-            : priest
-              ? [`priest_${part}`, part]
-              : ranger
-                ? [`ranger_${part}`, `barbarian_${part}`]
-                : caveman
-                  ? [`caveman_${part}`, part]
-                  : valkyrie
-                    ? [`valkyrie_${part}`, part]
-                    : rogueStyle
-                      ? [`rogue_${part}`, part]
-                      : brilliance
-                        ? ['brilliance_helmet', part]
-                        : barbarianStyle
-                          ? [`barbarian_${part}`, part]
-                          : [part, `barbarian_${part}`]
+        const [shown, hidden] = shopkeeper
+          ? [`shopkeeper_${part}`, part]
+          : ceremony
+            ? [`ceremony_${part}`, part]
+            : bard
+              ? [`bard_${part}`, part]
+              : priest
+                ? [`priest_${part}`, part]
+                : ranger
+                  ? [`ranger_${part}`, `barbarian_${part}`]
+                  : caveman
+                    ? [`caveman_${part}`, part]
+                    : valkyrie
+                      ? [`valkyrie_${part}`, part]
+                      : rogueStyle
+                        ? [`rogue_${part}`, part]
+                        : brilliance
+                          ? ['brilliance_helmet', part]
+                          : barbarianStyle
+                            ? [`barbarian_${part}`, part]
+                            : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
         expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)

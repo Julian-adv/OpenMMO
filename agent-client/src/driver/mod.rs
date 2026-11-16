@@ -60,7 +60,7 @@ use backoff::PromptBackoff;
 use combat::{defend_self, load_attack_cooldown, tick_combat};
 use execute::{append_memory, handle_response};
 use movement::{
-    check_schedule_transition, coverage_positions, fetch_furniture_around,
+    check_schedule_transition, coverage_positions, fetch_furniture_around, keep_post_facing,
     maintain_scheduled_fishing, resolve_due_schedule,
 };
 use prompt::build_prompt;
@@ -465,6 +465,8 @@ impl<T> Drop for Spawned<T> {
     }
 }
 
+const POST_CHECK_EVERY: Duration = Duration::from_secs(5);
+
 fn running(task: &Option<Spawned<()>>) -> bool {
     task.as_ref().is_some_and(|t| !t.is_finished())
 }
@@ -585,6 +587,7 @@ pub async fn llm_driver(
     // A table walk runs as a background task so the [Guest] prompt's LLM
     // round trip overlaps the walk instead of waiting for arrival.
     let mut visit_walk: Option<Spawned<()>> = None;
+    let mut post_check_at = Instant::now() + POST_CHECK_EVERY;
     // A road-patrol lap walks in the background so the guard can talk on the way.
     let mut patrol_walk: Option<Spawned<()>> = None;
     let mut weapon_checked_at = Instant::now();
@@ -1311,6 +1314,16 @@ pub async fn llm_driver(
                         maintain_scheduled_fishing(&state, entry).await;
                     }
                 }
+            }
+        }
+
+        // === Standing post: keep the scheduled facing ===
+        if Instant::now() >= post_check_at {
+            post_check_at = Instant::now() + POST_CHECK_EVERY;
+            if let Some(entry) = active_schedule.0.map(|i| &schedule[i]).filter(|_| {
+                !running(&visit_walk) && !running(&unload_trip) && !running(&patrol_walk)
+            }) {
+                keep_post_facing(&state, entry, &label).await;
             }
         }
 

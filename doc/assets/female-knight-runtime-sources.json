@@ -1,7 +1,7 @@
 {
   "date": "2026-11-03",
   "inputs": {
-    "tools/prepare-female-knight.mjs": "3f79ad952e0f704c40fbcf8ba3a35ff63d9c174213c9cb9bf36617ed62acfcdd",
+    "tools/prepare-female-knight.mjs": "d1b9984004a559fdcea1a08ea29470921abe478f4e7d6440d755a538f102ad04",
     "client/src/lib/utils/female-clip-bake.ts": "23454f31df35567701ee157dc4e4a7547856524a6b83c14367353a18594287d6",
     "client/src/lib/utils/female-boot-ground.ts": "0cd0b888f399c689ce821ec416660ca2805b12fa3f4c8d780cdc4ad28b61dc80",
     "assets/modular_human_female_01/rig_v1/female-base.glb": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
@@ -69,7 +69,7 @@
     "assets/items/valkyrie_boots/fitted_v1/body-occlusion.json": "e5fd12be641d3917f5f152681d25f310bfd7351989605636d6e0530cb75d664c",
     "assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json": "2e67e4b201465d13889f5b6ea64aecfde8e63a2c347074e172c1c4c944a22448",
     "assets/items/valkyrie_helmet/fitted_v2/body-occlusion.json": "319a3f4848040f2cef370435ca95acbbdfa968c8d9544710391860dee620a7a2",
-    "client/src/lib/utils/femaleCharacter.ts": "6baee087e6081d78cc2359d60166d54b4a5eff938d8e0e4cdb5846acf33b2dbf",
+    "client/src/lib/utils/femaleCharacter.ts": "e2d4214effb49be0bb6cf90c331b9c6404759d6d20d7fdfea588c08966967323",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb": "e447242db6e34cb2ab8b0f67cbb621f4dee14ad036dfee7f193be4f80a78f23f",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/body-occlusion.json": "95494be44e0f651739bf853c24e783172338fab0dcf2cd79c7a3361195c7dd9f",
     "assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb": "ce641e30dcebe965a0c4aac09a5e233c5887d0aa81be2218875bf3866819b6f9",
@@ -124,7 +124,14 @@
     "assets/items/female_ceremony_outfit/bottom/fitted_v1/body-occlusion.json": "31e5da4ca8487bfb156f739759ac336cad6fbb74b8ad1f9c8de052ce5c260948",
     "assets/items/female_ceremony_outfit/boots/fitted_v1/body-occlusion.json": "983026ff033387c71d4d5e2a7c7cf2cd43033ac717ca005eaeebc1c32e071ca8",
     "assets/items/female_ceremony_outfit/gloves/fitted_v1/body-occlusion.json": "90aa6c48b84be45c53e54f4003ffe0abcca0e512b08e6c029319dceb1b2605c7",
-    "assets/items/female_ceremony_outfit/helmet/fitted_v1/body-occlusion.json": "06e0aa9de1ee016c6d69501a57fa0f892fa48afd835aba1609babced868d3539"
+    "assets/items/female_ceremony_outfit/helmet/fitted_v1/body-occlusion.json": "06e0aa9de1ee016c6d69501a57fa0f892fa48afd835aba1609babced868d3539",
+    "assets/items/female_shopkeeper_outfit/top/fitted_v1/top_female_shopkeeper.glb": "f33cb269687a40975e3b0ed9bbd2b65feca1249c0b3cb7c41d0bb190e5029198",
+    "assets/items/female_shopkeeper_outfit/top/fitted_v1/body-occlusion.json": "08c5b6cece13e491da3e5cf31744c7324bc774f890f5ca3449998fd9514b9bc5",
+    "assets/items/female_shopkeeper_outfit/bottom/fitted_v1/bottom_female_shopkeeper.glb": "5afebec7dea531e3eb0b7117458dd4984c4cd9690248a8e446ce87b213759f8d",
+    "assets/items/female_shopkeeper_outfit/boots/fitted_v1/boots_female_shopkeeper.glb": "0aa7e65c0198f6934f8284ed9b9c758830b72cc6847682395dd1715356cbb7bb",
+    "assets/items/female_shopkeeper_outfit/bottom/fitted_v1/body-occlusion.json": "50220bcd0e551eb4c42173066e75ef35015c0262f0bf7b560e9a9bced5a06515",
+    "assets/items/female_shopkeeper_outfit/boots/fitted_v1/body-occlusion.json": "5f47353b1838ed22a30fcd737db2c92ec9428bc929765bc5c382ce533884f953",
+    "assets/modular_human_female_01/hair/tripo_rica_wavy_v1/fitted_v1/hair_female_long_wavy.glb": "8e7ebdac5b4bd76782f2293b0fbe64094265750e054a6591e6cac057642e7041"
   },
   "outputs": {
     "client/public/models/characters/modular_female/base.glb": "4ffaa3622719890b9ed447ab32676dccdadde041fa6986e4a7577ce2876ecfbb",
@@ -188,7 +195,11 @@
     "client/public/models/characters/modular_female/ceremony_bottom.glb": "b3965544ce2296e4b9b4292b41fe8635213582725356e637acf7cff0d0061947",
     "client/public/models/characters/modular_female/ceremony_boots.glb": "c1b53c9918dfe4b7c16adba3df3d5c850ef10bfa725a3c589f1df17548dddaec",
     "client/public/models/characters/modular_female/ceremony_gloves.glb": "ef573b761907885013996fa3088fdccac4af1e2cb60cb794aa2eb80fab6b3303",
-    "client/public/models/characters/modular_female/ceremony_helmet.glb": "1bfb6b9e5c5e115f790bfc39224524f51ae03f2a7bb9f486dd04cdc3981387a0"
+    "client/public/models/characters/modular_female/ceremony_helmet.glb": "1bfb6b9e5c5e115f790bfc39224524f51ae03f2a7bb9f486dd04cdc3981387a0",
+    "client/public/models/characters/modular_female/shopkeeper_top.glb": "36ca9939e4540dcf64b215cc5ea047863ac6fb118d3500482dd34ebdfad37279",
+    "client/public/models/characters/modular_female/shopkeeper_bottom.glb": "9e22f55b76e03e61bdd3a2e0459fca95a617a798e8f6972282356f7a9ea2d581",
+    "client/public/models/characters/modular_female/shopkeeper_boots.glb": "6259e69be9f1501ea3367f54fff30aa6fce13178bfdba80e627bb1c8fe67ac28",
+    "client/public/models/characters/modular_female/long_wavy_hair.glb": "830bcae149efd61400bcb45eb2b32cd8a996aeef56a61980d66f7db78718c596"
   },
   "underwear_weight_patch": {
     "date": "2026-10-15",

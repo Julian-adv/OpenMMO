@@ -125,6 +125,32 @@ OUTFITS = {
                           lower_shoe=.0155, extend_heel={'gap': .0085}, clip_hem=dict(keep='above', within=.4)),
             'helmet': dict(nodes=['helmet'], version='fitted_v1'),
         }),
+    # Rica's working clothes, generated on the blue mannequin from front and back views and aligned by
+    # tools/split-female-shopkeeper-outfit.py.
+    'shopkeeper': dict(
+        source='tripo_multiview_v2/segmented.glb',
+        sha256='a5c222e0b9904a786ed2f00d1a27bf2f7ef9f4a8f4eeec2f58f3e22780f89e78',
+        scale=1, on_heels=True, snug_cover=True,
+        parts={
+            # Blouse and corset. The sleeves end below the elbow and the forearms stay bare.
+            'top': dict(nodes=['top'], version='fitted_v1', hide_underwear=(1.15, 1.7), restore_visible=True,
+                        clip_hem=dict(keep='below', within=.25), clip_sleeve=.01),
+            # Belt, apron, pouch, keys and an ankle-length skirt on the robe rig. The apron hangs close enough for
+            # the thighs to come through it, so the legs inside are hidden.
+            'bottom': dict(nodes=['skirt'], version='fitted_v1', hide_underwear=(.8, 1.2),
+                           hide_bones=('LeftUpLeg', 'LeftLeg', 'RightUpLeg', 'RightLeg'),
+                           # No colliders: the rest shape of a skirt this narrow already touches the legs, and the
+                           # rig keeps rest contact, so the hem would not lift. Each hem column follows its thigh.
+                           robe=dict(waist_height_m=1.12, hem_height_m=.19, center_z_m=-.02, waist_radii_m=[.14, .11],
+                                     driven_below_m=1.05, blend_m=.08, lift=1, max_angle=1.2)),
+            # After the preview fit the sole sits 1.8 mm below the plate boots' sole, whose lift every heel shares:
+            # the shoe is raised as one piece. The heel tip is 7 mm short and stretched by half, as on the
+            # ceremony pumps.
+            'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=FEET, rigid_post=.075,
+                          lower_shoe=-.0018, extend_heel={'gap': .0036},
+                          # Without the skirt the boot top shows: the shin is cut along it.
+                          clip_hem=dict(keep='above', within=.4)),
+        }),
 }
 COVER_RAY = .06
 # Sleeve alignment fades in over this distance from the shoulder joint, leaving the shoulder pads in place.
@@ -162,6 +188,8 @@ EDGE_LIP = .008
 EDGE_TUCK = .002
 # `clip_hem` fits its plane to the open edges within this distance (m) of the cloth's extreme height.
 HEM_BAND = .04
+# Garment points farther than this (m) from the centre plane belong to a sleeve (`clip_sleeve`).
+SLEEVE_SIDE = .25
 # Open-edge loops shorter than this (m) are slits, not openings.
 EDGE_LOOP = .5
 
@@ -997,6 +1025,23 @@ if 'clip_cuff' in SPEC:
         hidden[arm & inside.all(1)] = True
         hidden[arm & ~inside.all(1)] = False
         cuff_clips.append({'point': (origin @ TO_GLTF.T).round(5).tolist(), 'normal': (-normal @ TO_GLTF.T).round(5).tolist(),
+                           'triangle_indices': np.flatnonzero(arm & inside.any(1) & ~inside.all(1)).tolist()})
+if 'clip_sleeve' in SPEC:
+    # A sleeve that ends on the bare arm: as at a glove cuff, arm skin is cut along the plane of the sleeve's end,
+    # `clip_sleeve` metres inside it, and hidden up the sleeve from there.
+    for side, sign in (('Left', 1), ('Right', -1)):
+        axis = bones[side + 'Hand'] - bones[side + 'ForeArm']
+        axis /= np.linalg.norm(axis)
+        sleeve = points[points[:, 0] * sign > SLEEVE_SIDE]
+        along = (sleeve - bones[side + 'ForeArm']) @ axis
+        origin = bones[side + 'ForeArm'] + axis * (np.percentile(along, 99) - SPEC['clip_sleeve'])
+        depth = (rest_points - origin) @ axis
+        columns = [i for i, n in enumerate(names) if n in (side + 'Arm', side + 'ForeArm') or n.startswith(side + 'Hand')]
+        arm = (bw[:, columns].sum(1) > .5)[bf].all(1)
+        inside = (depth < 0)[bf]
+        hidden[arm & inside.all(1)] = True
+        hidden[arm & ~inside.all(1)] = False
+        cuff_clips.append({'point': (origin @ TO_GLTF.T).round(5).tolist(), 'normal': (axis @ TO_GLTF.T).round(5).tolist(),
                            'triangle_indices': np.flatnonzero(arm & inside.any(1) & ~inside.all(1)).tolist()})
 if 'clip_hem' in SPEC:
     # A flat hem or top edge: skin is cut along its plane instead of by whole triangles, whose corners showed as

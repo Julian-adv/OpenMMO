@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 HAIR = ROOT / 'assets/modular_human_female_01/hair'
 BODY = ROOT / 'assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb'
 FITS = ROOT / 'client/src/lib/data/femaleHairFits.json'
+HAIRLINES = ROOT / 'doc/assets/female-hairline.json'
 STYLES = {
     # hairline_drop: metres the front hairline slides down the forehead (user request 2026-11-11).
     # fit: the hair's key in femaleHairFits.json. tuck: settle the cut edge over the forehead onto the skin.
@@ -26,6 +27,8 @@ STYLES = {
              'tuck': True},
     'bangs': {'folder': 'tripo_long_bangs_v2', 'part': 'hair_female_long_bangs', 'fit': 'long_bangs', 'tuck': False,
               'level_fringe': True, 'square_fringe': True},
+    # Rica's wavy hair with temple braids; swept back, so the hairline drops (female-hairline.json) and settles as on the side-part hair.
+    'wavy': {'folder': 'tripo_rica_wavy_v1', 'part': 'hair_female_long_wavy', 'fit': 'long_wavy', 'tuck': True},
 }
 CLEARANCE = .003
 parser = argparse.ArgumentParser()
@@ -87,7 +90,18 @@ def smoothstep(low, high, value):
 
 # The hair over the forehead shifts down and forward along the forehead's slope, fading out towards the crown
 # and the sides; the clearance pass below lifts whatever ends up under the skin.
-drop = style.get('hairline_drop', 0) if args.hairline_drop is None else args.hairline_drop
+# A hair listed in female-hairline.json takes its drop from there: the preview's slider saves `pending_cm`, which
+# becomes `baked_cm` here.
+hairlines = json.loads(HAIRLINES.read_text())
+hairline = hairlines.get(style['fit'])
+if args.hairline_drop is not None:
+    drop = args.hairline_drop
+elif hairline:
+    hairline['baked_cm'] = hairline.pop('pending_cm', hairline['baked_cm'])
+    HAIRLINES.write_text(json.dumps(hairlines, indent=2) + '\n')
+    drop = hairline['baked_cm'] / 100
+else:
+    drop = style.get('hairline_drop', 0)
 front = [smoothstep(.04, -.06, v.co.y) * smoothstep(1.62, 1.74, v.co.z) for v in vertices]
 for index, vertex in enumerate(vertices):
     vertex.co += Vector((0, -.4, -1)) * drop * front[index]

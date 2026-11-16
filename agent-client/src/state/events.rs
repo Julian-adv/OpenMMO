@@ -1392,12 +1392,15 @@ impl SharedState {
             ServerMessage::PlayerMoved {
                 player_id,
                 position,
+                rotation,
                 ..
             } => {
                 // Update tracked position for self and nearby players
                 if self.self_player_id.as_ref() == Some(player_id) {
                     if let Some(ref mut p) = self.self_player {
                         p.position = *position;
+                        // The reply to a turn in place, which `keep_post_facing` checks.
+                        p.rotation = *rotation;
                     }
                 }
                 if let Some(p) = self.nearby_players.get_mut(player_id) {

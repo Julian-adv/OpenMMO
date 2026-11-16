@@ -63,6 +63,9 @@ pub struct NpcDefinition {
     pub hair: Option<onlinerpg_shared::HairStyle>,
     #[serde(rename = "hairColor", default)]
     pub hair_color: Option<onlinerpg_shared::AppearanceColor>,
+    /// Set on the character at boot: a registry NPC is created with the agent client's default.
+    #[serde(default)]
+    pub gender: Option<onlinerpg_shared::Gender>,
 }
 
 impl NpcDefinition {
@@ -177,6 +180,13 @@ impl NpcDefs {
 
     pub fn get_by_npc_name(&self, npc_name: &str) -> Option<&NpcDefinition> {
         self.by_npc_name.get(npc_name)
+    }
+
+    /// Every registry NPC by character name.
+    pub fn npcs(&self) -> impl Iterator<Item = (&str, &NpcDefinition)> {
+        self.by_npc_name
+            .iter()
+            .map(|(name, def)| (name.as_str(), def))
     }
 
     /// Every registry NPC's character name.

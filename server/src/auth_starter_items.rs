@@ -114,10 +114,7 @@ impl AuthService {
         if done {
             return Ok(());
         }
-        let gender_str = match gender {
-            Gender::Male => "male",
-            Gender::Female => "female",
-        };
+        let gender_str = gender.as_str();
         let mut characters = tx.prepare(
             "SELECT id, account_name, character_name FROM characters \
              WHERE gender = ?1 AND class = ?2",
@@ -231,6 +228,29 @@ impl AuthService {
         }
         if stripped > 0 {
             tracing::info!(stripped, "Removed starter swords from NPC characters");
+        }
+        Ok(())
+    }
+
+    /// A registry NPC with a gender in its definition takes it. Rica was created male, which no one-piece
+    /// model showed.
+    pub(super) fn sync_npc_genders(conn: &Connection) -> Result<(), rusqlite::Error> {
+        let mut stmt = conn.prepare(
+            "UPDATE characters SET gender = ?1 WHERE character_name = ?2 \
+             AND account_name GLOB ?3 AND gender != ?1",
+        )?;
+        let pattern = format!("{NPC_ACCOUNT_PREFIX}*");
+        for (name, def) in crate::npc_defs::npc_defs().npcs() {
+            let Some(gender) = def.gender.map(Gender::as_str) else {
+                continue;
+            };
+            if stmt.execute(params![gender, name, pattern])? > 0 {
+                tracing::info!(
+                    name,
+                    gender,
+                    "Set an NPC character's gender from the registry"
+                );
+            }
         }
         Ok(())
     }
@@ -937,6 +957,38 @@ mod tests {
         drop(auth);
         let auth = AuthService::new(db_path).unwrap();
         assert!(auth.load_inventory(rica.id).unwrap().is_empty());
+    }
+
+    #[test]
+    fn a_registry_npc_takes_its_gender_from_the_registry_at_boot() {
+        let (auth, db_path) = temp_auth("auth_npc_gender");
+        let account = auth.login_npc("npc_merchant").unwrap();
+        for name in ["Rica", "Aldwin"] {
+            auth.create_character(
+                &account,
+                name,
+                &plain_attributes(),
+                10,
+                CharacterClass::Merchant,
+                Gender::Male,
+            )
+            .unwrap();
+        }
+        drop(auth);
+        let auth = AuthService::new(db_path).unwrap();
+        let gender = |name: &str| -> String {
+            auth.open_connection()
+                .unwrap()
+                .query_row(
+                    "SELECT gender FROM characters WHERE character_name = ?1",
+                    [name],
+                    |row| row.get(0),
+                )
+                .unwrap()
+        };
+        assert_eq!(gender("Rica"), "female");
+        // No gender in the registry: left as created.
+        assert_eq!(gender("Aldwin"), "male");
     }
 
     #[test]

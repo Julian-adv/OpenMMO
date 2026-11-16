@@ -16,7 +16,8 @@ from lib.glb import read_glb, write_glb
 
 ROOT = Path(__file__).resolve().parents[1]
 STYLES = {'side': ('tripo_long_side_v3', 'hair_female_long_side'),
-          'bangs': ('tripo_long_bangs_v2', 'hair_female_long_bangs')}
+          'bangs': ('tripo_long_bangs_v2', 'hair_female_long_bangs'),
+          'wavy': ('tripo_rica_wavy_v1', 'hair_female_long_wavy')}
 parser = argparse.ArgumentParser()
 parser.add_argument('--style', choices=STYLES, required=True)
 folder, part = STYLES[parser.parse_args().style]

@@ -230,6 +230,7 @@ function modularCharacterPreview(): Plugin {
           ['ranger', ['top', 'bottom', 'gloves', 'boots', 'hair']],
           ['bard', ['top', 'bottom', 'gloves', 'boots', 'helmet']],
           ['ceremony', ['top', 'bottom', 'gloves', 'boots', 'helmet']],
+          ['shopkeeper', ['top', 'bottom', 'boots']],
         ] as const
       ).flatMap(([outfit, slots]) =>
         slots.flatMap((slot) => [

@@ -15,7 +15,12 @@ export const HAIR_FIT_DEFAULT = {
 }
 export type HairFit = typeof HAIR_FIT_DEFAULT
 export type HairFitFace = 'default' | 'custom' | 'ranger' | 'chic'
-export type HairFitStyle = 'bob' | 'long' | 'ponytail' | 'long_bangs'
+export type HairFitStyle =
+  | 'bob'
+  | 'long'
+  | 'ponytail'
+  | 'long_bangs'
+  | 'long_wavy'
 export type HairFits = Record<
   HairFitFace,
   Partial<Record<HairFitStyle, HairFit>>
@@ -26,6 +31,7 @@ const styles: Record<string, HairFitStyle> = {
   valkyrie_hair: 'long',
   ranger_hair: 'ponytail',
   long_bangs_hair: 'long_bangs',
+  long_wavy_hair: 'long_wavy',
 }
 export const femaleHairStyle = (part: string): HairFitStyle | undefined =>
   styles[part]
@@ -67,7 +73,11 @@ export function femaleHairFitMatrix(fit: HairFit, pivot: THREE.Vector3) {
 
 // Hair that hangs past the shoulders rests on the body, which every face shares: the fit applies in full at
 // head height and fades to nothing between these heights (metres, bind pose).
-const BODY_HELD: ReadonlySet<HairFitStyle> = new Set(['long', 'long_bangs'])
+const BODY_HELD: ReadonlySet<HairFitStyle> = new Set([
+  'long',
+  'long_bangs',
+  'long_wavy',
+])
 const HELD_BELOW = 1.46
 const FITTED_ABOVE = 1.6
 

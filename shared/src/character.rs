@@ -11,6 +11,15 @@ pub enum Gender {
     Female,
 }
 
+impl Gender {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Male => "male",
+            Self::Female => "female",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum FaceStyle {
@@ -33,13 +42,14 @@ pub enum HairStyle {
     Long,
     Ponytail,
     LongBangs,
+    LongWavy,
 }
 
 impl HairStyle {
     fn is_female(self) -> bool {
         matches!(
             self,
-            Self::Bob | Self::Long | Self::Ponytail | Self::LongBangs
+            Self::Bob | Self::Long | Self::Ponytail | Self::LongBangs | Self::LongWavy
         )
     }
 
@@ -57,6 +67,7 @@ impl HairStyle {
             Self::Long => 0xcbac91,
             Self::Ponytail => 0x432e26,
             Self::LongBangs => 0xdbb99d,
+            Self::LongWavy => 0xb9aca3,
             _ => 0xceb294,
         })
     }

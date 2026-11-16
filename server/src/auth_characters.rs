@@ -390,10 +390,7 @@ impl AuthService {
 
         self.check_new_character_name(&conn, account_name, character_name, None)?;
 
-        let gender_str = match gender {
-            Gender::Male => "male",
-            Gender::Female => "female",
-        };
+        let gender_str = gender.as_str();
 
         conn.execute(
             "INSERT INTO characters (

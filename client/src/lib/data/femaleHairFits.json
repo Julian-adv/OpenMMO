@@ -24,6 +24,18 @@
       "rotate-x": 0,
       "rotate-y": 0,
       "rotate-z": 0
+    },
+    "long_wavy": {
+      "move-x": 0,
+      "move-y": -0.1,
+      "move-z": -0.15,
+      "scale": 100.5,
+      "scale-x": 103,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
     }
   },
   "ranger": {
@@ -121,6 +133,18 @@
       "scale-x": 92,
       "scale-y": 108.5,
       "scale-z": 96,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "long_wavy": {
+      "move-x": -0.1449,
+      "move-y": 1.05,
+      "move-z": 1.25,
+      "scale": 96.6,
+      "scale-x": 95.5,
+      "scale-y": 101,
+      "scale-z": 100,
       "rotate-x": 0,
       "rotate-y": 0,
       "rotate-z": 0

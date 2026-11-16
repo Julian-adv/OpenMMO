@@ -87,6 +87,7 @@ export async function showFemaleBase(
         <option value="none">없음</option>
         <option value="warrior">긴 생머리 · 옆 가르마</option>
         <option value="long_bangs">긴 생머리 · 앞머리</option>
+        <option value="long_wavy">긴 웨이브 · 땋은 머리</option>
         <option value="ranger">순찰자 갈색 포니테일 (피팅 검수 중)</option>
       </select>
       <div id="warrior-hair-fit" hidden>
@@ -98,6 +99,13 @@ export async function showFemaleBase(
         <label for="warrior-hair-offset">위아래 위치 <output id="warrior-hair-offset-value">-5.1cm</output></label>
         <input id="warrior-hair-offset" type="range" min="-10" max="10" step="0.1" value="-5.1" />
         <button id="warrior-hair-reset" type="button">헤어 조정 초기화</button>
+      </div>
+      <div id="wavy-hairline" hidden>
+        <p class="details">이마선을 이마 경사를 따라 내립니다. 저장한 뒤 헤어를 다시 구우면 게임에 반영됩니다. 굽기 전에는 머리카락이 피부에 조금 묻혀 보일 수 있습니다.</p>
+        <label for="wavy-hairline-drop">이마선 내리기 <output id="wavy-hairline-value"></output></label>
+        <input id="wavy-hairline-drop" type="range" min="0" max="6" step="0.1" />
+        <button id="wavy-hairline-save" type="button">이마선 저장</button>
+        <span id="wavy-hairline-status" class="details"></span>
       </div>
       <label class="toggle"><input id="female-wings" type="checkbox" /> 발키리 날개 (피팅 시안)</label>
       <a href="?asset=female-knight-bob">단발 원본 단독 보기</a>
@@ -139,6 +147,7 @@ export async function showFemaleBase(
         <option value="ranger">순찰자 조끼와 셔츠 (피팅 검수 중)</option>
         <option value="bard">바드 코르셋과 망토 (피팅 검수 중)</option>
         <option value="ceremony">예복 보디스 (피팅 검수 중)</option>
+        <option value="shopkeeper">잡화점 블라우스와 코르셋 (피팅 검수 중)</option>
         <option value="rogue">로그 가죽 코르셋</option>
       </select>
       <label for="female-bottom">하의</label>
@@ -152,6 +161,7 @@ export async function showFemaleBase(
         <option value="ranger">순찰자 가죽 치마 (피팅 검수 중)</option>
         <option value="bard">바드 주름치마 (피팅 검수 중)</option>
         <option value="ceremony">예복 종 모양 치마 (피팅 검수 중)</option>
+        <option value="shopkeeper">잡화점 앞치마 치마 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
       <label for="female-boots">신발</label>
@@ -163,6 +173,7 @@ export async function showFemaleBase(
         <option value="ranger">순찰자 스틸레토 부츠 (피팅 검수 중)</option>
         <option value="bard">바드 스틸레토 부츠 (피팅 검수 중)</option>
         <option value="ceremony">예복 스타킹과 구두 (피팅 검수 중)</option>
+        <option value="shopkeeper">잡화점 앵클부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
         <option value="valkyrie">발키리 부츠 (초기 피팅 검수 중)</option>
@@ -375,7 +386,9 @@ export async function showFemaleBase(
   const requestedHair = new URLSearchParams(location.search).get('hair')
   hairSelect.value =
     requestedHair &&
-    ['bob', 'warrior', 'long_bangs', 'ranger', 'none'].includes(requestedHair)
+    ['bob', 'warrior', 'long_bangs', 'long_wavy', 'ranger', 'none'].includes(
+      requestedHair
+    )
       ? requestedHair
       : 'bob'
   const initialHair = hairSelect.value
@@ -431,6 +444,7 @@ export async function showFemaleBase(
     'barbarian-bob': 'barbarian_hair',
     warrior: 'valkyrie_hair',
     long_bangs: 'long_bangs_hair',
+    long_wavy: 'long_wavy_hair',
     ranger: 'ranger_hair',
   }
   const bindHair = (key: string, source: THREE.Object3D) => {
@@ -538,6 +552,73 @@ export async function showFemaleBase(
   }
   hairFitControls.hidden = initialHair !== 'warrior'
   updateHairFit()
+  // The baked hairline drop is already in the mesh; the slider shows the difference, as the fit script applies it.
+  const hairlineControls = document.getElementById('wavy-hairline')!
+  const hairlineDrop = document.getElementById(
+    'wavy-hairline-drop'
+  ) as HTMLInputElement
+  const hairlineStatus = document.getElementById('wavy-hairline-status')!
+  const hairlineOriginals = new WeakMap<THREE.SkinnedMesh, Float32Array>()
+  let bakedHairline = 0
+  const SKULL_Y = 1.68
+  const updateHairline = () => {
+    const drop = Number(hairlineDrop.value)
+    const extra = (drop - bakedHairline) / 100
+    document.getElementById('wavy-hairline-value')!.textContent =
+      `${drop.toFixed(1)}cm`
+    for (const mesh of hairOptions.long_wavy ?? []) {
+      const position = mesh.geometry.attributes.position
+      let original = hairlineOriginals.get(mesh)
+      if (!original) {
+        original = readAttribute(position)
+        hairlineOriginals.set(mesh, original)
+      }
+      for (let i = 0; i < position.count; i++) {
+        const j = i * 3
+        const x = original[j]
+        const up = original[j + 1] - SKULL_Y
+        const z = original[j + 2]
+        const weight =
+          THREE.MathUtils.smoothstep(z, -0.04, 0.06) *
+          THREE.MathUtils.smoothstep(up + SKULL_Y, 1.62, 1.74)
+        if (weight === 0) {
+          position.setXYZ(i, x, up + SKULL_Y, z)
+          continue
+        }
+        const movedUp = up - extra * weight
+        const movedZ = z + 0.4 * extra * weight
+        // The fit script lifts hair that ends up under the skin; here it keeps its distance from the skull's centre.
+        const out = Math.max(
+          1,
+          Math.hypot(x, up, z) / Math.hypot(x, movedUp, movedZ)
+        )
+        position.setXYZ(i, x * out, movedUp * out + SKULL_Y, movedZ * out)
+      }
+      position.needsUpdate = true
+    }
+  }
+  hairlineDrop.oninput = updateHairline
+  void fetch('/__female-preview/hairline.json')
+    .then((response) => response.json())
+    .then((saved) => {
+      bakedHairline = saved.long_wavy.baked_cm
+      hairlineDrop.value = String(saved.long_wavy.pending_cm ?? bakedHairline)
+      updateHairline()
+    })
+  document.getElementById('wavy-hairline-save')!.onclick = async () => {
+    const response = await fetch('/__female-preview/hairline.json', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        hair: 'long_wavy',
+        drop_cm: Number(hairlineDrop.value),
+      }),
+    })
+    hairlineStatus.textContent = response.ok
+      ? `${Number(hairlineDrop.value).toFixed(1)}cm 저장됨`
+      : '저장하지 못했습니다'
+  }
+  hairlineControls.hidden = initialHair !== 'long_wavy'
   const pendingHair = new Map<string, Promise<THREE.SkinnedMesh[]>>()
   const loadHair = (
     name: string,
@@ -562,6 +643,7 @@ export async function showFemaleBase(
         for (const mesh of meshes) mesh.visible = false
         hairOptions[key] = meshes
         if (key === 'warrior') updateHairFit()
+        if (key === 'long_wavy') updateHairline()
         return meshes
       })
       .finally(() => pendingHair.delete(key))
@@ -1212,6 +1294,7 @@ export async function showFemaleBase(
     ranger: '순찰자',
     bard: '바드',
     ceremony: '예복',
+    shopkeeper: '잡화점',
   }
   const fitSlotNames: Record<string, string> = {
     helmet: '투구',
@@ -1246,6 +1329,7 @@ export async function showFemaleBase(
     bob: 'bob',
     warrior: 'long',
     long_bangs: 'long_bangs',
+    long_wavy: 'long_wavy',
     ranger: 'ponytail',
   }
   const helmetHair = () => helmetHairStyles[hairSelect.value]
@@ -1453,6 +1537,7 @@ export async function showFemaleBase(
   for (const input of [
     ...Object.values(fitInputs),
     ...sleeveEndInputs.map(({ input }) => input),
+    hairlineDrop,
   ])
     input.addEventListener(
       'wheel',
@@ -2264,6 +2349,7 @@ export async function showFemaleBase(
       if (hairSelect.value !== requested) return
       appliedHair = requested
       hairFitControls.hidden = requested !== 'warrior'
+      hairlineControls.hidden = requested !== 'long_wavy'
       updateHair()
       for (const part of fitters.keys())
         if (partSlot(part) === 'helmet') applyFit(part)
@@ -2388,6 +2474,7 @@ export async function showFemaleBase(
     bob: 'hair',
     warrior: 'valkyrie_hair',
     long_bangs: 'long_bangs_hair',
+    long_wavy: 'long_wavy_hair',
     ranger: 'ranger_hair',
   }
   let hairBrushPaused = false

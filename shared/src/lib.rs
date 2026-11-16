@@ -296,7 +296,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// walking up to a road fence and striking it before the sweep.
 /// v160: `PatrolBreakOut`/`PatrolBrokeOut`, a penned-in guard forfeiting the
 /// fences around it or being sent back to town.
-pub const PROTOCOL_VERSION: u32 = 160;
+/// v161: female `HairStyle::LongWavy`.
+pub const PROTOCOL_VERSION: u32 = 161;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

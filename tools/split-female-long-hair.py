@@ -21,10 +21,13 @@ from lib.glb_accessors import accessor, add_accessor
 
 ROOT = Path(__file__).resolve().parents[1]
 BODY = ROOT / 'assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb'
-STYLES = {'side': 'tripo_long_side_v3', 'bangs': 'tripo_long_bangs_v2'}
+# Folder, and the red minus blue under which a texel is mannequin: blond sits well above blue, ash silver barely
+# above grey.
+STYLES = {'side': ('tripo_long_side_v3', 30), 'bangs': ('tripo_long_bangs_v2', 30), 'wavy': ('tripo_rica_wavy_v1', -20)}
 parser = argparse.ArgumentParser()
 parser.add_argument('--style', choices=STYLES, required=True)
-directory = ROOT / 'assets/modular_human_female_01/hair' / STYLES[parser.parse_args().style]
+folder, mannequin_below = STYLES[parser.parse_args().style]
+directory = ROOT / 'assets/modular_human_female_01/hair' / folder
 source = directory / 'model_url.glb'
 out = directory / 'fitted_v1'
 out.mkdir(exist_ok=True)
@@ -45,8 +48,7 @@ view = doc['bufferViews'][image['bufferView']]
 start = view.get('byteOffset', 0)
 colour = np.asarray(Image.open(bytes_io.BytesIO(bytes(binary[start:start + view['byteLength']]))).convert('RGB'))
 size = colour.shape[0]
-# Hair is blond (red well above blue); the mannequin is blue.
-blue = colour[:, :, 0].astype(int) - colour[:, :, 2] < 30
+blue = colour[:, :, 0].astype(int) - colour[:, :, 2] < mannequin_below
 
 
 def texel(coords):

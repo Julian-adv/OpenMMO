@@ -5,6 +5,7 @@ import { valkyriePreviewFit } from './lib/valkyrie-preview-fit.mjs'
 import { outfitPreviewFit } from './lib/outfit-preview-fit.mjs'
 import { helmetHairBrush } from './lib/helmet-hair-brush.mjs'
 import { femaleHairFit } from './lib/female-hair-fit.mjs'
+import { femaleHairline } from './lib/female-hairline.mjs'
 import { femaleHelmetFit } from './lib/female-helmet-fit.mjs'
 
 const pending = new Map()
@@ -55,9 +56,10 @@ export function femalePreviewPlugin() {
       server.middlewares.use(outfitPreviewFit())
       server.middlewares.use(helmetHairBrush())
       server.middlewares.use(femaleHairFit())
+      server.middlewares.use(femaleHairline())
       server.middlewares.use(femaleHelmetFit())
       server.middlewares.use((req, res, next) => {
-        const match = /^\/__female-preview\/(base|bob|warrior|long_bangs|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
+        const match = /^\/__female-preview\/(base|bob|warrior|long_bangs|long_wavy|valkyrie)\.glb$|^\/__female-preview\/(animations)\.json$/.exec(req.url?.split('?')[0] ?? '')
         if (req.method !== 'GET' || !match) return next()
         const name = match[1] ?? match[2]
         if (!Object.hasOwn(sources, name)) return next()

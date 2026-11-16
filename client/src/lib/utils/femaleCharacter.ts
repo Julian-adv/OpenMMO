@@ -33,6 +33,7 @@ type Style =
   | 'ranger'
   | 'bard'
   | 'ceremony'
+  | 'shopkeeper'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
@@ -43,19 +44,23 @@ const prefixes: Record<Style, string> = {
   ranger: 'ranger_',
   bard: 'bard_',
   ceremony: 'ceremony_',
+  shopkeeper: 'shopkeeper_',
 }
 const styles = Object.keys(prefixes) as Style[]
-type Helmet = Exclude<Style, 'rogue' | 'caveman' | 'ranger'> | 'brilliance'
+type Helmet =
+  | Exclude<Style, 'rogue' | 'caveman' | 'ranger' | 'shopkeeper'>
+  | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
 export type FemaleHair = Extract<
   CharacterAppearance['hair'],
-  'bob' | 'long' | 'ponytail' | 'long_bangs'
+  'bob' | 'long' | 'ponytail' | 'long_bangs' | 'long_wavy'
 >
 export const FEMALE_HAIR_PARTS: Record<FemaleHair, string> = {
   bob: 'hair',
   long: 'valkyrie_hair',
   ponytail: 'ranger_hair',
   long_bangs: 'long_bangs_hair',
+  long_wavy: 'long_wavy_hair',
 }
 const HAIR_PART_NAMES = new Set([
   ...Object.values(FEMALE_HAIR_PARTS),
@@ -87,6 +92,7 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   ranger: slots.filter((slot) => slot !== 'helmet'),
   bard: slots,
   ceremony: slots,
+  shopkeeper: ['top', 'bottom', 'boots'],
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
@@ -460,6 +466,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/ranger_')) return 'ranger'
   if (model.startsWith('armor/bard_')) return 'bard'
   if (model.startsWith('armor/ceremony_')) return 'ceremony'
+  if (model.startsWith('armor/shopkeeper_')) return 'shopkeeper'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -471,7 +478,10 @@ const femaleHelmet = (itemId: string | null | undefined): Helmet | null => {
   if (modularOutfitForArmor({ head: itemId }).helmet === 'brilliance')
     return 'brilliance'
   const style = femaleStyle(itemId)
-  return style === 'rogue' || style === 'caveman' || style === 'ranger'
+  return style === 'rogue' ||
+    style === 'caveman' ||
+    style === 'ranger' ||
+    style === 'shopkeeper'
     ? 'barbarian'
     : style
 }
