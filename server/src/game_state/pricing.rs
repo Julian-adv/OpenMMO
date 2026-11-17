@@ -35,55 +35,77 @@ fn target_on(state: &PricingState, game_day: i64, cfg: &PricingConfig) -> Option
     grown(stored, (game_day - day) as f64, cfg.target_daily_growth)
 }
 
-/// The target path over real time, for the dashboard.
+/// Unix time at which the game clock reaches `game_day`.
+fn game_day_ts(game_day: i64, day_now: f64) -> i64 {
+    unix_now() - ((day_now - game_day as f64) * REAL_DAY_DURATION_SECONDS) as i64
+}
+
+/// The start of a path stored before `target_since`: the baseline midpoint
+/// before the first meeting held on it, else `target_day`. `meetings` are
+/// `(ts, game_day, reference)` oldest first.
+fn inferred_since(state: &PricingState, day_now: f64, meetings: &[(i64, i64, f64)]) -> Option<i64> {
+    let cfg = &world_config().pricing;
+    let on_path = |&&(_, day, reference): &&(i64, i64, f64)| {
+        target_on(state, day, cfg).is_some_and(|target| (reference / target - 1.0).abs() < 1e-6)
+    };
+    Some(match meetings.iter().find(on_path) {
+        Some((ts, ..)) => ts - BASELINE_OFFSET_SECONDS,
+        None => game_day_ts(state.target_day?, day_now),
+    })
+}
+
+/// The target path over real time, for the dashboard: the targets the
+/// meetings compared against, continued from the stored one.
 pub struct TargetPath {
-    target: f64,
-    target_day: i64,
-    growth: f64,
-    /// Fractional game day at unix time 0.
-    day_at_epoch: f64,
     since: i64,
+    growth: f64,
+    /// `(ts, target)`, oldest first, never empty.
+    anchors: Vec<(i64, f64)>,
 }
 
 impl TargetPath {
-    fn new(state: &PricingState, day_now: f64, since: i64) -> Option<Self> {
+    pub fn new(state: &PricingState, day_now: f64, meetings: &[(i64, i64, f64)]) -> Option<Self> {
         let (target, target_day) = state.target_m.zip(state.target_day)?;
-        Some(Self {
-            target,
-            target_day,
-            growth: world_config().pricing.target_daily_growth,
-            day_at_epoch: day_now - unix_now() as f64 / REAL_DAY_DURATION_SECONDS,
-            since,
-        })
-    }
-
-    fn on_day(&self, day: f64) -> Option<f64> {
-        grown(self.target, day - self.target_day as f64, self.growth)
-    }
-
-    /// None before the path starts.
-    pub fn at(&self, ts: i64) -> Option<f64> {
-        (ts >= self.since)
-            .then(|| self.on_day(self.day_at_epoch + ts as f64 / REAL_DAY_DURATION_SECONDS))?
-    }
-
-    /// The start of a path stored before `target_since`: the baseline
-    /// midpoint before the first meeting held on it, else `target_day`.
-    /// `meetings` are `(ts, game_day, reference)` oldest first.
-    fn inferred_since(&self, meetings: &[(i64, i64, f64)]) -> i64 {
-        meetings
+        let since = state.target_since?;
+        let mut anchors: Vec<_> = meetings
             .iter()
-            .find(|(_, day, reference)| {
-                self.on_day(*day as f64)
-                    .is_some_and(|target| (reference / target - 1.0).abs() < 1e-6)
-            })
-            .map_or_else(
-                || {
-                    ((self.target_day as f64 - self.day_at_epoch) * REAL_DAY_DURATION_SECONDS)
-                        as i64
-                },
-                |(ts, ..)| ts - BASELINE_OFFSET_SECONDS,
-            )
+            .filter(|(ts, _, reference)| *ts >= since + BASELINE_OFFSET_SECONDS && *reference > 0.0)
+            .map(|&(ts, _, reference)| (ts, reference))
+            .collect();
+        let stored_ts = game_day_ts(target_day, day_now);
+        let recorded = meetings
+            .last()
+            .is_some_and(|(_, day, _)| *day == target_day);
+        if !recorded && anchors.last().is_none_or(|(ts, _)| *ts < stored_ts) {
+            anchors.push((stored_ts, target));
+        }
+        Some(Self {
+            since,
+            growth: world_config().pricing.target_daily_growth,
+            anchors,
+        })
+        .filter(|path| !path.anchors.is_empty())
+    }
+
+    /// None before the path starts. Between two meetings it runs from one
+    /// target to the next; outside them it grows at the configured rate.
+    pub fn at(&self, ts: i64) -> Option<f64> {
+        if ts < self.since {
+            return None;
+        }
+        let next = self.anchors.partition_point(|(at, _)| *at <= ts);
+        let before = next.checked_sub(1).map(|index| self.anchors[index]);
+        match (before, self.anchors.get(next)) {
+            (Some((t0, v0)), Some(&(t1, v1))) => {
+                Some(v0 * (v1 / v0).powf((ts - t0) as f64 / (t1 - t0) as f64))
+            }
+            (Some((at, target)), None) | (None, Some(&(at, target))) => grown(
+                target,
+                (ts - at) as f64 / REAL_DAY_DURATION_SECONDS,
+                self.growth,
+            ),
+            (None, None) => None,
+        }
     }
 }
 
@@ -104,8 +126,8 @@ impl super::GameState {
         let loaded = super::auth_db(move || {
             let mut state = auth.load_pricing_state()?;
             if state.target_since.is_none() {
-                if let Some(path) = TargetPath::new(&state, day_now, 0) {
-                    let since = path.inferred_since(&auth.pricing_meeting_references()?);
+                let meetings = auth.pricing_meeting_references()?;
+                if let Some(since) = inferred_since(&state, day_now, &meetings) {
                     state.target_since = Some(since);
                     auth.save_pricing_state(&state, None)?;
                     info!("pricing: target path starts at {since}");
@@ -127,10 +149,10 @@ impl super::GameState {
         self.pricing.read().await.index_percent
     }
 
-    pub async fn target_path(&self) -> Option<TargetPath> {
+    /// The stored state and the fractional game day, for `TargetPath::new`.
+    pub async fn pricing_snapshot(&self) -> (PricingState, f64) {
         let day_now = self.game_day_now();
-        let state = self.pricing.read().await;
-        TargetPath::new(&state, day_now, state.target_since?)
+        (self.pricing.read().await.clone(), day_now)
     }
 
     #[cfg(test)]
@@ -288,28 +310,69 @@ mod tests {
     use super::*;
 
     #[test]
-    fn target_path_follows_real_time_from_its_start() {
+    fn target_path_runs_through_the_meeting_targets() {
         let day = REAL_DAY_DURATION_SECONDS as i64;
-        let now = 100 * day;
-        let path = TargetPath {
-            target: 100.0,
-            target_day: 40,
-            growth: 0.01,
-            day_at_epoch: -49.5,
-            since: now - day,
+        let now = unix_now();
+        let since = now - 40 * day - BASELINE_OFFSET_SECONDS;
+        let state = PricingState {
+            target_m: Some(130.0),
+            target_day: Some(90),
+            target_since: Some(since),
+            ..Default::default()
         };
-        assert_eq!(path.at(now - day - 1), None);
-        let target = path.at(now - day / 2).unwrap();
-        assert!((target - 100.0 * 1.01f64.powi(10)).abs() < 1e-9);
-        assert_eq!(path.inferred_since(&[]), now - day * 21 / 2);
+        let meetings = [
+            (now - 60 * day - BASELINE_OFFSET_SECONDS, 40, 500.0),
+            (now - 40 * day, 60, 100.0),
+            (now - 20 * day, 80, 121.0),
+        ];
+        let path = TargetPath::new(&state, 100.0, &meetings).unwrap();
+        let close = |ts, expected: f64| (path.at(ts).unwrap() - expected).abs() < 1e-6;
+        assert_eq!(path.at(since - 1), None);
+        assert!(close(now - 40 * day, 100.0));
+        assert!(close(now - 30 * day, 110.0));
+        assert!(close(now - 20 * day, 121.0));
+        assert!(close(now - 15 * day, (121.0f64 * 130.0).sqrt()));
+        let growth = world_config().pricing.target_daily_growth;
+        assert!(close(now, 130.0 * (1.0 + growth).powi(10)));
+        assert!(close(now - 41 * day, 100.0 / (1.0 + growth)));
+
+        let recorded = PricingState {
+            target_m: Some(121.0),
+            target_day: Some(80),
+            ..state.clone()
+        };
+        let path = TargetPath::new(&recorded, 100.0, &meetings).unwrap();
+        assert_eq!(path.anchors.len(), 2);
+        assert_eq!(
+            TargetPath::new(&PricingState::default(), 100.0, &meetings).map(|_| ()),
+            None
+        );
+    }
+
+    #[test]
+    fn a_path_without_its_start_infers_it_from_the_first_meeting_on_it() {
+        let cfg = &world_config().pricing;
+        let state = PricingState {
+            target_m: Some(100.0),
+            target_day: Some(40),
+            ..Default::default()
+        };
+        let on_path = target_on(&state, 20, cfg).unwrap();
         let meetings = [
             (500_000, 0, 90.0),
-            (700_000, 20, 100.0 * 1.01f64.powi(-20)),
+            (700_000, 20, on_path),
             (900_000, 40, 100.0),
         ];
         assert_eq!(
-            path.inferred_since(&meetings),
-            700_000 - BASELINE_OFFSET_SECONDS
+            inferred_since(&state, 50.0, &meetings),
+            Some(700_000 - BASELINE_OFFSET_SECONDS)
+        );
+        let fallback = inferred_since(&state, 50.0, &[]).unwrap();
+        let expected = unix_now() - 10 * REAL_DAY_DURATION_SECONDS as i64;
+        assert!((fallback - expected).abs() <= 1);
+        assert_eq!(
+            inferred_since(&PricingState::default(), 50.0, &meetings),
+            None
         );
     }
 

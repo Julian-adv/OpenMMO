@@ -246,7 +246,7 @@ GET /api/metrics/gold-per-account?hours=24&active_hours=168
 
 응답은 `from`, `until`, `sample_interval_seconds`, `window_seconds`, `collection_started_at`, `latest`, `samples`를 포함합니다. `window_seconds`는 활성 계정 집계 기간입니다. `latest`는 가장 최근 기록의 `{ timestamp, total_gold, accounts, gold_per_account }`이며 `total_gold`는 해당 계정들의 지갑 합입니다. 계정 수가 0이면 `null`이고 이전 기록으로 대신하지 않습니다. 각 표본은 `{ timestamp, gold_per_account, peak_gold_per_account, sample_count }`이며 6개월·1년 그래프는 시간별로 나눗셈을 먼저 계산한 뒤 구간 평균과 최고값을 구합니다. 구간 정렬과 첫 부분 구간의 시각은 총 골드 API와 같습니다.
 
-`active_hours=720`이면 각 표본에 `target_gold_per_account`를 더합니다. [물가 시스템](PRICING.md#조정-serin의-삭이-되는-저녁)의 목표 경로를 그 표본 시각에 맞춰 계산한 값으로, `pricing_state`의 `target_m`·`target_day`에서 `targetDailyGrowth`로 이어 그립니다. 경로 시작 시각(`pricing_state.target_since`) 이전의 표본과 기준점이 없을 때는 `null`입니다. 이 열 없이 저장된 경로는 서버가 부팅할 때 한 번 시작 시각을 추정해 저장합니다. 현재 경로 위에 있는 첫 회의 행(`pricing_history.m_prev`가 경로 값과 일치)의 15일 전이고, 그런 행이 없으면 `target_day`의 시각입니다. 다른 `active_hours`에서는 항상 `null`입니다. 화면은 이 값을 파란 점선으로 그립니다.
+`active_hours=720`이면 각 표본에 `target_gold_per_account`를 더합니다. [물가 시스템](PRICING.md#조정-serin의-삭이-되는-저녁)의 목표 경로를 그 표본 시각에 맞춘 값입니다. 현재 경로의 회의들이 실제로 비교한 목표(`pricing_history.m_prev`)를 지나며, 두 회의 사이는 한 값에서 다음 값으로 일정한 비율로 잇고, 첫 회의 이전과 마지막 목표(`pricing_state`의 `target_m`·`target_day`) 이후는 `targetDailyGrowth`로 이어 그립니다. 그래서 증가율을 바꿔도 지난 구간은 그때 회의가 쓴 목표 그대로입니다. 경로 시작 시각(`pricing_state.target_since`) 이전의 표본과 기준점이 없을 때는 `null`입니다. 이 열 없이 저장된 경로는 서버가 부팅할 때 한 번 시작 시각을 추정해 저장합니다. 현재 경로 위에 있는 첫 회의 행(`pricing_history.m_prev`가 경로 값과 일치)의 15일 전이고, 그런 행이 없으면 `target_day`의 시각입니다. 다른 `active_hours`에서는 항상 `null`입니다. 화면은 이 값을 파란 점선으로 그립니다.
 
 화면에는 최근 계산의 분자·분모와 집계 시각을 표시합니다. 선택한 기간의 접속 기록이 충분히 쌓이지 않은 구간은 수집 시작 시각과 함께 안내합니다. 조회는 저장된 값만 읽습니다.
 

@@ -254,6 +254,7 @@ mod player;
 mod player_interaction;
 mod player_trade;
 mod pricing;
+pub use pricing::TargetPath;
 mod road_patrol;
 pub(crate) use player::restored_floor_level;
 mod salary;

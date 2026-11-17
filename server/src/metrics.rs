@@ -1,5 +1,5 @@
 use crate::auth::{unix_now, AuthService, PRICING_MEASURE_DAYS};
-use crate::game_state::{auth_db, GameState};
+use crate::game_state::{auth_db, GameState, TargetPath};
 use axum::{
     extract::{Query, State},
     http::{header, StatusCode},
@@ -949,8 +949,8 @@ async fn per_account_gold_history(
     let Some(active_days) = period_days(query.active_hours, &ACCOUNT_GOLD_PERIOD_DAYS) else {
         return invalid_period_hours("active_hours", &ACCOUNT_GOLD_PERIOD_DAYS);
     };
-    let path = if active_days == PRICING_MEASURE_DAYS {
-        state.game.target_path().await
+    let pricing = if active_days == PRICING_MEASURE_DAYS {
+        Some(state.game.pricing_snapshot().await).filter(|(pricing, _)| pricing.target_m.is_some())
     } else {
         None
     };
@@ -960,9 +960,12 @@ async fn per_account_gold_history(
                 state
                     .auth
                     .per_account_gold_history(unix_now(), hours, interval, active_days)?;
-            if let Some(path) = path {
-                for sample in &mut history.samples {
-                    sample.target_gold_per_account = path.at(sample.timestamp);
+            if let Some((pricing, day_now)) = pricing {
+                let meetings = state.auth.pricing_meeting_references()?;
+                if let Some(path) = TargetPath::new(&pricing, day_now, &meetings) {
+                    for sample in &mut history.samples {
+                        sample.target_gold_per_account = path.at(sample.timestamp);
+                    }
                 }
             }
             Ok(history)
