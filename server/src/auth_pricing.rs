@@ -1,13 +1,15 @@
 use super::{unix_now, AuthError, AuthService};
 use rusqlite::{params, Connection, OptionalExtension};
 
-/// doc/PRICING.md; `target_m` is the target path at game day `target_day`.
+/// doc/PRICING.md; `target_m` is the target path at game day `target_day`,
+/// and the path starts at unix time `target_since`.
 #[derive(Debug, Clone, PartialEq)]
 pub struct PricingState {
     pub index_percent: u32,
     pub last_meeting_day: Option<i64>,
     pub target_m: Option<f64>,
     pub target_day: Option<i64>,
+    pub target_since: Option<i64>,
 }
 
 impl Default for PricingState {
@@ -17,6 +19,7 @@ impl Default for PricingState {
             last_meeting_day: None,
             target_m: None,
             target_day: None,
+            target_since: None,
         }
     }
 }
@@ -45,7 +48,8 @@ impl AuthService {
                 index_percent INTEGER NOT NULL,
                 last_meeting_day INTEGER,
                 target_m REAL,
-                target_day INTEGER
+                target_day INTEGER,
+                target_since INTEGER
             );
             CREATE TABLE IF NOT EXISTS pricing_history (
                 ts INTEGER NOT NULL,
@@ -57,11 +61,15 @@ impl AuthService {
                 index_after INTEGER NOT NULL
             );",
         )?;
-        if !Self::table_columns(conn, "pricing_state")?.contains("target_m") {
+        let columns = Self::table_columns(conn, "pricing_state")?;
+        if !columns.contains("target_m") {
             conn.execute_batch(
                 "ALTER TABLE pricing_state ADD COLUMN target_m REAL;
                  ALTER TABLE pricing_state ADD COLUMN target_day INTEGER;",
             )?;
+        }
+        if !columns.contains("target_since") {
+            conn.execute_batch("ALTER TABLE pricing_state ADD COLUMN target_since INTEGER;")?;
         }
         Ok(())
     }
@@ -70,7 +78,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         Ok(conn
             .query_row(
-                "SELECT index_percent, last_meeting_day, target_m, target_day
+                "SELECT index_percent, last_meeting_day, target_m, target_day, target_since
                  FROM pricing_state WHERE id = 1",
                 [],
                 |row| {
@@ -79,6 +87,7 @@ impl AuthService {
                         last_meeting_day: row.get(1)?,
                         target_m: row.get(2)?,
                         target_day: row.get(3)?,
+                        target_since: row.get(4)?,
                     })
                 },
             )
@@ -97,12 +106,14 @@ impl AuthService {
         let tx = conn.transaction()?;
         tx.execute(
             "INSERT OR REPLACE INTO pricing_state \
-             (id, index_percent, last_meeting_day, target_m, target_day) VALUES (1, ?1, ?2, ?3, ?4)",
+             (id, index_percent, last_meeting_day, target_m, target_day, target_since) \
+             VALUES (1, ?1, ?2, ?3, ?4, ?5)",
             params![
                 state.index_percent,
                 state.last_meeting_day,
                 state.target_m,
-                state.target_day
+                state.target_day,
+                state.target_since
             ],
         )?;
         if let Some(m) = meeting {
@@ -205,6 +216,7 @@ mod tests {
             last_meeting_day: Some(34),
             target_m: Some(98.5),
             target_day: Some(-86),
+            target_since: Some(1_700_000_000),
         };
         let meeting = PricingMeeting {
             game_day: 34,

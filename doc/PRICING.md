@@ -59,7 +59,7 @@ P_new  = clamp(P_new, P_min, P_max)        -- 전체 범위
 
 `M`은 직전 회의 값이 아니라 고정 기준점에서 이어지는 **목표 경로**와 비교한다. 그래서 `M`이 경로 위에 있는 동안은 회의마다 지수가 계속 올라, 쌓인 골드를 줄이는 압력이 이어진다.
 
-기준점은 첫 회의에서 정한다. 그때까지 30일간의 시간별 `M` 평균을 그 기간의 가운데(120게임일 전)에 둔다. 회의마다 그날의 목표 값과 게임일을 `pricing_state`(`target_m`, `target_day`)에 저장하고, 다음 회의는 거기서 이어 키운다. 측정값이 없는 회의도 목표는 저장한다. 기준점을 다시 잡으려면 두 값을 NULL로 지운다.
+기준점은 첫 회의에서 정한다. 그때까지 30일간의 시간별 `M` 평균을 그 기간의 가운데(120게임일 전)에 둔다. 회의마다 그날의 목표 값과 게임일을 `pricing_state`(`target_m`, `target_day`)에 저장하고, 다음 회의는 거기서 이어 키운다. 측정값이 없는 회의도 목표는 저장한다. 경로가 시작된 실제 시각(기준점을 둔 15일 전)은 `target_since`에 한 번 적어 두며, 대시보드가 목표 선을 그 시각부터 그린다. 기준점을 다시 잡으려면 `target_m`과 `target_day`를 NULL로 지운다. 다음 회의가 세 값을 새로 쓴다.
 
 `P`는 정수 퍼센트(`index_percent`, 기본 100)로 저장·전송한다. 직전 24시간 표본이 없는 회의는 지수를 바꾸지 않는다. `pricing_history`의 `m_prev`는 그 회의의 비교 기준(목표 경로 값)이고, `growth`는 그 기준 대비 차이다.
 
@@ -84,7 +84,7 @@ P_new  = clamp(P_new, P_min, P_max)        -- 전체 범위
 
 ### 영속화
 
-`P`는 `pricing_state` 테이블(단일 행: `index_percent`, `last_meeting_day`, `target_m`, `target_day`)에 저장하고, 조정마다 `pricing_history(ts, game_day, m_prev, m_now, growth, index_before, index_after)`에 한 줄 남긴다. history는 튜닝 자료이자 아래 연출의 "회의록"이 된다.
+`P`는 `pricing_state` 테이블(단일 행: `index_percent`, `last_meeting_day`, `target_m`, `target_day`, `target_since`)에 저장하고, 조정마다 `pricing_history(ts, game_day, m_prev, m_now, growth, index_before, index_after)`에 한 줄 남긴다. history는 튜닝 자료이자 아래 연출의 "회의록"이 된다.
 
 ## 적용 범위와 불변식
 

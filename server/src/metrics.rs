@@ -961,11 +961,8 @@ async fn per_account_gold_history(
                     .auth
                     .per_account_gold_history(unix_now(), hours, interval, active_days)?;
             if let Some(path) = path {
-                let since = path.since(&state.auth.pricing_meeting_references()?);
                 for sample in &mut history.samples {
-                    if sample.timestamp >= since {
-                        sample.target_gold_per_account = path.at(sample.timestamp);
-                    }
+                    sample.target_gold_per_account = path.at(sample.timestamp);
                 }
             }
             Ok(history)
@@ -1752,10 +1749,12 @@ mod tests {
         let auth = Arc::new(AuthService::new(path.clone()).unwrap());
         let game = Arc::new(make_test_game_state(name));
         let target_day = game.current_game_day() - 8;
+        let hour = unix_now() / 3600 * 3600;
         auth.save_pricing_state(
             &crate::auth::PricingState {
                 target_m: Some(200.0),
                 target_day: Some(target_day),
+                target_since: Some(hour - DAY_SECONDS),
                 ..Default::default()
             },
             None,
@@ -1763,7 +1762,6 @@ mod tests {
         .unwrap();
         game.load_pricing(&auth).await;
         let base = crate::test_util::serve(metrics_routes(game, auth)).await;
-        let hour = unix_now() / 3600 * 3600;
         let conn = rusqlite::Connection::open(path).unwrap();
         for ts in [hour - 20 * DAY_SECONDS, hour] {
             conn.execute(
@@ -1946,6 +1944,7 @@ mod tests {
                 last_meeting_day: Some(1620),
                 target_m: Some(150.0),
                 target_day: Some(1500),
+                target_since: None,
             },
             None,
         )
