@@ -1,4 +1,4 @@
-use crate::auth::{unix_now, AuthService};
+use crate::auth::{unix_now, AuthService, PRICING_MEASURE_DAYS};
 use crate::game_state::{auth_db, GameState};
 use axum::{
     extract::{Query, State},
@@ -412,6 +412,8 @@ pub struct PerAccountGoldHistorySample {
     pub gold_per_account: f64,
     pub peak_gold_per_account: f64,
     pub sample_count: u32,
+    /// The pricing target path at this time; only on the pricing window.
+    pub target_gold_per_account: Option<f64>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -947,11 +949,26 @@ async fn per_account_gold_history(
     let Some(active_days) = period_days(query.active_hours, &ACCOUNT_GOLD_PERIOD_DAYS) else {
         return invalid_period_hours("active_hours", &ACCOUNT_GOLD_PERIOD_DAYS);
     };
+    let path = if active_days == PRICING_MEASURE_DAYS {
+        state.game.target_path().await
+    } else {
+        None
+    };
     metrics_response(
         auth_db(move || {
-            state
-                .auth
-                .per_account_gold_history(unix_now(), hours, interval, active_days)
+            let mut history =
+                state
+                    .auth
+                    .per_account_gold_history(unix_now(), hours, interval, active_days)?;
+            if let Some(path) = path {
+                let since = path.since(&state.auth.pricing_meeting_references()?);
+                for sample in &mut history.samples {
+                    if sample.timestamp >= since {
+                        sample.target_gold_per_account = path.at(sample.timestamp);
+                    }
+                }
+            }
+            Ok(history)
         })
         .await,
         "Per-account gold history",
@@ -1726,6 +1743,62 @@ mod tests {
 
         conn.execute("DROP TABLE characters", []).unwrap();
         assert_unavailable(&client, &url).await;
+    }
+
+    #[tokio::test]
+    async fn per_account_gold_endpoint_adds_the_target_path_to_the_month_window() {
+        let name = "per_account_gold_target";
+        let path = crate::test_util::unique_temp_dir(name).join("game.db");
+        let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+        let game = Arc::new(make_test_game_state(name));
+        let target_day = game.current_game_day() - 8;
+        auth.save_pricing_state(
+            &crate::auth::PricingState {
+                target_m: Some(200.0),
+                target_day: Some(target_day),
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap();
+        game.load_pricing(&auth).await;
+        let base = crate::test_util::serve(metrics_routes(game, auth)).await;
+        let hour = unix_now() / 3600 * 3600;
+        let conn = rusqlite::Connection::open(path).unwrap();
+        for ts in [hour - 20 * DAY_SECONDS, hour] {
+            conn.execute(
+                "INSERT INTO account_gold_samples VALUES (?1, 100, 2, 100, 4, 100, 5)",
+                [ts],
+            )
+            .unwrap();
+        }
+        let targets = |active_hours: u32| {
+            let url = format!(
+                "{base}/api/metrics/gold-per-account?hours=720&active_hours={active_hours}"
+            );
+            async move {
+                let body: PerAccountGoldHistory =
+                    reqwest::get(url).await.unwrap().json().await.unwrap();
+                body.samples
+                    .iter()
+                    .map(|sample| sample.target_gold_per_account)
+                    .collect::<Vec<_>>()
+            }
+        };
+        let month = targets(720).await;
+        assert_eq!(month.len(), 2);
+        assert_eq!(month[0], None);
+        let growth: f64 = crate::world_config::world_config()
+            .pricing
+            .target_daily_growth;
+        let (low, high) = (
+            200.0 * (1.0 + growth).powf(7.5),
+            200.0 * (1.0 + growth).powf(9.0),
+        );
+        assert!(month[1].is_some_and(|target| target > low && target < high));
+        for active_hours in [24, 168] {
+            assert_eq!(targets(active_hours).await, [None, None]);
+        }
     }
 
     #[tokio::test]

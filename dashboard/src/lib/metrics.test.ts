@@ -61,6 +61,16 @@ describe('gold per active account history', () => {
     expect(() => parsePerAccountGoldHistory({ ...data, collection_started_at: midnight + 1 }, 24, 24)).toThrow()
   })
 
+  it('accepts an optional positive target per sample', () => {
+    for (const target_gold_per_account of [null, 120.5]) {
+      const samples = [{ ...sample, target_gold_per_account }]
+      expect(parsePerAccountGoldHistory({ ...data, samples }, 24, 24).samples).toEqual(samples)
+    }
+    for (const target_gold_per_account of [0, -1, NaN, '1']) {
+      expect(() => parsePerAccountGoldHistory({ ...data, samples: [{ ...sample, target_gold_per_account }] }, 24, 24)).toThrow()
+    }
+  })
+
   it('allows floating point rounding in bucket averages', () => {
     const history = { ...data, from: midnight - 4320 * 3600, sample_interval_seconds: 21600,
       samples: [{ timestamp: Math.floor(midnight / 21600) * 21600,

@@ -53,10 +53,11 @@
   const unique = createMetricsResource(() => uniqueHours, 'unique',
     (value, hours, query) => parseUniqueHistory(value, hours, Number(query.window_hours) as UniqueHours),
     '유니크 계정 현황', () => ({ window_hours: String(uniqueWindowHours) }))
-  let goldHours = $state<GoldHours>(24)
+  let goldHours = $state<GoldHours>(168)
   const gold = createMetricsResource(() => goldHours, 'gold', parseGoldHistory, '골드 현황')
+  let perAccountGoldHours = $state<GoldHours>(168)
   let activeHours = $state<AccountGoldHours>(24)
-  const perAccountGold = createMetricsResource(() => goldHours, 'gold-per-account',
+  const perAccountGold = createMetricsResource(() => perAccountGoldHours, 'gold-per-account',
     (value, hours, query) => parsePerAccountGoldHistory(value, hours, Number(query.active_hours) as AccountGoldHours),
     '1인당 골드 현황', () => ({ active_hours: String(activeHours) }))
   let priceIndexHours = $state<LeaderboardHours>(168)
@@ -231,7 +232,7 @@
 
   <GoldPanel bind:hours={goldHours} resource={gold} {markers} />
 
-  <PerAccountGoldPanel bind:hours={goldHours} bind:activeHours resource={perAccountGold} {markers} />
+  <PerAccountGoldPanel bind:hours={perAccountGoldHours} bind:activeHours resource={perAccountGold} {markers} />
 
   <PriceIndexPanel bind:hours={priceIndexHours} resource={priceIndex} />
 

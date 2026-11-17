@@ -34,6 +34,9 @@ pub struct PricingMeeting {
     pub index_after: u32,
 }
 
+/// The active-account window of the pricing measure `M`.
+pub const PRICING_MEASURE_DAYS: u32 = 30;
+
 impl AuthService {
     pub(super) fn ensure_pricing_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute_batch(
@@ -136,6 +139,17 @@ impl AuthService {
             .unwrap_or(0) as i32;
         let day = crate::metrics::DAY_SECONDS;
         Ok((change, self.average_gold_per_account(now - day, now)?))
+    }
+
+    /// Every meeting's `(ts, game_day, reference)`, oldest first.
+    pub fn pricing_meeting_references(&self) -> Result<Vec<(i64, i64, f64)>, AuthError> {
+        let conn = self.open_connection()?;
+        let mut statement =
+            conn.prepare("SELECT ts, game_day, m_prev FROM pricing_history ORDER BY ts, rowid")?;
+        let rows = statement
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        Ok(rows)
     }
 
     /// Mean hourly 30-day wallets per active account in `(from, until]`, or

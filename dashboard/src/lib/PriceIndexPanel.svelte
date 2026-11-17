@@ -4,7 +4,7 @@
   import MetricsError from './MetricsError.svelte'
   import PeriodFilter from './PeriodFilter.svelte'
   import { createChartSelection } from './chartSelection.svelte'
-  import { axisRange, formatAxisTime, formatCount, formatDateTime, leaderboardPeriods, nearestSample, type LeaderboardHours, type PriceIndexHistory } from './metrics'
+  import { axisRange, formatAxisTime, formatDateTime, formatSignedPercent, leaderboardPeriods, nearestSample, type LeaderboardHours, type PriceIndexHistory } from './metrics'
   import { stepPath } from './leaderboardHistory'
 
   let { hours = $bindable(), resource }: {
@@ -34,7 +34,6 @@
   let selected = $derived(meetings.find((meeting) => meeting.timestamp === selection.time) ?? null)
   let tooltipLeft = $derived(selected ? Math.max(8, Math.min(width - 244, x(selected.timestamp) - 118)) : 0)
   let last = $derived(meetings.at(-1))
-  const signed = (ratio: number) => `${ratio > 0 ? '+' : ''}${formatCount(ratio * 100)}%`
 
   function timeAtPointer(event: MouseEvent) {
     if (!history || !container) return null
@@ -86,7 +85,7 @@
         <div class="chart-tooltip" style:left={`${tooltipLeft}px`}>
           <span>{formatDateTime(selected.timestamp)} KST · 게임일 {selected.game_day}</span>
           <strong>{selected.index_before}% → {selected.index_after}%</strong>
-          <span>1인당 골드 <GoldAmount copper={selected.m_now} /> · 비교 기준 <GoldAmount copper={selected.m_prev} /> 대비 {signed(selected.growth)}</span>
+          <span>1인당 골드 <GoldAmount copper={selected.m_now} /> · 비교 기준 <GoldAmount copper={selected.m_prev} /> 대비 {formatSignedPercent(selected.growth)}</span>
           <span>{selection.hint}</span>
         </div>
       {/if}

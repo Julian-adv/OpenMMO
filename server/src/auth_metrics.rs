@@ -646,6 +646,7 @@ impl AuthService {
                     gold_per_account: row.get(1)?,
                     peak_gold_per_account: row.get(2)?,
                     sample_count: row.get(3)?,
+                    target_gold_per_account: None,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -2443,6 +2444,7 @@ mod tests {
                     gold_per_account: 50.0,
                     peak_gold_per_account: 100.0,
                     sample_count: 3,
+                    target_gold_per_account: None,
                 }]
             );
             assert_eq!(history.latest.unwrap().gold_per_account, 0.0);

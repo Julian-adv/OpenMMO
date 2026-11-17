@@ -163,6 +163,7 @@ export interface PerAccountGoldHistorySample extends TimestampSample {
   gold_per_account: number
   peak_gold_per_account: number
   sample_count: number
+  target_gold_per_account?: number | null
 }
 
 export interface PerAccountGoldHistory extends ChartHistory<PerAccountGoldHistorySample> {
@@ -341,6 +342,7 @@ export function parsePerAccountGoldHistory(value: unknown, hours: GoldHours, act
     !hasValidGoldSamples(data, hours, (sample) =>
       Number.isFinite(sample.gold_per_account) && sample.gold_per_account >= 0 &&
       Number.isFinite(sample.peak_gold_per_account) && sample.peak_gold_per_account >= 0 &&
+      (sample.target_gold_per_account == null || (Number.isFinite(sample.target_gold_per_account) && sample.target_gold_per_account > 0)) &&
       sample.gold_per_account - sample.peak_gold_per_account <= Math.max(1, sample.peak_gold_per_account) * 1e-9) ||
     (latest !== null && (latest.timestamp >= data.from
       ? data.samples.at(-1)?.timestamp !== Math.max(data.from, Math.floor(latest.timestamp / interval) * interval)
@@ -452,6 +454,7 @@ export const formatDay = (timestamp: number) => dayFormatter.format(timestamp * 
 export const formatShortDay = (timestamp: number) => shortDayFormatter.format(timestamp * 1000)
 export const formatTime = (timestamp: number) => timeFormatter.format(timestamp * 1000)
 export const formatCount = (value: number) => value.toLocaleString('ko-KR', { maximumFractionDigits: 1 })
+export const formatSignedPercent = (ratio: number) => `${ratio > 0 ? '+' : ''}${formatCount(ratio * 100)}%`
 export const formatPercent = (value: number | null | undefined) => value == null
   ? '—' : `${formatCount(value)}%`
 export function goldSegments(copper: number) {

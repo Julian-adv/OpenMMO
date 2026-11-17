@@ -26,7 +26,7 @@ pub use characters::CharacterListing;
 pub use characters::CharacterRecord;
 pub use npc_outfits::{OutfitClaim, OutfitHandover};
 pub use persistence::{CharacterSaveData, ItemRow, SkillRow, TradeLedgerEntry};
-pub use pricing::{PricingMeeting, PricingState};
+pub use pricing::{PricingMeeting, PricingState, PRICING_MEASURE_DAYS};
 #[path = "auth_character_deletion.rs"]
 mod character_deletion;
 #[path = "auth_dungeon_population.rs"]

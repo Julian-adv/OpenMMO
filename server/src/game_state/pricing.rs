@@ -9,7 +9,7 @@ use onlinerpg_shared::celestial::is_after_sunset;
 use onlinerpg_shared::moon::{days_until_serin_dark, is_serin_dark_day};
 use onlinerpg_shared::pricing::{PricingNotice, Trend};
 
-use super::time::REAL_DAY_DURATION_SECONDS;
+use super::time::{GAME_SECONDS_PER_DAY, REAL_DAY_DURATION_SECONDS};
 use crate::auth::{unix_now, AuthService, PricingMeeting, PricingState};
 use crate::metrics::DAY_SECONDS;
 use crate::types::{PlayerId, ServerMessage};
@@ -23,11 +23,52 @@ fn index_step(gap: f64, cfg: &PricingConfig) -> f64 {
     (cfg.gain * gap).clamp(-cfg.max_step_per_meeting, cfg.max_step_per_meeting)
 }
 
+fn grown(stored: f64, days: f64, growth: f64) -> Option<f64> {
+    let target = stored * (1.0 + growth).powf(days);
+    (target > 0.0).then_some(target)
+}
+
 /// The stored target grown to `game_day`; a `g` change applies only forward.
 fn target_on(state: &PricingState, game_day: i64, cfg: &PricingConfig) -> Option<f64> {
     let (stored, day) = state.target_m.zip(state.target_day)?;
-    let target = stored * (1.0 + cfg.target_daily_growth).powf((game_day - day) as f64);
-    (target > 0.0).then_some(target)
+    grown(stored, (game_day - day) as f64, cfg.target_daily_growth)
+}
+
+/// The target path over real time, for the dashboard.
+pub struct TargetPath {
+    target: f64,
+    target_day: i64,
+    growth: f64,
+    /// Fractional game day at unix time 0.
+    day_at_epoch: f64,
+}
+
+impl TargetPath {
+    fn on_day(&self, day: f64) -> Option<f64> {
+        grown(self.target, day - self.target_day as f64, self.growth)
+    }
+
+    pub fn at(&self, ts: i64) -> Option<f64> {
+        self.on_day(self.day_at_epoch + ts as f64 / REAL_DAY_DURATION_SECONDS)
+    }
+
+    /// The path starts at the baseline midpoint before the first meeting
+    /// held on it; `meetings` are `(ts, game_day, reference)` oldest first.
+    pub fn since(&self, meetings: &[(i64, i64, f64)]) -> i64 {
+        meetings
+            .iter()
+            .find(|(_, day, reference)| {
+                self.on_day(*day as f64)
+                    .is_some_and(|target| (reference / target - 1.0).abs() < 1e-6)
+            })
+            .map_or_else(
+                || {
+                    ((self.target_day as f64 - self.day_at_epoch) * REAL_DAY_DURATION_SECONDS)
+                        as i64
+                },
+                |(ts, ..)| ts - BASELINE_DAYS * DAY_SECONDS / 2,
+            )
+    }
 }
 
 pub(crate) fn next_index_percent(current: u32, gap: f64, cfg: &PricingConfig) -> u32 {
@@ -50,6 +91,18 @@ impl super::GameState {
 
     pub async fn price_index_percent(&self) -> u32 {
         self.pricing.read().await.index_percent
+    }
+
+    pub async fn target_path(&self) -> Option<TargetPath> {
+        let day_now = self.current_total_game_seconds() as f64 / GAME_SECONDS_PER_DAY as f64;
+        let state = self.pricing.read().await;
+        let (target, target_day) = state.target_m.zip(state.target_day)?;
+        Some(TargetPath {
+            target,
+            target_day,
+            growth: world_config().pricing.target_daily_growth,
+            day_at_epoch: day_now - unix_now() as f64 / REAL_DAY_DURATION_SECONDS,
+        })
     }
 
     #[cfg(test)]
@@ -204,6 +257,31 @@ impl super::GameState {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn target_path_follows_real_time_from_its_first_meeting() {
+        let day = REAL_DAY_DURATION_SECONDS as i64;
+        let now = 100 * day;
+        let path = TargetPath {
+            target: 100.0,
+            target_day: 40,
+            growth: 0.01,
+            day_at_epoch: -49.5,
+        };
+        let close = |ts, expected: f64| (path.at(ts).unwrap() - expected).abs() < 1e-9;
+        assert!(close(now - day / 2, 100.0 * 1.01f64.powi(10)));
+        assert!(close(now - day * 21 / 2, 100.0));
+        assert_eq!(path.since(&[]), now - day * 21 / 2);
+        let meetings = [
+            (500_000, 0, 90.0),
+            (700_000, 20, 100.0 * 1.01f64.powi(-20)),
+            (900_000, 40, 100.0),
+        ];
+        assert_eq!(
+            path.since(&meetings),
+            700_000 - BASELINE_DAYS * DAY_SECONDS / 2
+        );
+    }
 
     #[test]
     fn index_follows_the_gap_above_the_target_path() {

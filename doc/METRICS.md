@@ -234,7 +234,7 @@ GET /api/metrics/gold?hours=24
 
 ## 활성 유저 1인당 골드 추이
 
-서버 총 골드 아래에 `직전 기간에 접속한 계정의 지갑 합 ÷ 그 계정 수`를 시간별로 표시합니다. 총 골드와 조회 기간을 공유하며, 별도 선택자로 기간을 1일·7일·30일 중에서 고릅니다(기본 1일). 분자와 분모는 같은 계정 집합입니다. 분모는 기간 안에 접속 세션(`account_activity_sessions`)이 있는 계정이고, 분자는 그 계정의 모든 캐릭터 골드 합입니다. 기간 안에 접속하지 않은 부캐릭터도 포함합니다. 공식 NPC는 세션을 남기지 않으므로 빠지고, 영지 세금 계좌도 포함하지 않습니다.
+서버 총 골드 아래에 `직전 기간에 접속한 계정의 지갑 합 ÷ 그 계정 수`를 시간별로 표시합니다. 조회 기간은 총 골드와 같은 선택지를 따로 가지며(둘 다 기본 1주일), 별도 선택자로 활성 기간을 1일·7일·30일 중에서 고릅니다(기본 1일). 분자와 분모는 같은 계정 집합입니다. 분모는 기간 안에 접속 세션(`account_activity_sessions`)이 있는 계정이고, 분자는 그 계정의 모든 캐릭터 골드 합입니다. 기간 안에 접속하지 않은 부캐릭터도 포함합니다. 공식 NPC는 세션을 남기지 않으므로 빠지고, 영지 세금 계좌도 포함하지 않습니다.
 
 서버는 매시 지표 작업이 끝날 때 `account_gold_samples(timestamp, day_gold, day_accounts, week_gold, week_accounts, month_gold, month_accounts)`에 그 시간의 값을 기록합니다. `timestamp`는 `gold_snapshots.ts`와 같은 정시이며, 그 시간의 캐릭터 골드는 `character_gold_history`에서 정시+1시간 이전의 마지막 값을 읽습니다. 부팅할 때 접속 기록 수집 시작 이후 빠진 시간을 같은 계산으로 채우므로 과거 구간도 표시합니다. 삭제된 캐릭터는 골드 이력도 함께 지워져 과거 값에서 빠집니다.
 
@@ -245,6 +245,8 @@ GET /api/metrics/gold-per-account?hours=24&active_hours=168
 `hours`의 지원 값과 그래프 간격은 총 골드 API와 같습니다. `active_hours`는 `24 / 168 / 720`을 지원합니다. 두 매개변수 모두 생략 시 `24`이며 잘못된 값은 HTTP 400입니다. DB 오류는 HTTP 503이며 성공·DB 오류 응답에 `Cache-Control: no-store`를 지정합니다.
 
 응답은 `from`, `until`, `sample_interval_seconds`, `window_seconds`, `collection_started_at`, `latest`, `samples`를 포함합니다. `window_seconds`는 활성 계정 집계 기간입니다. `latest`는 가장 최근 기록의 `{ timestamp, total_gold, accounts, gold_per_account }`이며 `total_gold`는 해당 계정들의 지갑 합입니다. 계정 수가 0이면 `null`이고 이전 기록으로 대신하지 않습니다. 각 표본은 `{ timestamp, gold_per_account, peak_gold_per_account, sample_count }`이며 6개월·1년 그래프는 시간별로 나눗셈을 먼저 계산한 뒤 구간 평균과 최고값을 구합니다. 구간 정렬과 첫 부분 구간의 시각은 총 골드 API와 같습니다.
+
+`active_hours=720`이면 각 표본에 `target_gold_per_account`를 더합니다. [물가 시스템](PRICING.md#조정-serin의-삭이-되는-저녁)의 목표 경로를 그 표본 시각에 맞춰 계산한 값으로, `pricing_state`의 `target_m`·`target_day`에서 `targetDailyGrowth`로 이어 그립니다. 경로가 시작되기 전의 표본과 기준점이 없을 때는 `null`입니다. 시작 시각은 현재 경로 위에 있는 첫 회의 행(`pricing_history.m_prev`가 경로 값과 일치)의 15일 전이고, 그런 행이 없으면 `target_day`의 시각입니다. 다른 `active_hours`에서는 항상 `null`입니다. 화면은 이 값을 파란 점선으로 그립니다.
 
 화면에는 최근 계산의 분자·분모와 집계 시각을 표시합니다. 선택한 기간의 접속 기록이 충분히 쌓이지 않은 구간은 수집 시작 시각과 함께 안내합니다. 조회는 저장된 값만 읽습니다.
 
