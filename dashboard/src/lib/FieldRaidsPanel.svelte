@@ -8,6 +8,13 @@
 
   let { resource }: { resource: MetricsResource<FieldRaids> } = $props()
   let { history: raids, loading, refreshing, error, refresh } = $derived(resource)
+
+  const TWO_COLUMNS_FROM = 8
+  function halves<T>(rows: T[]) {
+    if (rows.length < TWO_COLUMNS_FROM) return [rows]
+    const split = Math.ceil(rows.length / 2)
+    return [rows.slice(0, split), rows.slice(split)]
+  }
 </script>
 
 <section class="chart-panel" aria-labelledby="field-raids-title" aria-busy={loading}>
@@ -67,18 +74,33 @@
               <td class="num">{formatCount(raidMinutes(raid))}분</td>
               <td class="num">{formatPercent(bossHealthLeft(raid))}</td>
               <td>
-                {#if raid.raiders.length === 0}—{/if}
-                <ul class="raiders">
-                  {#each raid.raiders as raider (raider.character_id)}
-                    <li>
-                      <span class="name">{raider.name}</span>
-                      {#each raiderTags(raid, raider) as tag (tag)}<span class="tag">{tag}</span>{/each}
-                      <span class="sub">
-                        준 피해 {formatCount(raider.dealt)} · 받은 피해 {formatCount(raider.taken)} · 사망 {formatCount(raider.deaths)}
-                      </span>
-                    </li>
-                  {/each}
-                </ul>
+                {#if raid.raiders.length === 0}
+                  —
+                {:else}
+                  <div class="raider-columns">
+                    {#each halves(raid.raiders) as half (half[0].character_id)}
+                      <table class="raiders">
+                        <thead>
+                          <tr>
+                            <th scope="col">이름</th><th scope="col">비고</th><th scope="col" class="num">준 피해</th>
+                            <th scope="col" class="num">받은 피해</th><th scope="col" class="num">사망</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {#each half as raider (raider.character_id)}
+                            <tr>
+                              <th scope="row" class="name">{raider.name}</th>
+                              <td>{#each raiderTags(raid, raider) as tag (tag)}<span class="tag">{tag}</span>{/each}</td>
+                              <td class="num">{formatCount(raider.dealt)}</td>
+                              <td class="num">{formatCount(raider.taken)}</td>
+                              <td class="num">{formatCount(raider.deaths)}</td>
+                            </tr>
+                          {/each}
+                        </tbody>
+                      </table>
+                    {/each}
+                  </div>
+                {/if}
               </td>
             </tr>
           {:else}
@@ -112,8 +134,11 @@
   .fill { width: 100%; }
   .sub { display: block; margin-top: 3px; color: #74857d; font-size: 11px; }
   .sub-heading { margin: 0; font-size: 13px; font-weight: 600; }
-  .raiders { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
-  .tag { margin-left: 6px; padding: 1px 6px; border-radius: 999px; background: #edf1ee; color: #4f6158; font-size: 11px; }
+  .raider-columns { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 32px; }
+  .raiders { width: auto; min-width: 0; font-size: 12px; }
+  .raiders th, .raiders td { padding: 2px 16px 2px 0; border-bottom: 0; white-space: nowrap; }
+  .raiders thead th { background: none; }
+  .tag { margin-right: 4px; padding: 1px 6px; border-radius: 999px; background: #edf1ee; color: #4f6158; font-size: 11px; }
   .empty-row { color: #74857d; text-align: center; }
   .chart-empty { min-height: 140px; }
 </style>
