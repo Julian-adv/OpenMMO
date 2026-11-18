@@ -13,10 +13,12 @@ use onlinerpg_shared::dungeon::{
 use onlinerpg_shared::inventory::GroundItem;
 use onlinerpg_shared::{wrap_world_x, Position, ServerMessage};
 use rand::Rng;
+use tokio::sync::RwLock;
 use tracing::{info, warn};
 
 use crate::types::{Player, PlayerId};
 
+use super::localization::localized;
 use super::GameState;
 
 const MONSTER_RESPAWN_MS_BY_PLAYER_COUNT: [u64; 5] = [
@@ -815,14 +817,25 @@ impl GameState {
         entrance_id: &str,
         now_seconds: i64,
     ) -> bool {
+        Self::claim_nightly(&self.chest_opens, character_id, entrance_id, now_seconds).await
+    }
+
+    /// Record `(character_id, id)` for the current night; false when tonight
+    /// already holds it. Sweeps earlier nights on the way through.
+    async fn claim_nightly(
+        claims: &RwLock<HashMap<(i64, String), i64>>,
+        character_id: i64,
+        id: &str,
+        now_seconds: i64,
+    ) -> bool {
         let tonight = Self::night_epoch(now_seconds);
-        let key = (character_id, entrance_id.to_string());
-        let mut chest_opens = self.chest_opens.write().await;
-        if Self::opened_since(chest_opens.get(&key), tonight) {
+        let key = (character_id, id.to_string());
+        let mut claims = claims.write().await;
+        if Self::opened_since(claims.get(&key), tonight) {
             return false;
         }
-        chest_opens.retain(|_, &mut opened| Self::night_epoch(opened) >= tonight);
-        chest_opens.insert(key, now_seconds);
+        claims.retain(|_, &mut claimed| Self::night_epoch(claimed) >= tonight);
+        claims.insert(key, now_seconds);
         true
     }
 
@@ -1125,15 +1138,20 @@ impl GameState {
         depth: u8,
         position: Position,
     ) {
-        let key = self.roll_prop_key_drop(player_id, entrance_id, depth).await;
-        self.spawn_world_drops(
-            position,
-            -(depth as i8),
-            None,
-            key.into_iter().collect(),
-            *player_id,
-        )
-        .await;
+        if let Some((recipient, key)) = self
+            .roll_dungeon_key(
+                player_id,
+                entrance_id,
+                depth,
+                position,
+                PROP_KEY_DROP_CHANCE,
+            )
+            .await
+        {
+            self.grant_dungeon_key(&recipient, &key, false).await;
+        }
+        self.spawn_world_drops(position, -(depth as i8), None, Vec::new(), *player_id)
+            .await;
     }
 
     async fn spawn_dungeon_coin_pile(&self, position: Position, floor_level: i8, owner: PlayerId) {
@@ -1682,16 +1700,15 @@ impl GameState {
         layout.walkable_drop_position(&entrance.position(), &monster_position, &preferred)
     }
 
-    /// Mark a dungeon monster's slot for respawn after it dies, and roll the
-    /// floor key the monster may carry for `finder`, the kill's loot owner.
-    /// Called from the combat death path; `None` for non-dungeon monsters,
-    /// bosses and locked floors.
+    /// Mark a dungeon monster's slot for respawn and roll its floor key for
+    /// `finder`, the loot owner: who gets which key once the blow lands.
     pub(super) async fn on_dungeon_monster_dead(
         &self,
         monster_id: &str,
         finder: &PlayerId,
+        position: Position,
         auth: Option<&crate::auth::AuthService>,
-    ) -> Option<String> {
+    ) -> Option<(PlayerId, String)> {
         let entry = {
             let mut index = self.dungeon_monsters.write().await;
             index.remove(monster_id)
@@ -1707,15 +1724,13 @@ impl GameState {
             Self::now_ms() + respawn_ms
         };
 
-        let total = {
+        {
             let mut dungeons = self.dungeons.write().await;
             let rt = dungeons.get_mut(&entry.entrance_id)?;
-            let total = rt.layouts.len() as u8;
             let slot = rt.floors.get_mut(&entry.depth)?.slots.get_mut(entry.slot)?;
             slot.alive_monster_id = None;
             slot.respawn_at_ms = respawn_at_ms;
-            total
-        };
+        }
         if entry.is_boss {
             info!(
                 "Guardian of '{}' fell at depth {}",
@@ -1736,50 +1751,78 @@ impl GameState {
             }
             return None;
         }
-        self.roll_dungeon_key_drop(
+        self.roll_dungeon_key(
             finder,
             &entry.entrance_id,
             entry.depth,
-            total,
+            position,
             KEY_DROP_CHANCE,
         )
         .await
     }
 
-    /// The key a loot event at `depth` drops, if any: `chance` for the next
-    /// locked floor's key, skipped when the finder already carries it or has
-    /// opened this dungeon's chest tonight (the key would be dead weight).
-    /// The dice go first — the candidate check takes three locks.
-    async fn roll_dungeon_key_drop(
+    /// One key roll for a loot event at `depth`, claimed for `finder` or a
+    /// party member sharing the kill. Dice first: the checks take locks.
+    pub(super) async fn roll_dungeon_key(
         &self,
         finder: &PlayerId,
         entrance_id: &str,
         depth: u8,
-        total: u8,
+        position: Position,
         chance: f64,
-    ) -> Option<String> {
+    ) -> Option<(PlayerId, String)> {
         if !rand::thread_rng().gen_bool(chance) {
             return None;
         }
-        self.dungeon_key_candidate(finder, entrance_id, depth, total)
-            .await
-    }
-
-    async fn roll_prop_key_drop(
-        &self,
-        finder: &PlayerId,
-        entrance_id: &str,
-        depth: u8,
-    ) -> Option<String> {
-        if !rand::thread_rng().gen_bool(PROP_KEY_DROP_CHANCE) {
-            return None;
-        }
         let total = self.dungeons.read().await.get(entrance_id)?.layouts.len() as u8;
-        self.dungeon_key_candidate(finder, entrance_id, depth, total)
-            .await
+        let mut candidates = vec![*finder];
+        candidates.extend(
+            self.party_members_sharing_kill(finder, position, -(depth as i8))
+                .await,
+        );
+        let now_seconds = self.current_total_game_seconds();
+        for candidate in candidates {
+            let Some(key) = self
+                .dungeon_key_candidate(&candidate, entrance_id, depth, total)
+                .await
+            else {
+                continue;
+            };
+            let Some(character_id) = self.character_id_of(&candidate).await else {
+                continue;
+            };
+            if Self::claim_nightly(&self.key_finds, character_id, &key, now_seconds).await {
+                return Some((candidate, key));
+            }
+        }
+        None
     }
 
-    /// The key a kill at `depth` is eligible to drop, before the chance roll.
+    /// Put a rolled key straight in the bag, where it cannot be missed.
+    pub(super) async fn grant_dungeon_key(&self, player_id: &PlayerId, key: &str, from_kill: bool) {
+        self.record_item_drops(&[key.to_string()], from_kill);
+        if let Some((position, _, floor_level, name)) = self.player_pose(player_id).await {
+            info!(
+                "{name} found {key} at {}",
+                crate::dungeon_defs::place_label(&position, floor_level)
+            );
+        }
+        if !self.award_item(player_id, key).await {
+            return;
+        }
+        self.send_system_message(
+            player_id,
+            localized(
+                "server.dungeonKeyFound",
+                format!("You found a {}.", self.item_name(key)),
+            )
+            .with_param("item", key.to_string()),
+        )
+        .await;
+    }
+
+    /// The key `finder` could use from a drop at `depth`: none while they
+    /// carry it or once tonight's chest is spent.
     pub(super) async fn dungeon_key_candidate(
         &self,
         finder: &PlayerId,

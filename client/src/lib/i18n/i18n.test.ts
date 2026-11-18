@@ -268,6 +268,32 @@ describe('message rendering', () => {
     ).toBe(message)
   })
 
+  it("names a found dungeon key in the reader's language", () => {
+    const found = {
+      message: 'You found a Crypt Key.',
+      localization: {
+        code: 'server.dungeonKeyFound',
+        params: { item: 'crypt_key_5' },
+      },
+    }
+    expect(translateServerMessage(found, 'en')).toBe('You found a Crypt Key.')
+    expect(
+      translateServerMessage(
+        {
+          ...found,
+          localization: {
+            ...found.localization,
+            params: { item: 'den_key_5' },
+          },
+        },
+        'en'
+      )
+    ).toBe("You found a Thieves' Den Key (5F).")
+    expect(translateServerMessage(found, 'ko')).toBe(
+      '지하묘지 열쇠를 얻었습니다.'
+    )
+  })
+
   it('updates active status effects on language changes without resetting their duration', () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)

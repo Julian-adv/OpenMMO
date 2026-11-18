@@ -313,7 +313,8 @@ struct PlayerAttackTarget {
 
 impl super::GameState {
     /// Put a kill's loot — the weapon drop and any rare world drops — on the
-    /// ground once the killing blow lands, claimed by `owner`. The wait
+    /// ground once the killing blow lands, claimed by `owner`, and hand over
+    /// a rolled dungeon key. The wait
     /// lives server-side: a ground item is pickable the moment it exists, so
     /// a client that skips the animation must not reach it early.
     #[allow(clippy::too_many_arguments)]
@@ -325,11 +326,15 @@ impl super::GameState {
         floor_level: i8,
         monster_level: Option<u8>,
         owner: PlayerId,
+        key_grant: Option<(PlayerId, String)>,
         impact_delay: Duration,
     ) {
         let game_state = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(impact_delay).await;
+            if let Some((recipient, key)) = key_grant {
+                game_state.grant_dungeon_key(&recipient, &key, true).await;
+            }
             if let Some(item) = weapon_drop {
                 game_state.spawn_ground_item(item).await;
             }
@@ -1433,16 +1438,15 @@ impl super::GameState {
             } else {
                 None
             };
-            let mut monster_drops = def.map_or_else(Vec::new, |def| {
+            let monster_drops = def.map_or_else(Vec::new, |def| {
                 crate::world_drop_defs::roll_independent(
                     def.drop_entries().iter().map(|(id, c)| (id.as_str(), *c)),
                     &mut rand::thread_rng(),
                 )
             });
-            monster_drops.extend(
-                self.on_dungeon_monster_dead(monster_id, &loot_owner, auth)
-                    .await,
-            );
+            let key_grant = self
+                .on_dungeon_monster_dead(monster_id, &loot_owner, monster_position, auth)
+                .await;
             // All kill loot waits for the blow to land.
             self.spawn_kill_loot_after_impact(
                 weapon_drop,
@@ -1451,6 +1455,7 @@ impl super::GameState {
                 monster_floor_level,
                 effective_level,
                 loot_owner,
+                key_grant,
                 loot_delay,
             );
 

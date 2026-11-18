@@ -26,6 +26,13 @@
   import { buildInventorySlots } from './inventorySlots'
   import { inventoryGroupKey, sortBag } from './inventorySort'
   import {
+    BUNDLE_ICONS,
+    foldBundles,
+    type BundleCell,
+    type InventoryBundle,
+    type InventoryCell,
+  } from './inventoryBundles'
+  import {
     INVENTORY_SORT_MODES,
     inventorySortMode,
   } from '../stores/inventorySortSettings'
@@ -46,15 +53,43 @@
 
   // The character panel already displays the worn quiver.
   const wornId = $derived(wornAmmoStack($inventoryStore)?.instance_id)
-  const slots = $derived(
+  const cells = $derived(
     buildInventorySlots(
-      sortBag(
-        $inventoryStore.bag.filter((item) => item.instance_id !== wornId),
-        $inventorySortMode,
-        $locale
+      foldBundles(
+        sortBag(
+          $inventoryStore.bag.filter((item) => item.instance_id !== wornId),
+          $inventorySortMode,
+          $locale
+        )
       )
     )
   )
+
+  const BUNDLE_COLUMNS = 4
+  let openBundle = $state<InventoryBundle | null>(null)
+  const openBundleCell = $derived(
+    cells.find(
+      (cell): cell is BundleCell =>
+        cell?.kind === 'bundle' && cell.bundle === openBundle
+    )
+  )
+  const bundleSlots = $derived(
+    buildInventorySlots(openBundleCell?.items ?? [], BUNDLE_COLUMNS, 1)
+  )
+
+  function cellKey(cell: InventoryCell | null, index: number): string | number {
+    if (!cell) return `empty-${index}`
+    return cell.kind === 'bundle'
+      ? `bundle-${cell.bundle}`
+      : cell.item.instance_id
+  }
+
+  function toggleBundle(bundle: InventoryBundle) {
+    for (const item of openBundleCell?.items ?? []) {
+      selected.delete(item.instance_id)
+    }
+    openBundle = openBundle === bundle ? null : bundle
+  }
 
   let panelEl = $state<HTMLDivElement | null>(null)
   let pendingDrop = $state<{ slot: ItemInstance; def: ItemDefinition } | null>(
@@ -75,6 +110,7 @@
   // Closing the panel resets its editing modes.
   $effect(() => {
     if (!visible) {
+      openBundle = null
       selectMode = false
       itemLockMode.set(false)
       selected.clear()
@@ -278,6 +314,45 @@
   }
 </script>
 
+{#snippet itemCell(slot: ItemInstance | null)}
+  {@const def = slot ? getItemDef(slot.item_def_id) : null}
+  {@const locked = selectMode && slot !== null && !isSelectable(slot)}
+  {@const onTable = slot ? reservedQuantity($playerTrade, slot.instance_id) : 0}
+  <!-- svelte-ignore a11y_no_static_element_interactions -->
+  <div
+    class="grid-cell"
+    class:selected={slot !== null && selected.has(slot.instance_id)}
+    class:locked
+    class:on-table={onTable > 0}
+    use:itemTooltip={def && slot ? { def, item: slot, side: 'left' } : null}
+    ondblclick={() => onDblClick(slot)}
+    onpointerdown={(e: PointerEvent) => {
+      if (slot && !locked) onPointerDown(e, slot)
+    }}
+  >
+    {#if def}
+      <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
+    {/if}
+    {#if slot && slot.enchant > 0}
+      <span class="item-enchant">+{slot.enchant}</span>
+    {/if}
+    {#if slot && ($itemLockMode || slot.locked)}
+      <ItemLockButton item={slot} getInstanceIds={() => lockTargets(slot)} />
+    {/if}
+    {#if slot && slot.quantity > 1}
+      <span class="item-qty">{slot.quantity}</span>
+    {/if}
+    {#if onTable > 0}
+      <span class="item-reserved" title={$t('inventory.onTrade')}
+        >{onTable}</span
+      >
+    {/if}
+    {#if slot !== null && selected.has(slot.instance_id)}
+      <span class="item-selected-check">&check;</span>
+    {/if}
+  </div>
+{/snippet}
+
 {#if visible}
   <div
     class="inventory-panel"
@@ -329,55 +404,26 @@
     </div>
 
     <div class="bag-grid">
-      {#each slots as slot, i (slot?.instance_id ?? `empty-${i}`)}
-        {@const def = slot ? getItemDef(slot.item_def_id) : null}
-        {@const locked = selectMode && slot !== null && !isSelectable(slot)}
-        {@const onTable = slot
-          ? reservedQuantity($playerTrade, slot.instance_id)
-          : 0}
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
-        <div
-          class="grid-cell"
-          class:selected={slot !== null && selected.has(slot.instance_id)}
-          class:locked
-          class:on-table={onTable > 0}
-          use:itemTooltip={def && slot
-            ? { def, item: slot, side: 'left' }
-            : null}
-          ondblclick={() => onDblClick(slot)}
-          onpointerdown={(e: PointerEvent) => {
-            if (slot && !locked) onPointerDown(e, slot)
-          }}
-        >
-          {#if def}
+      {#each cells as cell, i (cellKey(cell, i))}
+        {#if cell?.kind === 'bundle'}
+          <button
+            class="grid-cell bundle-cell"
+            class:open={cell.bundle === openBundle}
+            aria-expanded={cell.bundle === openBundle}
+            title={$t(`inventory.bundle.${cell.bundle}`)}
+            onclick={() => toggleBundle(cell.bundle)}
+          >
             <img
               class="item-icon"
-              src="/items/{def.icon}"
+              src="/items/{BUNDLE_ICONS[cell.bundle]}"
               alt=""
               draggable="false"
             />
-          {/if}
-          {#if slot && slot.enchant > 0}
-            <span class="item-enchant">+{slot.enchant}</span>
-          {/if}
-          {#if slot && ($itemLockMode || slot.locked)}
-            <ItemLockButton
-              item={slot}
-              getInstanceIds={() => lockTargets(slot)}
-            />
-          {/if}
-          {#if slot && slot.quantity > 1}
-            <span class="item-qty">{slot.quantity}</span>
-          {/if}
-          {#if onTable > 0}
-            <span class="item-reserved" title={$t('inventory.onTrade')}
-              >{onTable}</span
-            >
-          {/if}
-          {#if slot !== null && selected.has(slot.instance_id)}
-            <span class="item-selected-check">&check;</span>
-          {/if}
-        </div>
+            <span class="item-qty">{cell.items.length}</span>
+          </button>
+        {:else}
+          {@render itemCell(cell?.item ?? null)}
+        {/if}
       {/each}
     </div>
 
@@ -387,6 +433,30 @@
       label={$t('inventory.weight')}
     />
   </div>
+  {#if openBundleCell}
+    {@const bundle = openBundleCell.bundle}
+    <div
+      class="inventory-panel bundle-panel"
+      role="dialog"
+      aria-label={$t(`inventory.bundle.${bundle}`)}
+      data-panel="inventoryBundle"
+      use:draggablePanel={'inventoryBundle'}
+    >
+      <div class="panel-header" data-drag-handle>
+        <span class="panel-title">{$t(`inventory.bundle.${bundle}`)}</span>
+        <button
+          class="close-btn"
+          aria-label={$t('common.close')}
+          onclick={() => toggleBundle(bundle)}>&times;</button
+        >
+      </div>
+      <div class="bag-grid bundle-grid" style:--bundle-columns={BUNDLE_COLUMNS}>
+        {#each bundleSlots as slot, i (slot?.instance_id ?? `empty-${i}`)}
+          {@render itemCell(slot)}
+        {/each}
+      </div>
+    </div>
+  {/if}
 {/if}
 
 <QuantityPopup
@@ -576,6 +646,34 @@
     justify-content: center;
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 4px;
+  }
+
+  .bundle-cell {
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    background: rgba(120, 100, 60, 0.18);
+    border-color: rgba(210, 170, 80, 0.45);
+  }
+
+  .bundle-cell.open {
+    background: rgba(160, 130, 70, 0.32);
+    border-color: rgba(230, 190, 100, 0.8);
+  }
+
+  .bundle-panel {
+    right: calc(
+      9px + var(--inventory-slot-size) * 5 + var(--inventory-slot-gap) * 4 +
+        30px
+    );
+  }
+
+  .bundle-grid {
+    grid-template-columns: repeat(
+      var(--bundle-columns),
+      var(--inventory-slot-size)
+    );
   }
 
   .grid-cell.selected {

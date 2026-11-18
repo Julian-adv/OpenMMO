@@ -40,7 +40,18 @@ async fn kill_monster(
             .expect("spawned monster")
     };
     game_state.monsters.write().await.mark_dead(&id);
-    game_state.on_dungeon_monster_dead(&id, killer, None).await;
+    game_state
+        .on_dungeon_monster_dead(
+            &id,
+            killer,
+            Position {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            None,
+        )
+        .await;
     let dungeons = game_state.dungeons.read().await;
     let state = &dungeons[DUNGEON].floors[&depth].slots[slot];
     assert!(state.alive_monster_id.is_none());

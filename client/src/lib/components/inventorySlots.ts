@@ -1,18 +1,15 @@
-import type { ItemInstance } from '../network/networkTypes'
-
 const INVENTORY_COLUMNS = 5
 const INVENTORY_MIN_ROWS = 10
 
-export function buildInventorySlots(
-  bag: readonly ItemInstance[]
-): (ItemInstance | null)[] {
-  const rows = Math.max(
-    INVENTORY_MIN_ROWS,
-    Math.ceil(bag.length / INVENTORY_COLUMNS)
-  )
+export function buildInventorySlots<T>(
+  bag: readonly T[],
+  columns = INVENTORY_COLUMNS,
+  minRows = INVENTORY_MIN_ROWS
+): (T | null)[] {
+  const rows = Math.max(minRows, Math.ceil(bag.length / columns))
 
   return Array.from(
-    { length: rows * INVENTORY_COLUMNS },
+    { length: rows * columns },
     (_, index) => bag[index] ?? null
   )
 }

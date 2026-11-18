@@ -586,6 +586,10 @@ pub struct GameState {
     /// would race the session replacement that clears it.
     #[allow(clippy::type_complexity)]
     chest_opens: Arc<RwLock<HashMap<(i64, String), i64>>>,
+    /// (character_id, key item id) → that character's last key find, one a
+    /// night. Memory only; kept across logout so a relog cannot reroll.
+    #[allow(clippy::type_complexity)]
+    key_finds: Arc<RwLock<HashMap<(i64, String), i64>>>,
     /// Dungeon boss monster id → character id → damage dealt (doc/TITLES.md).
     boss_damage: Arc<RwLock<HashMap<String, HashMap<i64, u64>>>>,
     /// player_id → earned title ids in definition order; the shown one is
@@ -893,6 +897,7 @@ impl GameState {
             whisper_partners: Arc::new(RwLock::new(HashMap::new())),
             muted_until: Arc::new(RwLock::new(HashMap::new())),
             chest_opens: Arc::new(RwLock::new(HashMap::new())),
+            key_finds: Arc::new(RwLock::new(HashMap::new())),
             boss_damage: Arc::new(RwLock::new(HashMap::new())),
             player_titles: Arc::new(RwLock::new(HashMap::new())),
             dungeon_discoveries: Arc::new(RwLock::new(HashMap::new())),

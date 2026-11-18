@@ -353,6 +353,7 @@ async fn monster_loot_is_withheld_until_the_killing_blow_lands() {
         0,
         None,
         pid("killer"),
+        None,
         *super::combat::PLAYER_ATTACK_IMPACT_DELAY,
     );
 
@@ -416,6 +417,7 @@ async fn kill_loot_is_reserved_for_its_owner() {
         0,
         None,
         pid("dealer"),
+        None,
         std::time::Duration::ZERO,
     );
     tokio::time::sleep(std::time::Duration::from_millis(1)).await;

@@ -642,6 +642,97 @@ async fn dungeon_key_drops_only_where_they_are_useful() {
     );
 }
 
+async fn stage_key_hunter(game_state: &GameState, name: &str, character_id: i64) -> PlayerId {
+    let player_id = stage_opener(game_state, name, character_id, false).await;
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&player_id)
+        .unwrap()
+        .floor_level = -1;
+    player_id
+}
+
+async fn roll_certain_key(game_state: &GameState, finder: &PlayerId) -> Option<(PlayerId, String)> {
+    let position = crypt_chest_spot(game_state).await.1;
+    game_state
+        .roll_dungeon_key(finder, CRYPT_ID, 1, position, 1.0)
+        .await
+}
+
+#[tokio::test]
+async fn a_key_handed_on_earns_no_second_the_same_night() {
+    let auth = make_test_auth("key_once_a_night");
+    let account = auth.login_npc("npc_key_once_a_night").unwrap();
+    let character = create_test_character(&auth, &account, "Hunter");
+
+    let game_state = make_test_game_state("key_once_a_night");
+    let player_id = stage_key_hunter(&game_state, "Hunter", character.id).await;
+
+    let (recipient, key) = roll_certain_key(&game_state, &player_id)
+        .await
+        .expect("the first roll finds a key");
+    assert_eq!((recipient, key.as_str()), (player_id, CRYPT_CHEST_KEY));
+    game_state.grant_dungeon_key(&recipient, &key, true).await;
+    assert_eq!(bag_count(&game_state, &player_id, CRYPT_CHEST_KEY).await, 1);
+    assert!(
+        game_state.ground_items.read().await.is_empty(),
+        "the key goes to the bag, not the floor"
+    );
+
+    game_state
+        .inventories
+        .write()
+        .await
+        .get_mut(&player_id)
+        .unwrap()
+        .bag
+        .retain(|item| item.item_def_id != CRYPT_CHEST_KEY);
+    assert_eq!(
+        roll_certain_key(&game_state, &player_id).await,
+        None,
+        "giving the key away must not earn another tonight"
+    );
+
+    game_state.debug_set_time(23, 0);
+    assert!(roll_certain_key(&game_state, &player_id).await.is_some());
+}
+
+#[tokio::test]
+async fn a_key_the_finder_cannot_use_goes_to_a_party_member() {
+    let auth = make_test_auth("key_party_share");
+    let game_state = make_test_game_state("key_party_share");
+    let mut ids = Vec::new();
+    for name in ["Dealer", "Healer"] {
+        let account = auth.login_npc(&format!("npc_key_{name}")).unwrap();
+        let character = create_test_character(&auth, &account, name);
+        ids.push(stage_key_hunter(&game_state, name, character.id).await);
+    }
+    let (dealer, healer) = (ids[0], ids[1]);
+    assert!(game_state.give_item(&dealer, CRYPT_CHEST_KEY).await);
+
+    assert_eq!(
+        roll_certain_key(&game_state, &dealer).await,
+        None,
+        "a stranger nearby gets nothing"
+    );
+
+    game_state.invite_to_party(&dealer, "Healer").await;
+    game_state
+        .respond_to_party_invite(&healer, &dealer, true)
+        .await;
+    assert_eq!(
+        roll_certain_key(&game_state, &dealer).await,
+        Some((healer, CRYPT_CHEST_KEY.to_string()))
+    );
+    assert_eq!(
+        roll_certain_key(&game_state, &dealer).await,
+        None,
+        "both have had tonight's key"
+    );
+}
+
 /// On a locked floor the arrival room is sealed until the door is opened, so
 /// its occupants are invisible to monster AI until then; on any floor a fresh
 /// arrival gets `STAIR_ROOM_ARRIVAL_GRACE_MS` unseen in the stair room.

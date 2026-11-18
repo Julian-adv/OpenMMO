@@ -5,6 +5,7 @@ export const PANEL_IDS = [
   'chat',
   'character',
   'inventory',
+  'inventoryBundle',
   'friends',
   'family',
   'familyLog',

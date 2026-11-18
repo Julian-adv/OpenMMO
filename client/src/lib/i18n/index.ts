@@ -8,6 +8,7 @@ import zhHant from './locales/zh-Hant.json'
 import { locale, type Locale } from './locale'
 import { resolveKoreanParticles } from './koreanParticles'
 import { formatGold } from '../utils/currency'
+import { itemName } from './items'
 
 export { languages, languagePreference, locale } from './locale'
 export type { Locale, LanguagePreference } from './locale'
@@ -32,6 +33,10 @@ void i18n.init({
 })
 // `{{amount, copper}}` renders a copper count as g/s/c.
 i18n.services.formatter!.add('copper', (value) => formatGold(Number(value)))
+// `{{item, item}}` renders an item id as its localized name.
+i18n.services.formatter!.add('item', (value, lng) =>
+  itemName(String(value), lng as Locale)
+)
 
 export function translate(
   key: MessageKey,
