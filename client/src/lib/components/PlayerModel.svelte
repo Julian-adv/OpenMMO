@@ -1972,7 +1972,10 @@
       !riding &&
         !enchantAction?.getEffectiveWeight() &&
         !armorEnchantWeight &&
-        !(weaponAnimationProfile?.restIdle && currentClip === weaponIdle) &&
+        !(
+          weaponAnimationProfile?.restIdle &&
+          currentClip?.name !== weaponAnimationProfile.attack
+        ) &&
         (weaponClips.has(currentClip?.name ?? '') ||
           (!!weaponIdle && isArmorEnchantHold(currentClip, weaponIdle)))
     )

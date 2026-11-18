@@ -60,3 +60,47 @@ describe('modular spear rest pose', () => {
     }, 30000)
   }
 })
+
+describe('modular spear carry', () => {
+  for (const [name, modelPath] of rigs) {
+    it(`rocks the spear about its forward lean and keeps it off the ground on the move on the ${name} rig`, async () => {
+      const profile = getWeaponAnimation('spear')!
+      const source = await loadCharacterModel(modelPath)
+      const { modelRoot } = createCharacterModelRoot(source.scene)
+      const { animations } = await loadCharacterAnimationPack(
+        modelPath,
+        `/models/${profile.pack}`
+      )
+      const spear = (await loadGLB('/models/weapons/spear.glb')).scene.clone()
+      const box = new THREE.Box3().setFromObject(spear)
+      modelRoot.getObjectByName('RightHand')!.add(spear)
+      poseMainHandProp(spear, 'spear', undefined, modelPath)
+      const lean = new THREE.Vector3(
+        0,
+        Math.cos(THREE.MathUtils.degToRad(30)),
+        Math.sin(THREE.MathUtils.degToRad(30))
+      )
+      const butt = new THREE.Vector3()
+      const tip = new THREE.Vector3()
+      for (const clipName of [profile.walk!, profile.run!]) {
+        const clip = animations.find((clip) => clip.name === clipName)!
+        const mixer = new THREE.AnimationMixer(modelRoot)
+        mixer.clipAction(clip).play()
+        for (let i = 0; i < 12; i++) {
+          mixer.setTime((clip.duration * i) / 12)
+          modelRoot.updateMatrixWorld(true)
+          spear.localToWorld(butt.set(box.min.x, 0, 0))
+          spear.localToWorld(tip.set(box.max.x, 0, 0))
+          expect(
+            tip.clone().sub(butt).normalize().angleTo(lean),
+            clipName
+          ).toBeLessThan(THREE.MathUtils.degToRad(8))
+          expect(butt.y, clipName).toBeGreaterThan(0.03)
+          expect(butt.y, clipName).toBeLessThan(0.3)
+        }
+        mixer.stopAllAction()
+        mixer.uncacheRoot(modelRoot)
+      }
+    }, 30000)
+  }
+})

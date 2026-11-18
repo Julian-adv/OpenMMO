@@ -12,8 +12,9 @@ export interface WeaponAnimationDefinition {
   offHandGripReach?: number
   /** The off hand holds the shaft ahead of the main hand, toward the point. */
   offHandAhead?: boolean
-  /** The idle clip is a one-handed rest pose: the stance between swings is
-   *  the shared combat idle and the off hand does not hold the weapon in it. */
+  /** Idle, walk and run carry the weapon in one hand: the stance between
+   *  swings is the shared combat idle and the off hand holds the weapon only
+   *  in the attack. */
   restIdle?: boolean
 }
 

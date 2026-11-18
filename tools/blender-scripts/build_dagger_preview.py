@@ -28,11 +28,18 @@ PACKS = {
     "spear": {"spear_thrust": "Bayonet Stab.fbx"},
 }
 # Clips derived from an action already in the blend file instead of an FBX.
-DERIVED = {"spear": {"spear_idle": "idle1"}}
+DERIVED = {"spear": {"spear_idle": "idle1", "spear_walk": "walk", "spear_run": "run"}}
 # At rest the spear stands upright: the upper arm hangs, the elbow bends to a right angle with the forearm
 # level and forward, and the hand turns the shaft (the hand bone's X) to vertical.
 REST_UPPER = Vector((-0.12, 0.05, -1))
 REST_FOREARM = math.radians(0)
+# On the move the upper arm swings forward to open the elbow, the forearm lifts just enough for the butt to clear
+# the ground, and the shaft leans forward. All hold still in the world while the body swings under them.
+CARRY_UPPER = Vector((-0.12, -math.sin(math.radians(20)), -math.cos(math.radians(20))))
+CARRY_FOREARM = math.radians(18)
+# A walking shoulder dips lower than a running one.
+WALK_FOREARM = math.radians(28)
+CARRY_LEAN = math.radians(12)
 parser.add_argument("--pack", choices=PACKS, default="dagger_preview")
 args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
 clips = PACKS[args.pack]
@@ -154,21 +161,29 @@ def aim(arm, bone, axis, direction):
 
 
 def shoulder_spear(arm, source, name):
-    """Copy an idle and hold the spear upright in the folded right arm through it."""
+    """Copy a clip and hold the spear in the folded right arm through it: upright at rest, leaning on the move."""
+    moving = name != "spear_idle"
+    fold = (WALK_FOREARM if name == "spear_walk" else CARRY_FOREARM) if moving else REST_FOREARM
+    lean = CARRY_LEAN if moving else 0
     action = source.copy()
     action.name = name
     arm.animation_data.action = action
     arm.animation_data.action_slot = action.slots[0]
     upper, fore, hand = (arm.pose.bones["Right" + part] for part in ("Arm", "ForeArm", "Hand"))
     along = Vector((0, 1, 0))
-    lift = Vector((0, -math.cos(REST_FOREARM), math.sin(REST_FOREARM)))
+    lift = Vector((0, -math.cos(fold), math.sin(fold)))
+    shaft = Vector((0, -math.sin(lean), math.cos(lean)))
     first, last = map(int, action.frame_range)
     previous = {}
     for frame in range(first, last + 1):
         bpy.context.scene.frame_set(frame)
-        aim(arm, upper, along, REST_UPPER)
+        aim(arm, upper, along, CARRY_UPPER if moving else REST_UPPER)
         aim(arm, fore, along, lift)
-        aim(arm, hand, Vector((1, 0, 0)), Vector((0, 0, 1)))
+        aim(arm, hand, Vector((1, 0, 0)), shaft)
+        # Roll the hand about the shaft until it points where the forearm does.
+        pointing = arm.matrix_world.to_3x3() @ hand.matrix.to_3x3() @ along
+        flat = [(v - shaft * v.dot(shaft)).normalized() for v in (pointing, lift)]
+        rotate_about_head(arm, hand, flat[0].rotation_difference(flat[1]))
         for bone in (upper, fore, hand):
             if bone.name in previous:
                 bone.rotation_quaternion.make_compatible(previous[bone.name])

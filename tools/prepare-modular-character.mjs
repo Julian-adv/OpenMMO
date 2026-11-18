@@ -402,14 +402,24 @@ async function preparePacks(runtime, modular) {
     corrected.set(name, clip);
     profile.iron_sword_by_clip[name] = profile.iron_sword_by_clip.idle1;
   }
-  // The pack's own spear_idle is for other rigs: here it stands as this rig's idle1 does.
+  // The pack's own spear clips are for other rigs: here the body moves as this rig's own clips do.
   const { spearRestClip } = await server.ssrLoadModule(
     "/src/lib/utils/spearRestClip.ts",
   );
-  corrected.set(
-    "spear_idle",
-    spearRestClip(base.scene, corrected.get("idle1")),
-  );
+  for (const [name, source] of [
+    ["spear_idle", "idle1"],
+    ["spear_walk", "walk"],
+    ["spear_run", "run"],
+  ])
+    corrected.set(
+      name,
+      spearRestClip(
+        base.scene,
+        corrected.get(source),
+        name,
+        source === "idle1" ? undefined : corrected.get("idle1"),
+      ),
+    );
   report.inputs[`${tuned}/animations.glb`] = hash(`${tuned}/animations.glb`);
   report.inputs[`${tuned}/hand-grips.json`] = hash(`${tuned}/hand-grips.json`);
   for (const name of selectedPack ? [selectedPack] : packs) {

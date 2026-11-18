@@ -65,7 +65,7 @@
     "assets/modular_human_male_01/guard/tripo_v1/gloves_guard.glb": "175cbc38bdb4f150c56de0cbd92c44b62f7a9ac39da627e7afeb2927ac8c9edc",
     "assets/modular_human_male_01/guard/tripo_v1/boots_guard.glb": "b211ff73679321bb7b4666bcd882f3a752a60631ba8bec0017df163738a6e3c1",
     "assets/modular_human_male_01/guard/tripo_v1/tabard_guard.glb": "893dc976ddcd733f5b4010619c1e1be7813d3695d68c04f36573a4d94e35a62a",
-    "client/public/models/animations/spear.glb": "1bd542a89cff8fb00cb2affb0a31b59c72e8024aa555404d2c2cf6ee3f693a15"
+    "client/public/models/animations/spear.glb": "8bfb15a28edaa7eaba5e7ad9e809f0325f5cd0d303d6e5e42c4ea9c754ebdf18"
   },
   "outputs": {
     "base.glb": "abf1a12178d5df11269afed6793e46ed16796c47174e356708ee73bdf590bdad",
@@ -212,8 +212,8 @@
     "boots_guard.glb": "0545f05af32e5ba6dc3e7350f8bc4231c4e6613354ebda33edf24087666f91f3",
     "tabard_guard.glb": "204a109c41dfc6ec0bbd7f5fc5a8cc482cb38e322eb980ea3eb5d8063b6977bf",
     "animations/spear.glb": {
-      "sha256": "293c4cfa1793cf4cc0b0d793f6ae311a810dc6e807f79a205828e4f1f63f4b76",
-      "clips": ["spear_thrust", "spear_idle"]
+      "sha256": "82f2bd02c326ea3c2f4e10775142aa2c785710f1f7baf47c5ba4d2eb25b3b122",
+      "clips": ["spear_thrust", "spear_idle", "spear_walk", "spear_run"]
     }
   }
 }

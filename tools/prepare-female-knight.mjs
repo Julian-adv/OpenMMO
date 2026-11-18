@@ -320,9 +320,10 @@ try {
   for (const name of ['idle2', 'idle3', 'idle4', 'idle5']) {
     const clip = corrected.get('idle1').clone(); clip.name = name; corrected.set(name, clip)
   }
-  // The pack's own spear_idle is for other rigs: here it stands as this rig's idle1 does.
+  // The pack's own spear clips are for other rigs: here the body moves as this rig's own clips do.
   const { spearRestClip } = await server.ssrLoadModule('/src/lib/utils/spearRestClip.ts')
-  corrected.set('spear_idle', spearRestClip(base.scene, corrected.get('idle1')))
+  for (const [name, source] of [['spear_idle', 'idle1'], ['spear_walk', 'walk'], ['spear_run', 'run']])
+    corrected.set(name, spearRestClip(base.scene, corrected.get(source), name, source === 'idle1' ? undefined : corrected.get('idle1')))
   for (const name of bakeExisting ? [] : builtPacks) {
     const source = `client/public/models/animations/${name}.glb`
     record(source)

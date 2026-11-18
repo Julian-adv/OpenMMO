@@ -14,6 +14,8 @@ const gripMotions = [
   'run',
   'combat_idle',
   'spear_idle',
+  'spear_walk',
+  'spear_run',
 ]
 const LIFT_SAMPLES_PER_SECOND = 10
 const LIFT_SAMPLES_PER_CLIP = 40
