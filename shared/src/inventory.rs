@@ -207,9 +207,33 @@ pub struct GroundItem {
     pub claimed_by: Option<PlayerId>,
 }
 
+/// Parses an items.csv `effects` token of the form `carry+10%`.
+pub fn carry_bonus_token(token: &str) -> Option<u8> {
+    token
+        .trim()
+        .strip_prefix("carry+")?
+        .strip_suffix('%')?
+        .parse()
+        .ok()
+}
+
+/// D&D 5e carry weight: STR × 15, scaled by the hunger multiplier and worn
+/// gear's summed `carry+N%`.
+pub fn carry_limit(str: u8, hunger_mult: f32, gear_percent: u32) -> f32 {
+    f32::from(str) * 15.0 * hunger_mult * (1.0 + gear_percent as f32 / 100.0)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn carry_tokens_need_a_plain_percent() {
+        assert_eq!(carry_bonus_token("carry+10%"), Some(10));
+        assert_eq!(carry_bonus_token("carry+10"), None);
+        assert_eq!(carry_bonus_token("carry+-10%"), None);
+        assert!((carry_limit(10, 0.6, 10) - 99.0).abs() < 0.01);
+    }
 
     const ALL_SLOTS: &[EquipSlot] = &[
         EquipSlot::Head,

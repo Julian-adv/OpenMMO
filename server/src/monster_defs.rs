@@ -241,6 +241,25 @@ mod tests {
     }
 
     #[test]
+    fn deeper_miners_drop_the_harness_more_often() {
+        let defs = MonsterDefs::load();
+        let chance = |id: &str| {
+            defs.get(id)
+                .unwrap()
+                .drop_entries()
+                .iter()
+                .find(|(item, _)| item == "miner_harness")
+                .map(|(_, chance)| *chance)
+        };
+        assert_eq!(chance("mine_remnant"), Some(0.0003));
+        assert_eq!(chance("mine_crystal"), Some(0.0006));
+        assert_eq!(chance("mine_twisted"), Some(0.001));
+        assert_eq!(chance("mine_foreman"), Some(0.03));
+        assert_eq!(chance("mine_veinfused"), None);
+        assert_eq!(chance("mine_predator"), None);
+    }
+
+    #[test]
     fn the_gnoll_claws_inflict_bleeding() {
         let defs = MonsterDefs::load();
         let gnoll = defs.get("gnoll").expect("gnoll def");

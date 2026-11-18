@@ -7,6 +7,7 @@ import type {
   PlayerInventory,
 } from '../network/networkTypes'
 import {
+  carryBonusPercent,
   getItemDef,
   givesLight,
   isRangedWeapon,
@@ -168,10 +169,17 @@ export const carryWeight = derived(
 /** The selected character's STR, the base of the carry limit. */
 export const localStr = writable(10)
 
-/** Mirrors the server's max_carry_weight: STR × 15 scaled by hunger. */
+/** Mirrors the server's max_carry_weight: STR × 15 scaled by hunger and
+ *  worn `carry+N%` gear. */
 export const carryLimit = derived(
-  [localStr, hungerState],
-  ([str, hunger]) => str * 15 * (hunger?.carryMult ?? 1)
+  [localStr, hungerState, inventoryStore],
+  ([str, hunger, inv]) => {
+    let gear = 0
+    for (const item of Object.values(inv.equipped)) {
+      if (item) gear += carryBonusPercent(item.item_def_id)
+    }
+    return str * 15 * (hunger?.carryMult ?? 1) * (1 + gear / 100)
+  }
 )
 
 /** Mirrors the server's `pickup_item_with_range`, which takes a partial pile

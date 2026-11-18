@@ -490,6 +490,20 @@ async fn weak_hunger_shrinks_carry_weight() {
 }
 
 #[tokio::test]
+async fn a_worn_miner_harness_adds_a_tenth_to_the_carry_limit() {
+    let game_state = make_test_game_state("harness_carry");
+    let (id, _rx) = make_eater(&game_state, "hauler", 500).await;
+    put_in_bag(&game_state, &id, 1, "miner_harness").await;
+    assert!((game_state.max_carry_weight(&id).await - 150.0).abs() < 0.01);
+
+    game_state.equip_item(&id, 1).await;
+    assert!((game_state.max_carry_weight(&id).await - 165.0).abs() < 0.01);
+
+    game_state.unequip_item(&id, EquipSlot::Belt).await;
+    assert!((game_state.max_carry_weight(&id).await - 150.0).abs() < 0.01);
+}
+
+#[tokio::test]
 async fn weak_hunger_slows_the_authoritative_attack_interval() {
     let game_state = make_test_game_state("weak_attack_speed");
     let (id, mut rx) = make_eater(&game_state, "tired_fighter", 50).await;

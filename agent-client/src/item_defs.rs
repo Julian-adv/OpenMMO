@@ -44,11 +44,22 @@ pub struct ItemDef {
     /// On a weapon, the ammo it fires; on ammo, the weapons it fits.
     #[serde(rename = "ammoKind", default)]
     pub ammo_kind: Option<String>,
+    #[serde(default)]
+    effects: Option<String>,
 }
 
 impl ItemDef {
     pub fn is_consumable(&self) -> bool {
         self.consumable
+    }
+
+    pub fn carry_bonus_percent(&self) -> u32 {
+        self.effects
+            .iter()
+            .flat_map(|effects| effects.split(';'))
+            .filter_map(onlinerpg_shared::inventory::carry_bonus_token)
+            .map(u32::from)
+            .sum()
     }
 
     pub fn is_two_handed(&self) -> bool {

@@ -136,6 +136,12 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 - raven_shield(guard 2): 티어 2 풀 20% 롤 (세트 완성 목표에는 미포함).
 - 장신구는 위 장신구 표를 따른다. leather_belt는 가죽 세트 소속으로 티어 1 풀.
 
+### 광부의 멜빵 (miner_harness)
+
+- 허리띠 칸 장비. 착용 중 최대 하중 +10% (`effects`의 `carry+10%`, 허기 배수와 곱연산). 거래 가능.
+- 체스트 풀에서 제외. Blackvein Mine의 광부 몬스터만 드랍한다: Lingering Miner 0.03%, Crystallized Miner 0.06%, Twisted Miner 0.1%, Rampaging Foreman 3%. Veinfused·Deep Predator는 드랍하지 않는다.
+- 목표 기대값은 완주 10회에 1개(리스폰 재처치 제외).
+
 ### 상점 안전장치
 
 상점 품목은 최소한으로 유지한다. 세트 파츠는 **티어 1 던전에서 확정적으로 나오지 않는 것만 카탈로그에 둔다** — 확률 롤에 계속 실패한 플레이어의 보험이 목적이므로, 시그니처(확정 드랍)는 보험이 필요 없고 상위 티어 파츠는 파밍 루프를 지키기 위해 팔지 않는다.

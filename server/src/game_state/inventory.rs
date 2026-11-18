@@ -491,21 +491,30 @@ impl super::GameState {
         self.reserve_instance_ids(1).await
     }
 
-    /// D&D 5e carry weight: STR * 15, scaled by the hunger band
-    /// (doc/HUNGER.md). Dropping below a cap only refuses new pickups and
-    /// purchases — it never blocks movement. Reads `player_characters` and
-    /// `hunger`, which rank below `player_gold`/`inventories`: call it before
-    /// taking those, never under them.
+    /// Carry limit from STR, the hunger band (doc/HUNGER.md) and worn
+    /// `carry+N%` gear. Dropping below a cap only refuses new pickups and
+    /// purchases — it never blocks movement. Reads `player_characters`,
+    /// `hunger` and `inventories` one at a time: call it before taking
+    /// `player_gold`/`inventories`, never under them.
     pub(super) async fn max_carry_weight(&self, player_id: &PlayerId) -> f32 {
-        let base = {
-            let chars = self.player_characters.read().await;
-            if let Some((_, _, attrs)) = chars.get(player_id) {
-                attrs.r#str as f32 * 15.0
-            } else {
-                150.0
-            }
-        };
-        base * self.hunger_carry_mult(player_id).await
+        let str = self
+            .player_characters
+            .read()
+            .await
+            .get(player_id)
+            .map_or(10, |(_, _, attrs)| attrs.r#str);
+        let hunger = self.hunger_carry_mult(player_id).await;
+        let gear = self
+            .inventories
+            .read()
+            .await
+            .get(player_id)
+            .map_or(0, |inv| {
+                self.equipped_defs(inv)
+                    .map(|def| def.carry_bonus_percent())
+                    .sum()
+            });
+        onlinerpg_shared::inventory::carry_limit(str, hunger, gear)
     }
 
     /// `armor_mult` soaks the armour, worn and packed alike (doc/DEBUFF.md);

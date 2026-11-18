@@ -548,6 +548,7 @@ impl super::GameState {
                     | ItemEffect::Invisibility
                     | ItemEffect::Sustenance
                     | ItemEffect::CriticalChance(_)
+                    | ItemEffect::CarryCapacity(_)
                     | ItemEffect::MaxHpPerLevel(_) => {}
                 }
             }

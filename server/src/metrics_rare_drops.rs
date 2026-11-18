@@ -3,7 +3,7 @@ use axum::{extract::State, response::Response};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-const TRACKED_ITEMS: [&str; 7] = [
+const TRACKED_ITEMS: [&str; 8] = [
     "scroll_of_enchant_weapon",
     "scroll_of_enchant_armor",
     "stethoscope",
@@ -11,6 +11,7 @@ const TRACKED_ITEMS: [&str; 7] = [
     "earth_amulet",
     "shadowfang",
     "foreman_pickaxe",
+    "miner_harness",
 ];
 
 /// Counts keyed by hour, waiting for the next save.

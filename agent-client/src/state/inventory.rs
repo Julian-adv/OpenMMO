@@ -67,7 +67,14 @@ impl SharedState {
                 crate::item_defs::get(&i.item_def_id).map_or(0.0, |d| d.weight) * i.quantity as f32
             })
             .sum();
-        Some((carried, f32::from(str) * 15.0 * self.self_carry_mult))
+        let gear = self
+            .self_equipped
+            .values()
+            .filter_map(|i| crate::item_defs::get(&i.item_def_id))
+            .map(|d| d.carry_bonus_percent())
+            .sum();
+        let limit = onlinerpg_shared::inventory::carry_limit(str, self.self_carry_mult, gear);
+        Some((carried, limit))
     }
 
     /// The ammo kind our main-hand weapon fires when the bag holds none of

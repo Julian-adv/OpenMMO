@@ -235,6 +235,22 @@ const STAT_LABELS = {
   int: 'item.intelligence',
 } as const
 
+const CARRY_TOKEN = /^carry\+(\d+)%$/
+
+const CARRY_BONUS_PERCENT = new Map<string, number>()
+for (const def of Object.values(itemDefs)) {
+  let percent = 0
+  for (const raw of def.effects?.split(';') ?? []) {
+    percent += Number(raw.trim().match(CARRY_TOKEN)?.[1] ?? 0)
+  }
+  if (percent) CARRY_BONUS_PERCENT.set(def.id, percent)
+}
+
+/** Summed `carry+N%` of an item's effects, in percent. */
+export function carryBonusPercent(itemDefId: string): number {
+  return CARRY_BONUS_PERCENT.get(itemDefId) ?? 0
+}
+
 /** Tooltip effects, including armor enchantment. */
 export function statLabels(
   def: ItemDefinition,
@@ -251,6 +267,7 @@ export function statLabels(
     const stat = token.match(/^(cha|int)([+-]\d+)$/)
     const hpPerLevel = token.match(/^maxhp\+(\d+)\/lv$/)
     const criticalChance = token.match(/^crit\+(\d+)%$/)
+    const carry = token.match(CARRY_TOKEN)
     if (stat)
       lines.push(
         translate(
@@ -268,7 +285,9 @@ export function statLabels(
         translate('item.criticalChance', { value: criticalChance[1] }, language)
       )
       lines.push(translate('item.nonStackingEffect', {}, language))
-    } else if (token === 'sustenance')
+    } else if (carry)
+      lines.push(translate('item.carryCapacity', { value: carry[1] }, language))
+    else if (token === 'sustenance')
       lines.push(translate('item.sustenance', {}, language))
     else if (token === 'light')
       lines.push(translate('item.light', {}, language))
