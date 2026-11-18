@@ -674,12 +674,27 @@ async fn a_key_handed_on_earns_no_second_the_same_night() {
         .await
         .expect("the first roll finds a key");
     assert_eq!((recipient, key.as_str()), (player_id, CRYPT_CHEST_KEY));
+    for _ in 0..50 {
+        assert!(game_state.give_item(&player_id, "breastplate").await);
+    }
     game_state.grant_dungeon_key(&recipient, &key, true).await;
-    assert_eq!(bag_count(&game_state, &player_id, CRYPT_CHEST_KEY).await, 1);
+    assert_eq!(
+        bag_count(&game_state, &player_id, CRYPT_CHEST_KEY).await,
+        1,
+        "an overloaded bag still takes the key"
+    );
     assert!(
         game_state.ground_items.read().await.is_empty(),
         "the key goes to the bag, not the floor"
     );
+    game_state
+        .inventories
+        .write()
+        .await
+        .get_mut(&player_id)
+        .unwrap()
+        .bag
+        .retain(|item| item.item_def_id == CRYPT_CHEST_KEY);
 
     game_state
         .inventories

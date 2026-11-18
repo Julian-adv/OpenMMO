@@ -753,26 +753,20 @@ impl super::GameState {
     }
 
     /// Award one unit to the bag, or the ground when it exceeds carry weight.
-    /// True when it reached the bag.
-    pub async fn award_item(&self, player_id: &PlayerId, item_def_id: &str) -> bool {
-        self.award_items(player_id, item_def_id, 1).await
+    pub async fn award_item(&self, player_id: &PlayerId, item_def_id: &str) {
+        self.award_items(player_id, item_def_id, 1).await;
     }
 
     /// Award `quantity` units of a stackable def, or one of any def, to the
     /// bag, or all to the ground when they exceed carry weight.
-    pub async fn award_items(
-        &self,
-        player_id: &PlayerId,
-        item_def_id: &str,
-        quantity: u32,
-    ) -> bool {
+    pub async fn award_items(&self, player_id: &PlayerId, item_def_id: &str, quantity: u32) {
         let Some(stackable) = self.item_defs.get(item_def_id).map(|d| d.stackable) else {
             warn!("award_items: unknown item_def_id {:?}", item_def_id);
-            return false;
+            return;
         };
         if quantity == 0 || (!stackable && quantity > 1) {
             warn!("award_items: cannot award {quantity} of {item_def_id:?}");
-            return false;
+            return;
         }
         let max_weight = self.max_carry_weight(player_id).await;
         let armor_mult = self.armor_weight_mult(player_id).await;
@@ -787,7 +781,7 @@ impl super::GameState {
         let placement = {
             let mut inventories = self.inventories.write().await;
             let Some(inv) = inventories.get_mut(player_id) else {
-                return false;
+                return;
             };
             if self.calc_total_weight(inv, armor_mult) + def_weight > max_weight {
                 Placement::Overweight
@@ -807,14 +801,13 @@ impl super::GameState {
             Placement::Bagged(snapshot) => {
                 self.mark_inventory_dirty(player_id).await;
                 self.send_inventory_snapshot(player_id, snapshot).await;
-                true
             }
             Placement::Overweight => {
                 let (position, floor_level) = {
                     let players = self.players.read().await;
                     match players.get(player_id) {
                         Some(p) => (p.position, p.floor_level),
-                        None => return false,
+                        None => return,
                     }
                 };
                 self.send_system_message(player_id, "Too heavy to carry — it slips to the ground.")
@@ -838,7 +831,6 @@ impl super::GameState {
                     None,
                 );
                 self.spawn_ground_item(ground_item).await;
-                false
             }
         }
     }

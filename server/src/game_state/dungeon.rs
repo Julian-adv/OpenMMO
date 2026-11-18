@@ -1799,6 +1799,7 @@ impl GameState {
     }
 
     /// Put a rolled key straight in the bag, where it cannot be missed.
+    /// Carry weight is not checked: a key on the floor is anyone's.
     pub(super) async fn grant_dungeon_key(&self, player_id: &PlayerId, key: &str, from_kill: bool) {
         self.record_item_drops(&[key.to_string()], from_kill);
         if let Some((position, _, floor_level, name)) = self.player_pose(player_id).await {
@@ -1807,7 +1808,7 @@ impl GameState {
                 crate::dungeon_defs::place_label(&position, floor_level)
             );
         }
-        if !self.award_item(player_id, key).await {
+        if !self.give_item(player_id, key).await {
             return;
         }
         self.send_system_message(
