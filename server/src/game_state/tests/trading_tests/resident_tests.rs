@@ -679,7 +679,7 @@ async fn a_changed_loadout_redresses_the_npc_and_prints_its_crest() {
     let crest = game_state.cape_textures.crest("aldermark").unwrap();
     let inventories = game_state.inventories.read().await;
     let inv = &inventories[&npc];
-    assert_eq!(inv.equipped[&chest].item_def_id, "worn_valkyrie_top");
+    assert_eq!(inv.equipped[&chest].item_def_id, "guard_top");
     assert_eq!(
         inv.bag
             .iter()
@@ -690,7 +690,7 @@ async fn a_changed_loadout_redresses_the_npc_and_prints_its_crest() {
     let cape = inv
         .equipped
         .values()
-        .find(|item| item.item_def_id == "wool_cape")
+        .find(|item| item.item_def_id == "guard_tabard")
         .unwrap();
     assert_eq!(cape.cape_texture.as_deref(), Some(crest.texture.as_str()));
     assert_eq!(cape.cape_color.as_deref(), Some(crest.color));
@@ -703,7 +703,10 @@ async fn loadout_gear_is_not_for_sale_even_from_the_bag() {
     setup_resident_trade(
         &game_state,
         0,
-        vec![bag_item(11, "spear", 1), bag_item(12, "iron_sword", 1)],
+        vec![
+            bag_item(11, "guard_spear", 1),
+            bag_item(12, "iron_sword", 1),
+        ],
         vec![],
     )
     .await;
@@ -725,7 +728,7 @@ async fn loadout_gear_is_not_for_sale_even_from_the_bag() {
     let _gold_update = seller_rx.try_recv();
 
     game_state
-        .buy_item(&pid("seller"), &pid("npc_karl"), "spear")
+        .buy_item(&pid("seller"), &pid("npc_karl"), "guard_spear")
         .await;
     match seller_rx.try_recv() {
         Ok(ServerMessage::TradeError { message, .. }) => {
@@ -752,7 +755,7 @@ async fn an_npc_never_sells_its_issued_gear_to_a_merchant() {
         inventories.insert(
             pid("npc_karl"),
             PlayerInventory {
-                bag: vec![bag_item(11, "spear", 1)],
+                bag: vec![bag_item(11, "guard_spear", 1)],
                 ..Default::default()
             },
         );
@@ -781,11 +784,11 @@ async fn an_npc_never_drops_its_issued_gear() {
     {
         let mut inventories = game_state.inventories.write().await;
         let mut inv = PlayerInventory {
-            bag: vec![bag_item(11, "spear", 1), bag_item(12, "torch", 1)],
+            bag: vec![bag_item(11, "guard_spear", 1), bag_item(12, "torch", 1)],
             ..Default::default()
         };
         inv.equipped
-            .insert(EquipSlot::Chest, bag_item(13, "leather_armor", 1));
+            .insert(EquipSlot::Chest, bag_item(13, "guard_top", 1));
         inventories.insert(pid("npc_karl"), inv);
     }
     let mut karl_rx = game_state.register_direct_channel(&pid("npc_karl")).await;
