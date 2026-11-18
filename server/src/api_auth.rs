@@ -1,11 +1,8 @@
 use axum::{
     extract::{ConnectInfo, Request, State},
-    http::{
-        header::{AUTHORIZATION, CACHE_CONTROL},
-        HeaderMap, HeaderValue, Method, StatusCode,
-    },
+    http::{header::AUTHORIZATION, HeaderMap, Method, StatusCode},
     middleware::Next,
-    response::{IntoResponse, Response},
+    response::Response,
 };
 use std::{net::SocketAddr, sync::Arc};
 use tracing::warn;
@@ -51,32 +48,17 @@ pub async fn require_admin_for_writes(
     Ok(next.run(req).await)
 }
 
-pub async fn require_google_admin(
-    State(auth): State<Arc<AuthContext>>,
-    req: Request,
-    next: Next,
-) -> Response {
-    let result = match bearer_token(req.headers()) {
-        Some(token) => verify_google_admin(&auth, token).await,
-        None => Err(unauthorized()),
-    };
-    let mut response = match result {
-        Ok(()) => next.run(req).await,
-        Err(error) => error.into_response(),
-    };
-    response
-        .headers_mut()
-        .insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
-    response
-}
-
-async fn verify_google_admin(auth: &AuthContext, token: &str) -> Result<(), (StatusCode, String)> {
+/// The verified admin's email.
+pub(crate) async fn verify_google_admin(
+    auth: &AuthContext,
+    token: &str,
+) -> Result<String, (StatusCode, String)> {
     let verifier = auth.google.as_ref().ok_or_else(unauthorized)?;
     let claims = verifier.verify(token).await.map_err(|_| unauthorized())?;
     if !auth.is_admin(&claims) {
-        return Err((StatusCode::FORBIDDEN, "not an admin".to_string()));
+        return Err(forbidden());
     }
-    Ok(())
+    claims.email.ok_or_else(forbidden)
 }
 
 /// Extract the bearer credential for admin or player authentication.
@@ -87,8 +69,12 @@ pub fn bearer_token(headers: &HeaderMap) -> Option<&str> {
         .and_then(|v| v.strip_prefix("Bearer "))
 }
 
-fn unauthorized() -> (StatusCode, String) {
+pub(crate) fn unauthorized() -> (StatusCode, String) {
     (StatusCode::UNAUTHORIZED, "unauthorized".to_string())
+}
+
+pub(crate) fn forbidden() -> (StatusCode, String) {
+    (StatusCode::FORBIDDEN, "not an admin".to_string())
 }
 
 #[cfg(test)]

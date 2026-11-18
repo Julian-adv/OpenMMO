@@ -1,0 +1,277 @@
+{
+  "date": "2026-11-18",
+  "source": {
+    "path": "assets/items/male_guard_outfit/tripo_body_v1/segmented.glb",
+    "sha256": "6b67211803416de52f8d2375ef6a1297d55dd52461e3bc6420493d0d2ac8f820"
+  },
+  "helmet_source": {
+    "path": "assets/items/male_guard_outfit/tripo_helmet_v1/segmented.glb",
+    "sha256": "5c1785fe620012642ab82c00adb5531cac039d00084e8345d1d6c5a4e46881c9"
+  },
+  "tabard_source": {
+    "path": "assets/items/male_guard_outfit/tripo_tabard_v1/segmented.glb",
+    "sha256": "7960bffd7172062cdbfd9ab9f60e146b3a12064b77b80136a5305a1b796599ee"
+  },
+  "base": {
+    "path": "assets/modular_human_male_01/fitted/base.glb",
+    "sha256": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a"
+  },
+  "rig_id": "human_male_01_mixamo_candidate_v2",
+  "parts": {
+    "top": {
+      "placement": {
+        "sleeves": {
+          "left": {
+            "Arm": {
+              "shift_m": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "turn_degrees": 2.22,
+              "median_distance_m": 0.0087
+            },
+            "ForeArm": {
+              "shift_m": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "turn_degrees": 7.48,
+              "median_distance_m": 0.0069,
+              "cuff_aim_degrees": 0.77
+            }
+          },
+          "right": {
+            "Arm": {
+              "shift_m": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "turn_degrees": 5.35,
+              "median_distance_m": 0.0083
+            },
+            "ForeArm": {
+              "shift_m": [
+                0.0,
+                0.0,
+                0.0
+              ],
+              "turn_degrees": 8.16,
+              "median_distance_m": 0.0072,
+              "cuff_aim_degrees": 0.75
+            }
+          }
+        }
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/guard/tripo_v1/top_guard.glb",
+        "sha256": "afadffe8e5ccb6482ce599e1719b5250da0b3f00592d205eac088dbd8953e5d5",
+        "triangles": 4177,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "Hips",
+          "LeftArm",
+          "LeftForeArm",
+          "LeftShoulder",
+          "LeftUpLeg",
+          "Neck",
+          "RightArm",
+          "RightForeArm",
+          "RightShoulder",
+          "RightUpLeg",
+          "Spine",
+          "Spine1",
+          "Spine2"
+        ]
+      }
+    },
+    "pants": {
+      "placement": {
+        "scale": 1.0146,
+        "shift_m": [
+          0.0053,
+          -0.0066,
+          -0.0071
+        ],
+        "turn_degrees": 0.0,
+        "median_distance_m": 0.0167
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/guard/tripo_v1/pants_guard.glb",
+        "sha256": "d9d5721f4a136e6c9ac405a3357f3fac359feadb44b982f6716f8524255116c3",
+        "triangles": 3085,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 5.960464477539063e-08,
+        "active_bones": [
+          "Hips",
+          "LeftLeg",
+          "LeftUpLeg",
+          "RightLeg",
+          "RightUpLeg"
+        ]
+      }
+    },
+    "gloves": {
+      "placement": {
+        "left": {
+          "shift_m": [
+            -0.0223,
+            0.0303,
+            -0.1669
+          ],
+          "turn_degrees": 13.52,
+          "median_distance_m": 0.0038
+        },
+        "right": {
+          "shift_m": [
+            0.0321,
+            0.0303,
+            -0.1649
+          ],
+          "turn_degrees": 14.29,
+          "median_distance_m": 0.004
+        }
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/guard/tripo_v1/gloves_guard.glb",
+        "sha256": "175cbc38bdb4f150c56de0cbd92c44b62f7a9ac39da627e7afeb2927ac8c9edc",
+        "triangles": 2302,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "LeftForeArm",
+          "LeftHand",
+          "LeftHandIndex1",
+          "LeftHandIndex2",
+          "LeftHandIndex3",
+          "LeftHandMiddle1",
+          "LeftHandMiddle2",
+          "LeftHandMiddle3",
+          "LeftHandPinky1",
+          "LeftHandPinky2",
+          "LeftHandPinky3",
+          "LeftHandRing1",
+          "LeftHandRing2",
+          "LeftHandRing3",
+          "LeftHandThumb1",
+          "LeftHandThumb2",
+          "LeftHandThumb3",
+          "RightForeArm",
+          "RightHand",
+          "RightHandIndex1",
+          "RightHandIndex2",
+          "RightHandIndex3",
+          "RightHandMiddle1",
+          "RightHandMiddle2",
+          "RightHandMiddle3",
+          "RightHandPinky1",
+          "RightHandPinky2",
+          "RightHandPinky3",
+          "RightHandRing1",
+          "RightHandRing2",
+          "RightHandRing3",
+          "RightHandThumb1",
+          "RightHandThumb2",
+          "RightHandThumb3"
+        ]
+      }
+    },
+    "boots": {
+      "placement": {
+        "left": {
+          "shift_m": [
+            -0.0064,
+            -0.0136,
+            -0.0033
+          ],
+          "turn_degrees": 0.0,
+          "median_distance_m": 0.0125
+        },
+        "right": {
+          "shift_m": [
+            0.024,
+            -0.0131,
+            -0.0047
+          ],
+          "turn_degrees": 0.0,
+          "median_distance_m": 0.0128
+        }
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/guard/tripo_v1/boots_guard.glb",
+        "sha256": "b211ff73679321bb7b4666bcd882f3a752a60631ba8bec0017df163738a6e3c1",
+        "triangles": 6204,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "LeftFoot",
+          "LeftLeg",
+          "LeftToeBase",
+          "LeftUpLeg",
+          "RightFoot",
+          "RightLeg",
+          "RightToeBase",
+          "RightUpLeg"
+        ]
+      }
+    },
+    "helmet": {
+      "placement": {},
+      "validation": {
+        "path": "assets/modular_human_male_01/guard/tripo_v1/helmet_guard.glb",
+        "sha256": "aef633f796174bd40c54e30aa90f098ed46a6f6302f08f01b9fa0ce7d2c823cb",
+        "triangles": 2754,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 5.960464477539063e-08,
+        "active_bones": [
+          "Head",
+          "Neck",
+          "Spine2"
+        ]
+      }
+    },
+    "tabard": {
+      "placement": {
+        "median_gap_m": 0.0156,
+        "picture": {
+          "belt_triangles": 957,
+          "picture_triangles": 919,
+          "picture_m": [
+            0.22,
+            0.352
+          ],
+          "picture_top_m": 1.49
+        }
+      },
+      "validation": {
+        "path": "assets/modular_human_male_01/guard/tripo_v1/tabard_guard.glb",
+        "sha256": "893dc976ddcd733f5b4010619c1e1be7813d3695d68c04f36573a4d94e35a62a",
+        "triangles": 5675,
+        "bones": 65,
+        "exact_rest_hierarchy_and_inverse_bind_match": true,
+        "maximum_weight_sum_error": 1.1920928955078125e-07,
+        "active_bones": [
+          "Hips",
+          "LeftArm",
+          "LeftShoulder",
+          "LeftUpLeg",
+          "Neck",
+          "RightArm",
+          "RightShoulder",
+          "RightUpLeg",
+          "Spine",
+          "Spine1",
+          "Spine2"
+        ]
+      }
+    }
+  }
+}

@@ -1,3 +1,5 @@
+import { trimModularClothing } from '../lib/utils/modularClothing'
+import { TABARD_PART } from '../lib/utils/tabard'
 import * as THREE from 'three'
 import { disposeObjects } from './dispose-objects'
 import { femaleOutfitMask as createOutfitMask } from '../lib/utils/female-outfit-mask'
@@ -22,6 +24,8 @@ import {
   PRIEST_MODULAR_OUTFIT,
   RANGER_MODULAR_OUTFIT,
   RANGER_MODULAR_PARTS,
+  GUARD_MODULAR_OUTFIT,
+  GUARD_MODULAR_PARTS,
   TUXEDO_MODULAR_OUTFIT,
   TUXEDO_MODULAR_PARTS,
   ROGUE_MODULAR_OUTFIT,
@@ -175,9 +179,11 @@ async function main() {
   const priest = requestedOutfit === 'priest'
   const bard = requestedOutfit === 'bard'
   const tuxedo = requestedOutfit === 'tuxedo'
-  if (tripo || caveman || ranger || priest || bard || tuxedo)
+  const guard = requestedOutfit === 'guard'
+  if (tripo || caveman || ranger || priest || bard || tuxedo || guard)
     showWeapon.checked = false
-  if (caveman || ranger || priest || bard || tuxedo) cameraSelect.value = 'full'
+  if (caveman || ranger || priest || bard || tuxedo || guard)
+    cameraSelect.value = 'full'
   const load = async (url: string) => {
     const gltf = await loader.loadAsync(url)
     if (disposed) {
@@ -224,6 +230,8 @@ async function main() {
     'helmet_bard',
     'helmet_brilliance',
     ...TUXEDO_MODULAR_PARTS,
+    ...GUARD_MODULAR_PARTS,
+    TABARD_PART,
   ]
   const [base, sources, animations, sword, profile, candidateSources, social] =
     await Promise.all([
@@ -271,6 +279,8 @@ async function main() {
   el<HTMLButtonElement>('bard-outfit').disabled = !ids.includes('top_bard')
   const tuxedoAvailable = TUXEDO_MODULAR_PARTS.every((id) => ids.includes(id))
   el<HTMLButtonElement>('tuxedo-outfit').disabled = !tuxedoAvailable
+  const guardAvailable = GUARD_MODULAR_PARTS.every((id) => ids.includes(id))
+  el<HTMLButtonElement>('guard-outfit').disabled = !guardAvailable
   const clips = [
     ...modularAnimationClips(base.scene, animations, 'corrected'),
     ...modularAnimationClips(base.scene, social, 'corrected').filter(
@@ -358,6 +368,11 @@ async function main() {
       boots: boots.value as ModularOutfit['boots'],
       helmet: helmet.value as ModularOutfit['helmet'],
     })
+    // This page draws with WebGL, so the tabard shows undyed and without a picture.
+    for (const mesh of parts.get(TABARD_PART) ?? [])
+      mesh.visible = params.has('tabard')
+    for (const mesh of parts.get('top_guard') ?? [])
+      trimModularClothing(mesh, params.has('tabard') && 'guard_tabard')
     outfitMask.setEquipped(
       'helmet-brilliance',
       !customFace && equipped.has('helmet_brilliance')
@@ -426,6 +441,7 @@ async function main() {
   }
   el('bard-outfit').onclick = () => wearOutfit(bardPreviewOutfit)
   el('tuxedo-outfit').onclick = () => wearOutfit(TUXEDO_MODULAR_OUTFIT)
+  el('guard-outfit').onclick = () => wearOutfit(GUARD_MODULAR_OUTFIT)
   hairColor.oninput = dress
   if (disposed) return
   const hand = body.getObjectByName('RightHand')
@@ -727,7 +743,8 @@ async function main() {
           : '얼굴 1,505'
       }`
   }
-  if (tuxedo && tuxedoAvailable) wearOutfit(TUXEDO_MODULAR_OUTFIT)
+  if (guard && guardAvailable) wearOutfit(GUARD_MODULAR_OUTFIT)
+  else if (tuxedo && tuxedoAvailable) wearOutfit(TUXEDO_MODULAR_OUTFIT)
   else if (bard && parts.has('top_bard')) wearOutfit(bardPreviewOutfit)
   else if (priest && parts.has('top_priest'))
     wearOutfit({ ...PRIEST_MODULAR_OUTFIT, helmet: 'priest' })

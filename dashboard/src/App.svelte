@@ -14,6 +14,6 @@
 
 {#if auth.signedIn}
   <Dashboard />
-{:else}
+{:else if !auth.checking}
   <GoogleLogin />
 {/if}

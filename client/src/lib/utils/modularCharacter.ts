@@ -70,6 +70,7 @@ export const MODULAR_BOOTS = [
   'priest',
   'bard',
   'tuxedo',
+  'guard',
 ] as const
 
 export interface ModularOutfit {
@@ -90,6 +91,7 @@ export interface ModularOutfit {
     | 'priest'
     | 'bard'
     | 'tuxedo'
+    | 'guard'
     | 'none'
   pants:
     | 'cloth'
@@ -101,6 +103,7 @@ export interface ModularOutfit {
     | 'priest'
     | 'bard'
     | 'tuxedo'
+    | 'guard'
     | 'none'
   gloves:
     | 'none'
@@ -111,8 +114,16 @@ export interface ModularOutfit {
     | 'caveman'
     | 'ranger'
     | 'tuxedo'
+    | 'guard'
   boots: (typeof MODULAR_BOOTS)[number]
-  helmet: 'none' | 'plate' | 'barbarian' | 'priest' | 'bard' | 'brilliance'
+  helmet:
+    | 'none'
+    | 'plate'
+    | 'barbarian'
+    | 'priest'
+    | 'bard'
+    | 'brilliance'
+    | 'guard'
 }
 
 export const SELECTABLE_HAIR_PARTS = new Set<ModularOutfit['hair']>([
@@ -227,6 +238,7 @@ function showBaseModularOutfit(
       rogue: undefined,
       caveman: undefined,
       tuxedo: undefined,
+      guard: undefined,
       ranger: 'ranger_sleeves',
       leather: 'gloves',
       plate: 'gauntlets',
@@ -402,6 +414,23 @@ export const TUXEDO_MODULAR_OUTFIT: ModularOutfit = {
   helmet: 'none',
 }
 
+export const GUARD_MODULAR_PARTS = [
+  'helmet_guard',
+  'top_guard',
+  'pants_guard',
+  'gloves_guard',
+  'boots_guard',
+] as const
+
+export const GUARD_MODULAR_OUTFIT: ModularOutfit = {
+  hair: 'hair_crop',
+  top: 'guard',
+  pants: 'guard',
+  gloves: 'guard',
+  boots: 'guard',
+  helmet: 'guard',
+}
+
 const BARD_HEMS = {
   none: 'bard_underwear_hem',
   cloth: 'bard_rear_hem',
@@ -412,6 +441,7 @@ const BARD_HEMS = {
   ranger: 'bard_fitted_pants_hem',
   priest: 'bard_fitted_pants_hem',
   tuxedo: 'bard_fitted_pants_hem',
+  guard: 'bard_fitted_pants_hem',
   bard: 'bard_matching_pants_hem',
 } as const satisfies Record<ModularOutfit['pants'], string>
 
@@ -435,6 +465,7 @@ const PRIEST_BOOT_HEMS = {
   priest: 'priest_pants_boots',
   bard: 'bard_pants_boots',
   tuxedo: undefined,
+  guard: undefined,
 } as const satisfies Record<ModularOutfit['boots'], string | undefined>
 
 // The game loads these on demand from this list; a style left out of it never shows.
@@ -445,6 +476,7 @@ export const PROXIED_OUTFITS = [
   PRIEST_MODULAR_OUTFIT,
   BARD_MODULAR_OUTFIT,
   TUXEDO_MODULAR_OUTFIT,
+  GUARD_MODULAR_OUTFIT,
 ]
 const PROXIED_STYLES = new Set<string>(PROXIED_OUTFITS.map(({ top }) => top))
 const PROXIED_PARTS = [
@@ -454,6 +486,7 @@ const PROXIED_PARTS = [
       .map((slot) => `${slot}_${outfit[slot]}`)
   ),
   'helmet_bard',
+  'helmet_guard',
 ]
 const CLOTH_PANTS = new Set<string>([
   'rogue',
@@ -461,6 +494,7 @@ const CLOTH_PANTS = new Set<string>([
   'priest',
   'bard',
   'tuxedo',
+  'guard',
 ])
 const proxied = (style: string) => PROXIED_STYLES.has(style)
 
@@ -481,7 +515,10 @@ export function showModularOutfit(
   const clothPants = CLOTH_PANTS.has(pants)
   const jacketOverGloves = gloves === 'tuxedo' && top === 'tuxedo'
   const tallBoots =
-    boots === 'caveman' || boots === 'ranger' || boots === 'bard'
+    boots === 'caveman' ||
+    boots === 'ranger' ||
+    boots === 'bard' ||
+    boots === 'guard'
   const priest = top === 'priest'
   for (const id of ['pants_barbarian', 'pants_caveman'])
     for (const mesh of parts.get(id) ?? []) setPeltPhysicsEnabled(mesh, !priest)
@@ -498,7 +535,7 @@ export function showModularOutfit(
       top: priest ? 'linen' : proxied(top) ? 'none' : top,
       pants: clothPants ? 'cloth' : pants === 'caveman' ? 'barbarian' : pants,
       gloves:
-        gloves === 'rogue' || gloves === 'tuxedo'
+        gloves === 'rogue' || gloves === 'tuxedo' || gloves === 'guard'
           ? 'none'
           : gloves === 'caveman'
             ? 'barbarian'
@@ -633,8 +670,10 @@ export function showModularOutfit(
   const hidden = new Set([
     ...(top === 'rogue' || top === 'ranger' ? ['torso', 'upper_arms'] : []),
     ...(top === 'bard' ? ['upper_arms'] : []),
-    ...(top === 'tuxedo' ? ['torso', 'upper_arms', 'forearms'] : []),
-    ...(jacketOverGloves ? ['hands'] : []),
+    ...(top === 'tuxedo' || top === 'guard'
+      ? ['torso', 'upper_arms', 'forearms']
+      : []),
+    ...(jacketOverGloves || gloves === 'guard' ? ['hands'] : []),
     ...(clothPants
       ? priestGreaves
         ? ['boot_ankles']
@@ -658,6 +697,7 @@ export function showModularOutfit(
     ranger: 'ranger_collar',
     bard: 'tripo_collar',
     tuxedo: 'tripo_collar',
+    guard: 'tripo_collar',
     rogue: collar,
     priest: 'collar',
   }

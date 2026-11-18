@@ -10,9 +10,9 @@
 
 Google 로그인 후 서버의 `ADMIN_EMAILS` / `--admin-emails` 목록에 등록된, 이메일 인증을 마친 계정만 입장합니다. 허용 계정은 서버에서 관리하며 프런트엔드에 이메일 목록을 넣지 않습니다. 기존 게임 어드민 목록을 공유하므로 계정을 추가하면 게임 관리 권한도 함께 부여됩니다.
 
-모든 `/api/metrics/` 조회에는 `Authorization: Bearer <Google ID token>`이 필요합니다. `/api/metrics/session`은 권한 확인에 성공하면 204를 반환합니다. 누락·위조·만료된 토큰은 401, 일반 계정·미인증 이메일은 403이며 NPC 토큰과 게임 세션 토큰은 사용할 수 없습니다. Google 인증이나 허용 목록이 설정되지 않으면 접근을 허용하지 않습니다. 성공·실패 응답 모두 `Cache-Control: no-store`입니다.
+Google 로그인에 성공하면 대시보드가 ID 토큰을 `POST /api/metrics/session`으로 보내고, 서버가 30일짜리 세션 쿠키(`dashboard_session`, `HttpOnly; Secure; SameSite=Strict; Path=/api/metrics`)를 내려줍니다. 이후 `/api/metrics/` 조회는 이 쿠키로 인증합니다. `Authorization: Bearer <Google ID token>`도 계속 받으며, 헤더가 있으면 쿠키는 보지 않습니다. 누락·위조·만료된 토큰과 세션은 401, 일반 계정·미인증 이메일은 403이며 NPC 토큰과 게임 세션 토큰은 사용할 수 없습니다. Google 인증이나 허용 목록이 설정되지 않으면 접근을 허용하지 않습니다. 성공·실패 응답 모두 `Cache-Control: no-store`입니다. 세부 동작은 [운영 지표](../doc/METRICS.md#접근-권한)를 참고합니다.
 
-로그인 전에는 지표를 요청하지 않습니다. 토큰은 브라우저 메모리에만 유지하며 페이지를 새로고침하면 다시 로그인합니다. 로그아웃·토큰 만료·API의 401/403 응답 시 대시보드를 닫고 표시 중인 통계와 자동 갱신을 정리합니다.
+대시보드는 열릴 때 `GET /api/metrics/session`으로 세션을 확인하고, 유효하면 로그인 화면 없이 바로 표시합니다. 새로고침이나 서버 재시작 뒤에도 로그인이 유지됩니다. 브라우저 스크립트는 토큰을 보관하지 않습니다. 로그아웃은 `DELETE /api/metrics/session`으로 서버 세션을 지웁니다. 로그아웃·세션 만료·API의 401/403 응답 시 대시보드를 닫고 표시 중인 통계와 자동 갱신을 정리합니다.
 
 ## 표시 지표
 
@@ -86,7 +86,7 @@ DB와 API의 금액은 코퍼 단위이며 `1골드 = 100실버 = 10,000코퍼`�
 
 저장소 루트에서 최신 게임 서버를 실행한 뒤 별도 터미널에서 시작합니다. 새 서버 코드가 실행되어야 지표 API와 수집이 활성화됩니다.
 
-Google 로그인 설정은 기존 `client/.env.local`의 `VITE_GOOGLE_CLIENT_ID`를 공유하므로 `dashboard/.env.local`을 따로 만들 필요가 없습니다. 개발 실행과 수동 빌드 모두 같은 설정을 사용합니다. 서버에는 `GOOGLE_CLIENT_ID`와 `ADMIN_EMAILS`를 설정하고, 해당 OAuth 클라이언트의 허용된 JavaScript 출처에 `https://localhost:10008`을 등록합니다. 개발 서버는 `dashboard/.env.local`에 `VITE_HTTPS_KEY`·`VITE_HTTPS_CERT`(선택 `VITE_HTTPS_CA`)로 게임 클라이언트의 `client/.certs` 인증서를 지정하면 HTTPS로 뜨며, 지정하지 않으면 HTTP입니다.
+Google 로그인 설정은 기존 `client/.env.local`의 `VITE_GOOGLE_CLIENT_ID`를 공유하므로 `dashboard/.env.local`을 따로 만들 필요가 없습니다. 개발 실행과 수동 빌드 모두 같은 설정을 사용합니다. 서버에는 `GOOGLE_CLIENT_ID`와 `ADMIN_EMAILS`를 설정하고, 해당 OAuth 클라이언트의 허용된 JavaScript 출처에 `https://localhost:10008`을 등록합니다. 개발 서버는 `dashboard/.env.local`에 `VITE_HTTPS_KEY`·`VITE_HTTPS_CERT`(선택 `VITE_HTTPS_CA`)로 게임 클라이언트의 `client/.certs` 인증서를 지정하면 HTTPS로 뜨며, 지정하지 않으면 HTTP입니다. 세션 쿠키가 `Secure`라서 HTTP로는 `localhost`·`127.0.0.1`에서만 로그인이 유지되고, 다른 주소로 열 때는 HTTPS가 필요합니다.
 
 대시보드에서 다른 클라이언트 ID나 API 주소를 사용할 때만 `.env.example`을 `.env.local`로 복사해 필요한 값을 지정합니다. Google 클라이언트 ID는 셸 환경변수, 대시보드 설정, 게임 클라이언트 설정 순서로 비어 있지 않은 값을 사용합니다. 각 폴더에서는 Vite의 모드별 환경 파일 우선순위를 따르며, 공통 설정에서 가져오는 값은 `VITE_GOOGLE_CLIENT_ID`뿐입니다. `client/`의 환경 파일을 수정한 뒤에는 대시보드 개발 서버를 재시작합니다.
 
@@ -116,7 +116,7 @@ npm run preview
 
 `dist/`는 별도 도메인이나 게임 사이트의 하위 경로에 제공할 수 있는 정적 파일입니다. 하위 경로에 게시할 때는 `DASHBOARD_BASE=/dashboard/ npm run build`로 빌드합니다. API 경로는 두 경우 모두 같은 출처의 `/api/metrics/concurrent`, `/api/metrics/unique`, `/api/metrics/gold`, `/api/metrics/gold-per-account`, `/api/metrics/level-leaderboard`, `/api/metrics/gold-leaderboard`, `/api/metrics/weapon-enchant-leaderboard`, `/api/metrics/armor-enchant-leaderboard`입니다.
 
-운영 빌드도 기존 `client/`의 Google 로그인 설정을 공유합니다. 실제 대시보드 출처가 Google OAuth의 허용된 JavaScript 출처에 등록되어 있어야 합니다. `/api/metrics/` 전체를 인증이 적용된 최신 게임 서버로 프록시하고 `Authorization` 헤더를 전달해야 합니다. 인증 전 정적 로그인 화면은 열 수 있지만 지표 API와 데이터는 운영자만 볼 수 있습니다. 배포 후 토큰 없는 요청과 일반 계정이 거부되는지 확인합니다.
+운영 빌드도 기존 `client/`의 Google 로그인 설정을 공유합니다. 실제 대시보드 출처가 Google OAuth의 허용된 JavaScript 출처에 등록되어 있어야 합니다. `/api/metrics/` 전체를 인증이 적용된 최신 게임 서버로 프록시하고 `Authorization`·`Cookie` 요청 헤더와 `Set-Cookie` 응답 헤더를 그대로 전달해야 합니다. 세션 쿠키가 `Secure`이므로 HTTPS로 제공합니다. 인증 전 정적 로그인 화면은 열 수 있지만 지표 API와 데이터는 운영자만 볼 수 있습니다. 배포 후 토큰 없는 요청과 일반 계정이 거부되는지 확인합니다.
 
 ## 운영 Nginx 설정
 
@@ -252,7 +252,7 @@ curl -i https://openmmo.to.nexus/api/metrics/session
 | `/dashboard/` | 로그인 화면, HTTP 200 |
 | 토큰 없는 `/api/metrics/session` | HTTP 401, `Cache-Control: no-store` |
 
-브라우저에서는 일반 Google 계정이 거부되고 어드민 계정만 통계를 볼 수 있는지 확인합니다. 로그아웃하면 로그인 화면으로 돌아가야 합니다.
+브라우저에서는 일반 Google 계정이 거부되고 어드민 계정만 통계를 볼 수 있는지 확인합니다. 로그아웃하면 로그인 화면으로 돌아가고, 새로고침해도 로그인 화면이어야 합니다. 로그인한 상태에서 새로고침하면 대시보드가 바로 열려야 합니다.
 
 `/dashboard/`가 404이면 빌드 파일과 `alias` 경로를, 403이면 `index.html` 존재 여부와 파일·디렉터리 읽기 권한을 확인합니다. 로그인 화면은 열리지만 JS·CSS가 404이면 `/dashboard/`를 기준으로 다시 빌드합니다. 지표 API의 404는 서버 코드·프록시 경로를, 502는 REST 서버의 `127.0.0.1:10007` 리스닝 상태를 확인합니다.
 

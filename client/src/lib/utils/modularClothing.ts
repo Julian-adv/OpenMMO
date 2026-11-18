@@ -22,6 +22,8 @@ type Cut =
   | 'tuxedo_glove_cuff'
   | 'tuxedo_gloves'
   | 'tuxedo_glove_rim'
+  | 'guard_tabard'
+  | 'female_guard_skirt'
   | 'greaves'
   | 'leather_boots'
   | 'plate_boots'
@@ -104,6 +106,18 @@ const cuts: Record<Cut, Clip | Reshape | Cuff | HatHair> = {
   tuxedo_glove_rim: (point) => -tuxedoGloveRim(point),
   // The cuff is wider than the jacket sleeve.
   tuxedo_glove_cuff: (point) => -tuxedoGloveCuff(point),
+  // Mail the tabard's panels cover: the chest and back, and each flap beside
+  // the centre split. The generated cloth lies inside the mail in places.
+  guard_tabard: (point) => {
+    const x = Math.abs(point.x)
+    return Math.min(
+      Math.max(x - 0.145, point.y - 1.48, 1.1 - point.y),
+      Math.max(x - 0.17, 0.04 - x, point.y - 1.1, 0.84 - point.y)
+    )
+  },
+  // The women's strap skirt under the guard's mail: only the strap ends below
+  // the mail's hem show.
+  female_guard_skirt: (point) => 0.775 - point.y,
   greaves: (point) => point.y - 0.46,
   leather_boots: (point) => point.y - 0.235,
   plate_boots: (point) => point.y - 0.22,

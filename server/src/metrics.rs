@@ -491,17 +491,24 @@ pub fn metrics_router(
     traffic: crate::traffic::TrafficMetrics,
     hardware: crate::hardware::HardwareMetrics,
 ) -> Router {
+    let access = crate::dashboard_session::DashboardAccess {
+        context: access,
+        auth: auth.clone(),
+    };
     metrics_routes(game, auth)
         .merge(heroic_tales::router(tales_ledger))
         .merge(traffic.router())
         .merge(hardware.router())
         .route(
             "/api/metrics/session",
-            get(|| async { StatusCode::NO_CONTENT }),
+            get(|| async { StatusCode::NO_CONTENT })
+                .post(crate::dashboard_session::start_session)
+                .delete(crate::dashboard_session::end_session)
+                .with_state(access.clone()),
         )
         .route_layer(axum::middleware::from_fn_with_state(
             access,
-            crate::api_auth::require_google_admin,
+            crate::dashboard_session::require_dashboard_admin,
         ))
 }
 

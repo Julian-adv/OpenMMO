@@ -14,6 +14,7 @@ import {
   MODULAR_FEMALE_RANGER_MODEL_PATH,
 } from './modelPaths'
 import { bindModularPart, skinnedParts } from './modularCharacter'
+import { trimModularClothing } from './modularClothing'
 import { femaleUnderwearColor } from './femaleUnderwearColor'
 import { femaleOutfitMask } from './female-outfit-mask'
 import { modularOutfitForArmor } from './modularEquipment'
@@ -34,6 +35,7 @@ type Style =
   | 'bard'
   | 'ceremony'
   | 'shopkeeper'
+  | 'guard'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
@@ -45,6 +47,7 @@ const prefixes: Record<Style, string> = {
   bard: 'bard_',
   ceremony: 'ceremony_',
   shopkeeper: 'shopkeeper_',
+  guard: 'guard_',
 }
 const styles = Object.keys(prefixes) as Style[]
 type Helmet =
@@ -93,6 +96,7 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   bard: slots,
   ceremony: slots,
   shopkeeper: ['top', 'bottom', 'boots'],
+  guard: slots,
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
@@ -399,7 +403,10 @@ const HELMET_HAIR: Record<Helmet, string | null> = {
   priest: 'hair',
   bard: 'hair',
   ceremony: 'hair',
+  guard: null,
 }
+// Helmets with a hood round the whole head: no hair shows under them, whatever its style.
+const HOODED_HELMETS = new Set<Helmet>(['guard'])
 const hairPart = (scene: THREE.Object3D, hair?: FemaleHair): string =>
   hair ? FEMALE_HAIR_PARTS[hair] : scene.userData.female_hair
 
@@ -467,6 +474,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/bard_')) return 'bard'
   if (model.startsWith('armor/ceremony_')) return 'ceremony'
   if (model.startsWith('armor/shopkeeper_')) return 'shopkeeper'
+  if (model.startsWith('armor/guard_')) return 'guard'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -529,6 +537,21 @@ function registerLazyPart(
 
 export const neckSlot = (name: string) => `${name}:neck`
 
+const FEMALE_TABARD = 'guard_tabard'
+
+/** The guard tabard's meshes on a female body, bound on first use; null on
+ *  any other body. They start hidden. */
+export async function femaleTabardMeshes(
+  root: THREE.Object3D
+): Promise<THREE.SkinnedMesh[] | null> {
+  const scene = femaleScene(root)
+  if (!scene) return null
+  await bindLazyFemalePart(scene, FEMALE_TABARD)
+  return skinnedParts(scene).filter(
+    (mesh) => mesh.userData.female_part === FEMALE_TABARD
+  )
+}
+
 /** Registers an outfit's body mask and, on a custom face, the same cut on the neck strip that stands in for those body triangles. */
 function registerBodyMask(
   scene: THREE.Object3D,
@@ -537,6 +560,7 @@ function registerBodyMask(
 ) {
   const meshes = skinnedParts(scene)
   const value = scene.userData.female_parts[name].body_mask
+  if (!value) return
   mask.register(
     name,
     value,
@@ -668,9 +692,16 @@ export function applyFemaleArmor(
   }
   const { helmet } = equipped
   const shownHair =
-    chosen !== FEMALE_HAIR_PARTS.bob || !helmet ? chosen : HELMET_HAIR[helmet]
+    helmet && HOODED_HELMETS.has(helmet)
+      ? null
+      : chosen !== FEMALE_HAIR_PARTS.bob || !helmet
+        ? chosen
+        : HELMET_HAIR[helmet]
   for (const name of HAIR_PART_NAMES)
     for (const mesh of part(name)) mesh.visible = name === shownHair
+  // Worn whole, the guard's skirt would lie over the mail it belongs under.
+  for (const mesh of part('guard_bottom'))
+    trimModularClothing(mesh, equipped.top === 'guard' && 'female_guard_skirt')
   const shown: Record<string, boolean> = {
     sleeves: equipped.top === 'plate' && equipped.gloves === 'plate',
   }

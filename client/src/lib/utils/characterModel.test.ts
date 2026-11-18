@@ -81,7 +81,7 @@ describe('male player model selection', () => {
           MODULAR_MALE_MODEL_PATH
         )
     }
-    expect(getNpcModelPath('Karl')).toBe('/models/characters/guard.glb')
+    expect(getNpcModelPath('Karl')).toBeUndefined()
     expect(getCharacterModelPath('guard', 'female', true)).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
@@ -966,6 +966,7 @@ describe.skipIf(
       priest: 'worn_priest_boots',
       bard: 'worn_bard_boots',
       tuxedo: 'tuxedo_boots',
+      guard: 'guard_boots',
     } satisfies Record<
       keyof typeof import('./modularSoleOffsets.json'),
       string | null

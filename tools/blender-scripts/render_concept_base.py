@@ -24,21 +24,20 @@ parser.add_argument('--out', required=True)
 parser.add_argument('--view', choices=['front', 'side', 'back'], default='front')
 parser.add_argument('--mannequin', action='store_true', help='Matte blue body, so a generated copy can be told from the outfit by colour')
 parser.add_argument('--heel', type=float, help='Foot pitch of the shared boot heel_pose, degrees')
+parser.add_argument('--wear', nargs='*', default=[], help='Fitted part GLBs to dress the body in')
+parser.add_argument('--centre', type=float, help='Camera height, metres')
+parser.add_argument('--span', type=float, help='Framed height, metres')
 args = parser.parse_args(sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else [])
 character = CHARACTERS[args.character]
 heel = character['heel'] if args.heel is None else args.heel
 
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=args.body or str(ROOT / character['body']))
-for obj in [o for o in bpy.data.objects if o.name in ['Icosphere', *character.get('skip', [])]]:
+for path in [args.body or str(ROOT / character['body']), *args.wear]:
+    bpy.ops.import_scene.gltf(filepath=path)
+for obj in [o for o in bpy.data.objects if o.name.split('.')[0] in ['Icosphere', *character.get('skip', [])]]:
     bpy.data.objects.remove(obj)
-rig = next(o for o in bpy.data.objects if o.type == 'ARMATURE')
+rigs = [o for o in bpy.data.objects if o.type == 'ARMATURE']
 bodies = [o for o in bpy.data.objects if o.type == 'MESH']
-# The GLB's node pose and idle1 action are not the bind pose.
-rig.animation_data_clear()
-for pb in rig.pose.bones:
-    pb.matrix_basis = Matrix()
-bpy.context.view_layer.update()
 
 
 def set_matrix(pb, matrix):
@@ -51,15 +50,6 @@ def rotate_about_head(pb, axis, degrees):
     set_matrix(pb, Matrix.Translation(head) @ Matrix.Rotation(math.radians(degrees), 4, axis) @ Matrix.Translation(-head) @ pb.matrix)
 
 
-# Same rotations as tools/outfits/female_boot_pose.py heel_pose.
-for side in ['Left', 'Right']:
-    foot, toe = rig.pose.bones[side + 'Foot'], rig.pose.bones[side + 'ToeBase']
-    forward = toe.head - foot.head
-    forward.z = 0
-    axis = Vector((0, 0, 1)).cross(forward.normalized())
-    rotate_about_head(foot, axis, heel)
-    rotate_about_head(toe, axis, -heel)
-
 mirror = Matrix.Diagonal((-1, 1, 1, 1))
 
 
@@ -69,24 +59,44 @@ def average(a, b):
     return matrix
 
 
-left = {pb.name: average(pb.matrix, mirror @ rig.pose.bones['Right' + pb.name[4:]].matrix @ mirror)
-        for pb in rig.pose.bones if pb.name.startswith('Left')}
-for pb in rig.pose.bones:
-    if not pb.name.startswith(('Left', 'Right')):
-        m = pb.matrix
-        centred = ((m.to_3x3() + (mirror @ m @ mirror).to_3x3()) * .5).to_quaternion().to_matrix().to_4x4()
-        centred.translation = (0, *m.to_translation()[1:])
-        set_matrix(pb, centred)
-for pb in rig.pose.bones:
-    if pb.name.startswith('Left'):
-        set_matrix(pb, left[pb.name])
-for pb in rig.pose.bones:
-    if pb.name.startswith('Right'):
-        set_matrix(pb, mirror @ rig.pose.bones['Left' + pb.name[5:]].matrix @ mirror)
+def bind_pose(rig):
+    # The GLB's node pose and idle1 action are not the bind pose.
+    rig.animation_data_clear()
+    for pb in rig.pose.bones:
+        pb.matrix_basis = Matrix()
+    bpy.context.view_layer.update()
+    # Same rotations as tools/outfits/female_boot_pose.py heel_pose.
+    for side in ['Left', 'Right']:
+        foot, toe = rig.pose.bones[side + 'Foot'], rig.pose.bones[side + 'ToeBase']
+        forward = toe.head - foot.head
+        forward.z = 0
+        axis = Vector((0, 0, 1)).cross(forward.normalized())
+        rotate_about_head(foot, axis, heel)
+        rotate_about_head(toe, axis, -heel)
+    left = {pb.name: average(pb.matrix, mirror @ rig.pose.bones['Right' + pb.name[4:]].matrix @ mirror)
+            for pb in rig.pose.bones if pb.name.startswith('Left')}
+    for pb in rig.pose.bones:
+        if not pb.name.startswith(('Left', 'Right')):
+            m = pb.matrix
+            centred = ((m.to_3x3() + (mirror @ m @ mirror).to_3x3()) * .5).to_quaternion().to_matrix().to_4x4()
+            centred.translation = (0, *m.to_translation()[1:])
+            set_matrix(pb, centred)
+    for pb in rig.pose.bones:
+        if pb.name.startswith('Left'):
+            set_matrix(pb, left[pb.name])
+    for pb in rig.pose.bones:
+        if pb.name.startswith('Right'):
+            set_matrix(pb, mirror @ rig.pose.bones['Left' + pb.name[5:]].matrix @ mirror)
+
+
+for rig in rigs:
+    bind_pose(rig)
 
 depsgraph = bpy.context.evaluated_depsgraph_get()
-rig.location.z -= min((evaluated.matrix_world @ v.co).z for evaluated in (body.evaluated_get(depsgraph) for body in bodies)
-                      for v in evaluated.data.vertices)
+drop = min((evaluated.matrix_world @ v.co).z for evaluated in (body.evaluated_get(depsgraph) for body in bodies)
+           for v in evaluated.data.vertices)
+for rig in rigs:
+    rig.location.z -= drop
 
 scene = bpy.context.scene
 scene.render.engine = 'CYCLES'
@@ -100,12 +110,12 @@ world.use_nodes = True
 world.node_tree.nodes['Background'].inputs[0].default_value = (.62, .62, .62, 1)
 camera = bpy.data.cameras.new('camera')
 camera.type = 'ORTHO'
-camera.ortho_scale = character['span']
+camera.ortho_scale = args.span or character['span']
 camera_obj = bpy.data.objects.new('camera', camera)
 scene.collection.objects.link(camera_obj)
 scene.camera = camera_obj
 x, y, turn = {'front': (0, -5, 0), 'back': (0, 5, 180), 'side': (5, 0, 90)}[args.view]
-camera_obj.location, camera_obj.rotation_euler = (x, y, character['centre']), (math.radians(90), 0, math.radians(turn))
+camera_obj.location, camera_obj.rotation_euler = (x, y, args.centre or character['centre']), (math.radians(90), 0, math.radians(turn))
 if args.mannequin:
     blue = bpy.data.materials.new('mannequin')
     blue.use_nodes = True

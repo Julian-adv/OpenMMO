@@ -151,6 +151,31 @@ OUTFITS = {
                           # Without the skirt the boot top shows: the shin is cut along it.
                           clip_hem=dict(keep='above', within=.4)),
         }),
+    # The women's cut of the guard outfit, generated on the blue mannequin from front and back views and aligned by
+    # tools/split-female-guard.py; the helmet came from its own bust and tools/split-male-guard-helmet.py --female.
+    'guard': dict(
+        source='tripo_body_v1/segmented.glb',
+        sha256='dcaf1c2755efba1339cb26d25284909493c4400174e578b7576de0c5656c387a',
+        # The mail's hips stand as far out as the arms and would pass for sleeve.
+        scale=1, on_heels=True, snug_cover=True, arm_reach=.12,
+        parts={
+            'gloves': dict(nodes=['left_glove', 'right_glove'], version='fitted_v1', hide_bones=('LeftHand', 'RightHand'),
+                           clip_cuff=0),
+            # Mail hauberk with its collar and belt; the sleeves run to the wrists under the glove cuffs.
+            'top': dict(nodes=['top'], version='fitted_v1', hide_bones=ARMS, hide_underwear=(1.15, 1.7),
+                        restore_visible=True, cut_inside_glove=True, align_sleeves=True),
+            # Generated alone from the waistband down by tools/split-female-guard-skirt.py: on the body its straps
+            # came fused to the mail's hem, which left a band 9 cm tall.
+            'bottom': dict(nodes=['skirt'], version='fitted_v1', hide_underwear=(.8, 1.2),
+                           model=dict(source='tripo_skirt_v1/segmented.glb',
+                                      sha256='97e1a576381bfe6d1f46efbc750ac8e97693a640f59160c6c302d930a2907602', scale=1)),
+            # Thigh-high stiletto boots with the knee cops strapped over them.
+            'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=LEGS, rigid_post=.075,
+                          clip_hem=dict(keep='above', within=.4)),
+            'helmet': dict(nodes=['helmet'], version='fitted_v1',
+                           model=dict(source='tripo_helmet_v1/segmented.glb',
+                                      sha256='0aa366b476346266fbacdcb9783815dfa6cdf154725a3b673070b88ab2eaf4c6', scale=1)),
+        }),
 }
 COVER_RAY = .06
 # Sleeve alignment fades in over this distance from the shoulder joint, leaving the shoulder pads in place.
@@ -287,7 +312,8 @@ if {'top', 'left_glove', 'right_glove'} <= world.keys():
     pose = ArmPose(bones, bp, bf, bw, names,
                    {'Left': np.vstack([top[top[:, 0] > .2], world['left_glove']]),
                     'Right': np.vstack([top[top[:, 0] < -.2], world['right_glove']])},
-                   {'Left': world['left_glove'], 'Right': world['right_glove']})
+                   {'Left': world['left_glove'], 'Right': world['right_glove']},
+                   arm_reach=CONFIG.get('arm_reach'))
 else:
     pose = StillArms()
 for name, obj in list(imported.items()):
@@ -646,8 +672,16 @@ def cut_sleeves(points):
         cuff_top = float((centre - bones[side + 'ForeArm']) @ axis)
         cut = centre + normal * SLEEVE_CUT_INSET
         # Only this sleeve is cut; the plane also crosses the bodice.
-        on_side = [v for v in edit.verts if v.co.x * sign > abs(bones[side + 'Arm'][0])]
-        side_faces = [f for f in edit.faces if all(v.co.x * sign > abs(bones[side + 'Arm'][0]) for v in f.verts)]
+        elbow, reach = bones[side + 'ForeArm'], CONFIG.get('arm_reach')
+
+        def sleeve(v):
+            # A hauberk's hip lies beyond the plane too, so with `arm_reach` only vertices near the forearm count.
+            along = np.array(v.co) - elbow
+            return v.co.x * sign > abs(bones[side + 'Arm'][0]) and (
+                not reach or np.linalg.norm(along - (along @ axis) * axis) < reach)
+
+        on_side = [v for v in edit.verts if sleeve(v)]
+        side_faces = [f for f in edit.faces if all(sleeve(v) for v in f.verts)]
         band = 0.
         if SPEC.get('cut_skin_band'):
             # A sleeve ending short of the cuff, bare once the gloves come off, is cut cleanly above its

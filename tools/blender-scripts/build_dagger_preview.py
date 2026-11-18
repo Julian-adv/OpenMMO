@@ -1,4 +1,7 @@
-"""Retarget the two supplied FBX clips into a separate preview pack."""
+"""Retarget supplied Mixamo FBX clips into a weapon animation pack.
+
+blender -b --python tools/blender-scripts/build_dagger_preview.py -- --source assets/animations/dagger [--pack spear]
+"""
 
 import argparse
 import json
@@ -16,12 +19,23 @@ from import_mixamo_animation import import_mixamo_animation
 ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser()
 parser.add_argument("--source", type=Path, required=True)
-args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
-clips = {
-    "dagger_inward": "Stable Sword Inward Slash.fbx",
-    "dagger_outward": "Stable Sword Outward Slash.fbx",
-    "dagger_stab": "Stabbing.fbx",
+PACKS = {
+    "dagger_preview": {
+        "dagger_inward": "Stable Sword Inward Slash.fbx",
+        "dagger_outward": "Stable Sword Outward Slash.fbx",
+        "dagger_stab": "Stabbing.fbx",
+    },
+    "spear": {"spear_thrust": "Bayonet Stab.fbx"},
 }
+# Clips derived from an action already in the blend file instead of an FBX.
+DERIVED = {"spear": {"spear_idle": "idle1"}}
+# At rest the spear stands upright: the upper arm hangs, the elbow bends to a right angle with the forearm
+# level and forward, and the hand turns the shaft (the hand bone's X) to vertical.
+REST_UPPER = Vector((-0.12, 0.05, -1))
+REST_FOREARM = math.radians(0)
+parser.add_argument("--pack", choices=PACKS, default="dagger_preview")
+args = parser.parse_args(sys.argv[sys.argv.index("--") + 1:])
+clips = PACKS[args.pack]
 for filename in clips.values():
     if not (args.source / filename).is_file():
         raise FileNotFoundError(args.source / filename)
@@ -73,6 +87,102 @@ def level_stab(arm, action):
             bone.keyframe_insert("rotation_quaternion", frame=frame, group=bone.name)
 
 
+# Mixamo's bayonet stab drives the point up to the chest; both hands come down this far (m) at full reach
+# for a thrust at the belly.
+THRUST_DROP = 0.17
+# The wind-up draws both hands this much farther back (m) at its deepest (user request 2026-11-18).
+THRUST_PULL = 0.18
+# Source frames kept, from the start of the wind-up to the return to guard, and the playback speed-up that
+# lands full reach on the shared 540 ms impact.
+THRUST_FRAMES = (9, 65)
+THRUST_SPEED = 0.54
+
+
+def lower_thrust(arm, action):
+    scene = bpy.context.scene
+    arms = [(arm.pose.bones[side + "Arm"], arm.pose.bones[side + "Hand"]) for side in ("Right", "Left")]
+    lead = arms[0][1]
+    first, last = map(int, action.frame_range)
+    hands = {}
+    for frame in range(first, last + 1):
+        scene.frame_set(frame)
+        hands[frame] = arm.matrix_world @ lead.head
+    peak = max(hands, key=lambda f: (hands[f] - hands[first]).xy.length)
+    forward = hands[peak] - hands[first]
+    forward.z = 0
+    reach = forward.length
+    forward.normalize()
+    side = forward.cross(Vector((0, 0, 1)))
+    deepest = max(-(hands[f] - hands[first]).dot(forward) for f in hands)
+    previous = {}
+    for frame in range(first, last + 1):
+        scene.frame_set(frame)
+        progress = (hands[frame] - hands[first]).dot(forward)
+        t = min(max(progress / reach, 0), 1)
+        weight = t * t * (3 - 2 * t)
+        b = min(max(-progress / deepest, 0), 1) if deepest > 0 else 0
+        pull = THRUST_PULL * b * b * (3 - 2 * b)
+        for upper, hand in arms:
+            if pull > 0:
+                span = arm.matrix_world @ hand.head - arm.matrix_world @ upper.head
+                rotate_about_head(arm, upper, span.rotation_difference(span - forward * pull))
+            if weight > 0:
+                span = arm.matrix_world @ hand.head - arm.matrix_world @ upper.head
+                target = max(min((span.z - THRUST_DROP * weight) / span.length, 1), -1)
+                rotate_about_head(arm, upper, Quaternion(side, math.asin(target) - math.asin(span.z / span.length)))
+            if upper.name in previous:
+                upper.rotation_quaternion.make_compatible(previous[upper.name])
+            previous[upper.name] = upper.rotation_quaternion.copy()
+            upper.keyframe_insert("rotation_quaternion", frame=frame, group=upper.name)
+
+
+def retime(action, first, last, speed):
+    """Keep source frames first..last and play them `speed` times as long."""
+    for curve in exporter.iter_fcurves(action):
+        for key in reversed(list(curve.keyframe_points)):
+            if not first <= key.co.x <= last:
+                curve.keyframe_points.remove(key)
+        for key in curve.keyframe_points:
+            for point in (key.co, key.handle_left, key.handle_right):
+                point.x = first + (point.x - first) * speed
+        curve.update()
+
+
+def aim(arm, bone, axis, direction):
+    current = arm.matrix_world.to_3x3() @ bone.matrix.to_3x3() @ axis
+    rotate_about_head(arm, bone, current.rotation_difference(direction))
+
+
+def shoulder_spear(arm, source, name):
+    """Copy an idle and hold the spear upright in the folded right arm through it."""
+    action = source.copy()
+    action.name = name
+    arm.animation_data.action = action
+    arm.animation_data.action_slot = action.slots[0]
+    upper, fore, hand = (arm.pose.bones["Right" + part] for part in ("Arm", "ForeArm", "Hand"))
+    along = Vector((0, 1, 0))
+    lift = Vector((0, -math.cos(REST_FOREARM), math.sin(REST_FOREARM)))
+    first, last = map(int, action.frame_range)
+    previous = {}
+    for frame in range(first, last + 1):
+        bpy.context.scene.frame_set(frame)
+        aim(arm, upper, along, REST_UPPER)
+        aim(arm, fore, along, lift)
+        aim(arm, hand, Vector((1, 0, 0)), Vector((0, 0, 1)))
+        for bone in (upper, fore, hand):
+            if bone.name in previous:
+                bone.rotation_quaternion.make_compatible(previous[bone.name])
+            previous[bone.name] = bone.rotation_quaternion.copy()
+            bone.keyframe_insert("rotation_quaternion", frame=frame, group=bone.name)
+    for curve in exporter.iter_fcurves(action):
+        for key in curve.keyframe_points:
+            for point in (key.co, key.handle_left, key.handle_right):
+                point.x = (point.x - first) * 24 / 30
+        curve.update()
+    action.use_fake_user = True
+    return action
+
+
 def cut_frames(action, first, last):
     removed = last - first + 1
     for curve in exporter.iter_fcurves(action):
@@ -100,6 +210,8 @@ for name, filename in clips.items():
     arm.animation_data.action_slot = action.slots[0]
     if name == "dagger_stab":
         level_stab(arm, action)
+    if name == "spear_thrust":
+        lower_thrust(arm, action)
     hips = arm.pose.bones["Hips"]
     first, last = map(int, action.frame_range)
     bpy.context.scene.frame_set(first)
@@ -120,6 +232,9 @@ for name, filename in clips.items():
         hips.keyframe_insert(data_path="location", frame=frame, group="Hips")
     if name == "dagger_stab":
         cut_frames(action, first + STAB_HOLD[0], first + STAB_HOLD[1])
+    if name == "spear_thrust":
+        retime(action, first + THRUST_FRAMES[0] - 1, first + THRUST_FRAMES[1] - 1, THRUST_SPEED)
+        first += THRUST_FRAMES[0] - 1
     for curve in exporter.iter_fcurves(action):
         for key in curve.keyframe_points:
             key.co.x -= first
@@ -129,12 +244,14 @@ for name, filename in clips.items():
     action.use_fake_user = True
     print("DAGGER_MOTION", name, json.dumps(motion))
 
+derived = [shoulder_spear(arm, bpy.data.actions[source], name)
+           for name, source in DERIVED.get(args.pack, {}).items()]
 arm.animation_data.action = None
 # The shipped slash clips and their combo windows are timed at 24 fps.
 bpy.context.scene.render.fps = 24
 bpy.context.scene.frame_start = 0
 exporter.strip_bone_name_prefixes(arm)
 exporter.rebind_action_slots_to_target(arm)
-exporter.push_actions_to_nla(arm, [bpy.data.actions[name] for name in clips])
+exporter.push_actions_to_nla(arm, [bpy.data.actions[name] for name in clips] + derived)
 exporter.select_export_objects(arm)
-exporter.export_glb(str(ROOT / "client/public/models/animations/dagger_preview.glb"))
+exporter.export_glb(str(ROOT / f"client/public/models/animations/{args.pack}.glb"))

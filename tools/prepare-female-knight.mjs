@@ -14,7 +14,7 @@ import { loadHelmetHairBrush } from './lib/helmet-hair-brush.mjs'
 
 const output = 'client/public/models/characters/modular_female'
 // Parts the client loads on first equip: packed separately with 1024 px colour textures.
-const separatePart = name => /^(caveman|priest|ranger|bard|ceremony|shopkeeper)_/.test(name)
+const separatePart = name => /^(caveman|priest|ranger|bard|ceremony|shopkeeper|guard)_/.test(name)
 // Fur panels share the waist rig and colliders.
 function bakeSkirtRobe(doc) {
   const panels = doc.getRoot().listNodes().filter(node => node.getExtras().pelt_physics)
@@ -74,6 +74,9 @@ const sources = {
     [`bard_${slot}`, `assets/items/female_bard_outfit/${slot}/fitted_v1/${slot}_female_bard.glb`])),
   ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
     [`ceremony_${slot}`, `assets/items/female_ceremony_outfit/${slot}/fitted_v1/${slot}_female_ceremony.glb`])),
+  ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
+    [`guard_${slot}`, `assets/items/female_guard_outfit/${slot}/fitted_v1/${slot}_female_guard.glb`])),
+  guard_tabard: 'assets/items/female_guard_outfit/tabard/fitted_v1/tabard_female_guard.glb',
   ...Object.fromEntries(['top', 'bottom', 'boots'].map(slot =>
     [`shopkeeper_${slot}`, `assets/items/female_shopkeeper_outfit/${slot}/fitted_v1/${slot}_female_shopkeeper.glb`])),
   valkyrie_hair: 'assets/modular_human_female_01/hair/tripo_long_side_v3/fitted_v1/hair_female_long_side.glb',
@@ -94,7 +97,7 @@ function matchBodySkin(doc) {
   material.getBaseColorTexture().setImage(readFileSync(bodySkin.color)).setMimeType('image/png')
   material.getMetallicRoughnessTexture().setImage(readFileSync(bodySkin.orm)).setMimeType('image/png')
 }
-const packs = ['locomotion', 'combat_melee', 'social', 'fishing', 'combat_ranged', 'offhand', 'enchant_armor', 'great_sword', 'riding', 'dagger_preview', 'cart_push']
+const packs = ['locomotion', 'combat_melee', 'social', 'fishing', 'combat_ranged', 'offhand', 'enchant_armor', 'great_sword', 'riding', 'dagger_preview', 'spear', 'cart_push']
 const bakeExisting = process.argv.includes('--bake-existing')
 const packFlag = process.argv.indexOf('--pack')
 const selectedPack = packFlag === -1 ? undefined : process.argv[packFlag + 1]
@@ -170,7 +173,7 @@ for (const [name, source] of Object.entries(sources)) {
   const doc = await io.read(source)
   const scene = doc.getRoot().listScenes()[0]
   const metadata = { ...scene.getExtras(), female_part: name }
-  if (!/^(base|((barbarian|valkyrie|long_bangs|long_wavy)_)?hair|valkyrie_wings|rogue_garters)$/.test(name)) {
+  if (!/^(base|((barbarian|valkyrie|long_bangs|long_wavy)_)?hair|valkyrie_wings|rogue_garters|guard_tabard)$/.test(name)) {
     const path = name === 'valkyrie_top' ? source.replace('fitted_v11/top_female_valkyrie.glb', 'fitted_v8/body-occlusion.json') : source.replace(/[^/]+$/, 'body-occlusion.json')
     record(path)
     metadata.body_mask = JSON.parse(readFileSync(path))
@@ -317,6 +320,9 @@ try {
   for (const name of ['idle2', 'idle3', 'idle4', 'idle5']) {
     const clip = corrected.get('idle1').clone(); clip.name = name; corrected.set(name, clip)
   }
+  // The pack's own spear_idle is for other rigs: here it stands as this rig's idle1 does.
+  const { spearRestClip } = await server.ssrLoadModule('/src/lib/utils/spearRestClip.ts')
+  corrected.set('spear_idle', spearRestClip(base.scene, corrected.get('idle1')))
   for (const name of bakeExisting ? [] : builtPacks) {
     const source = `client/public/models/animations/${name}.glb`
     record(source)

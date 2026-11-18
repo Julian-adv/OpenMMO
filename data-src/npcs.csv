@@ -1,6 +1,6 @@
 id,npcName,class,wishlist,wishlistRatePercent,salaryPerDay,walletCap,keepsakes,loadout,chatAliases,spawnAtSchedule,minLevel,minMaxHp,minGuard,unarmedDamageRoll,respawnAtSpawn,selfDefense,walkSpeed,dialogueOnly,capeCrest,rank,protects,hair,hairColor,gender,outfit,outfitPrice
 rica,Rica,merchant,,,,,,shopkeeper_top;shopkeeper_pants;shopkeeper_boots,리카,,,,,,,,,,,,,long_wavy,#d9d5cd,female,shopkeeper_top;shopkeeper_pants;shopkeeper_boots,30000
-karl,Karl,guard,torch;dagger,120,5000,30000,,spear;leather_armor;leather_helmet;leather_pants;leather_boots,카를,,,,,,,,,,,captain,,,,,,
+karl,Karl,guard,torch;dagger,120,5000,30000,,guard_spear;guard_helmet;guard_top;guard_pants;guard_gloves;guard_boots;guard_tabard,카를,,,,,,,,,,aldermark,captain,,,,male,guard_helmet;guard_top;guard_pants;guard_gloves;guard_boots;guard_tabard,25000
 signe,Signe,bard,,,,,mandolin;worn_mandolin,worn_torch;tip_hat,시그네,,,,,,,,,,,,,,,,,
 wick,Wick,merchant,,,,,,,위크;윅,,,,,,,,,,,,,,,,,
 miriel,Miriel,maid,,,,,,,미리엘,,,,,,,,,,,,,,,,,
@@ -11,8 +11,8 @@ grida,Grida,merchant,,,,,,,그리다,,,,,,,,,,,,,,,,,
 tobin,Tobin,merchant,,,,,,fishing_rod,토빈,,,,,,,,,,,,,,,,,
 ysolde,Ysolde,merchant,,,,,,,이졸데,true,30,360,24,4d8,true,true,1.1,true,,,,,,,,
 maelis,Maelis,priest,,,,,,worn_priest_helmet;worn_priest_top;worn_priest_pants;worn_priest_boots;worn_priest_gloves,마엘리스,true,,,,,true,,,true,,,,,,,,
-garrick,Garrick,guard,,,,,,rune_blade;breastplate;plate_helmet;plate_greaves;plate_boots;plate_gauntlets;wool_cape,개릭,true,50,700,24,,true,true,,,aldermark,sergeant,true,,,,,
-brenna,Brenna,guard,,,,,,rune_blade;worn_valkyrie_top;worn_valkyrie_helmet;worn_valkyrie_pants;worn_valkyrie_gloves;worn_valkyrie_boots;wool_cape,브레나,true,50,700,24,,true,true,,,aldermark,guard,true,,,,,
-osric,Osric,guard,,,,,,rune_blade;breastplate;plate_helmet;plate_greaves;plate_boots;plate_gauntlets;wool_cape,오스릭,true,50,700,24,,true,true,,,aldermark,sergeant,true,,,,,
-halda,Halda,guard,,,,,,rune_blade;worn_valkyrie_top;worn_valkyrie_helmet;worn_valkyrie_pants;worn_valkyrie_gloves;worn_valkyrie_boots;wool_cape,할다,true,50,700,24,,true,true,,,aldermark,guard,true,,,,,
+garrick,Garrick,guard,,,,,,guard_spear;breastplate;plate_helmet;plate_greaves;plate_boots;plate_gauntlets;wool_cape,개릭,true,50,700,24,,true,true,,,aldermark,sergeant,true,,,,,
+brenna,Brenna,guard,,,,,,guard_spear;guard_helmet;guard_top;guard_pants;guard_gloves;guard_boots;guard_tabard,브레나,true,50,700,24,,true,true,,,aldermark,guard,true,,,female,guard_helmet;guard_top;guard_pants;guard_gloves;guard_boots;guard_tabard,25000
+osric,Osric,guard,,,,,,guard_spear;breastplate;plate_helmet;plate_greaves;plate_boots;plate_gauntlets;wool_cape,오스릭,true,50,700,24,,true,true,,,aldermark,sergeant,true,,,,,
+halda,Halda,guard,,,,,,guard_spear;guard_helmet;guard_top;guard_pants;guard_gloves;guard_boots;guard_tabard,할다,true,50,700,24,,true,true,,,aldermark,guard,true,,,female,guard_helmet;guard_top;guard_pants;guard_gloves;guard_boots;guard_tabard,25000
 clothier,Linnea,merchant,,,,,,worn_ranger_top;worn_priest_pants;worn_priest_boots,리네아,,,,,,,,,,,,,bob,#1a1614,,,

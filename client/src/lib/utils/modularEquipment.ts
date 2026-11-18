@@ -4,6 +4,7 @@ import { DEFAULT_MODULAR_OUTFIT, type ModularOutfit } from './modularCharacter'
 
 const ARMOR_STYLES = {
   chest: {
+    'armor/guard_top.glb': 'guard',
     'armor/tuxedo_top.glb': 'tuxedo',
     'armor/bard_top.glb': 'bard',
     'armor/priest_top.glb': 'priest',
@@ -14,6 +15,7 @@ const ARMOR_STYLES = {
     'armor/barbarian_armor.glb': 'barbarian',
   },
   pants: {
+    'armor/guard_pants.glb': 'guard',
     'armor/tuxedo_pants.glb': 'tuxedo',
     'armor/bard_pants.glb': 'bard',
     'armor/priest_pants.glb': 'priest',
@@ -24,6 +26,7 @@ const ARMOR_STYLES = {
     'armor/barbarian_pants.glb': 'barbarian',
   },
   boots: {
+    'armor/guard_boots.glb': 'guard',
     'armor/tuxedo_boots.glb': 'tuxedo',
     'armor/bard_boots.glb': 'bard',
     'armor/priest_boots.glb': 'priest',
@@ -34,6 +37,7 @@ const ARMOR_STYLES = {
     'armor/barbarian_boots.glb': 'barbarian',
   },
   hands: {
+    'armor/guard_gloves.glb': 'guard',
     'armor/tuxedo_gloves.glb': 'tuxedo',
     'armor/ranger_gloves.glb': 'ranger',
     'armor/caveman_bracers.glb': 'caveman',
@@ -42,6 +46,7 @@ const ARMOR_STYLES = {
     'armor/barbarian_bracers.glb': 'barbarian',
   },
   head: {
+    'armor/guard_helmet.glb': 'guard',
     'armor/bard_helmet.glb': 'bard',
     'armor/priest_helmet.glb': 'priest',
     'armor/plate_helmet.glb': 'plate',

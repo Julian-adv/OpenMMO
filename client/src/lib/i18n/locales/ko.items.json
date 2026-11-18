@@ -468,5 +468,19 @@
   "tuxedo_gloves.name": "예복 흰 장갑",
   "tuxedo_gloves.description": "손목까지 오는 무늬 없는 흰 장갑. 가문 합병식에서 낍니다.",
   "tuxedo_boots.name": "예복 구두",
-  "tuxedo_boots.description": "굽이 낮고 윤을 낸 검은 가죽 구두. 가문 합병식에서 신습니다."
+  "tuxedo_boots.description": "굽이 낮고 윤을 낸 검은 가죽 구두. 가문 합병식에서 신습니다.",
+  "guard_helmet.name": "경비대 철모",
+  "guard_helmet.description": "사슬 두건 위에 쓰는 챙 넓은 철모. 알더마크 경비대의 지급품입니다.",
+  "guard_top.name": "경비대 사슬 갑옷",
+  "guard_top.description": "사슬 깃이 달린 긴소매 사슬 갑옷. 허벅지까지 내려오며 가죽 허리띠를 맵니다. 알더마크 경비대의 지급품입니다.",
+  "guard_pants.name": "경비대 바지",
+  "guard_pants.description": "무릎에 철 보호대를 맨 짙은 회색 모직 바지. 알더마크 경비대의 지급품입니다.",
+  "guard_gloves.name": "경비대 장갑",
+  "guard_gloves.description": "목이 짧은 밤색 가죽 장갑. 알더마크 경비대의 지급품입니다.",
+  "guard_boots.name": "경비대 장화",
+  "guard_boots.description": "발목에 죔쇠 끈을 두르고 무릎 밑에 리넨을 감은 무릎 높이 가죽 장화. 알더마크 경비대의 지급품입니다.",
+  "guard_tabard.name": "경비대 타바드",
+  "guard_tabard.description": "가죽으로 가장자리를 두르고 허리띠를 맨 리넨 타바드. 망토처럼 물들일 수 있고 가슴에 가문 문장이 나타납니다.",
+  "guard_spear.name": "경비대 창",
+  "guard_spear.description": "넓은 철 촉을 단 긴 물푸레나무 창. 알더마크 경비대의 지급품입니다."
 }

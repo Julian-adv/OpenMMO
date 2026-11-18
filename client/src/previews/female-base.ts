@@ -1,3 +1,4 @@
+import { trimModularClothing } from '../lib/utils/modularClothing'
 import * as THREE from 'three'
 import { disposeObjects } from './dispose-objects'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -119,6 +120,7 @@ export async function showFemaleBase(
         <option value="priest">사제관 (피팅 검수 중)</option>
         <option value="bard">바드 깃털 모자 (피팅 검수 중)</option>
         <option value="ceremony">예복 베일 (피팅 검수 중)</option>
+        <option value="guard">경비대 철모·사슬 두건</option>
       </select>
       <p class="details">긴 헤어와 포니테일은 모든 투구 아래 그대로 보입니다. 단발은 뿔 투구에서 투구용 단발로, 기사·광휘 투구에서는 숨깁니다.</p>
       <div id="helmet-hair-brush" hidden>
@@ -147,6 +149,7 @@ export async function showFemaleBase(
         <option value="ranger">순찰자 조끼와 셔츠 (피팅 검수 중)</option>
         <option value="bard">바드 코르셋과 망토 (피팅 검수 중)</option>
         <option value="ceremony">예복 보디스 (피팅 검수 중)</option>
+        <option value="guard">경비대 사슬 갑옷</option>
         <option value="shopkeeper">잡화점 블라우스와 코르셋 (피팅 검수 중)</option>
         <option value="rogue">로그 가죽 코르셋</option>
       </select>
@@ -161,6 +164,7 @@ export async function showFemaleBase(
         <option value="ranger">순찰자 가죽 치마 (피팅 검수 중)</option>
         <option value="bard">바드 주름치마 (피팅 검수 중)</option>
         <option value="ceremony">예복 종 모양 치마 (피팅 검수 중)</option>
+        <option value="guard">경비대 가죽 띠 치마</option>
         <option value="shopkeeper">잡화점 앞치마 치마 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
@@ -173,6 +177,7 @@ export async function showFemaleBase(
         <option value="ranger">순찰자 스틸레토 부츠 (피팅 검수 중)</option>
         <option value="bard">바드 스틸레토 부츠 (피팅 검수 중)</option>
         <option value="ceremony">예복 스타킹과 구두 (피팅 검수 중)</option>
+        <option value="guard">경비대 허벅지 장화</option>
         <option value="shopkeeper">잡화점 앵클부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
@@ -191,6 +196,7 @@ export async function showFemaleBase(
         <option value="ranger">순찰자 반장갑 (피팅 검수 중)</option>
         <option value="bard">바드 반장갑과 팔 보호대 (피팅 검수 중)</option>
         <option value="ceremony">예복 긴 장갑 (피팅 검수 중)</option>
+        <option value="guard">경비대 가죽 장갑</option>
         <option value="rogue">로그 검은 가죽 반장갑</option>
       </select>
       <div id="outfit-fit" hidden>
@@ -659,8 +665,10 @@ export async function showFemaleBase(
         mesh.visible =
           !(
             helmetEquipped &&
-            hairSelect.value === 'bob' &&
-            (helmetOutfit === 'knight' || helmetOutfit === 'brilliance')
+            // The guard's hood covers the whole head, whatever the hair.
+            (helmetOutfit === 'guard' ||
+              (hairSelect.value === 'bob' &&
+                (helmetOutfit === 'knight' || helmetOutfit === 'brilliance')))
           ) && hairKey(hairSelect.value) === name
     refreshHairBrush()
   }
@@ -1294,6 +1302,7 @@ export async function showFemaleBase(
     ranger: '순찰자',
     bard: '바드',
     ceremony: '예복',
+    guard: '경비대',
     shopkeeper: '잡화점',
   }
   const fitSlotNames: Record<string, string> = {
@@ -2276,6 +2285,17 @@ export async function showFemaleBase(
             outfitMask.setEquipped('glove-sleeves', knightGlovesEquipped)
         }
         show(requested)
+        // As in the game: under the guard's mail only the strap ends show.
+        const mailed =
+          (document.getElementById('female-top') as HTMLSelectElement).value ===
+          'guard'
+        model.getObjectByName('bottom_female_guard')?.traverse((object) => {
+          if ((object as THREE.SkinnedMesh).isSkinnedMesh)
+            trimModularClothing(
+              object as THREE.SkinnedMesh,
+              mailed && 'female_guard_skirt'
+            )
+        })
         updateFitPanel()
         await updateGarters()
         if (disposed() || select.value !== requested) return
@@ -2468,6 +2488,7 @@ export async function showFemaleBase(
     priest: 'priest_helmet',
     bard: 'bard_helmet',
     ceremony: 'ceremony_helmet',
+    guard: 'guard_helmet',
     brilliance: 'brilliance_helmet',
   }
   const hairParts: Record<string, string> = {

@@ -44,6 +44,10 @@ OUTFITS = {
     "tuxedo": {
         part: f"../modular_human_male_01/tuxedo/tripo_v1/{part}_tuxedo.glb" for part in ("top", "pants", "gloves", "boots")
     },
+    "guard": {
+        part: f"../modular_human_male_01/guard/tripo_v1/{part}_guard.glb"
+        for part in ("helmet", "top", "pants", "gloves", "boots", "tabard")
+    },
 }
 parser = argparse.ArgumentParser()
 parser.add_argument("--outfit", choices=OUTFITS, default="valkyrie")

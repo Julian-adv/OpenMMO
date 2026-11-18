@@ -1,3 +1,4 @@
+import { trimModularClothing } from './modularClothing'
 import * as THREE from 'three'
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
@@ -15,6 +16,7 @@ import {
   loadFemaleAnimationPack,
   applyFemaleArmorAsync,
   disposeFemaleCharacter,
+  femaleTabardMeshes,
   isFemaleHair,
 } from './femaleCharacter'
 import type {
@@ -27,6 +29,7 @@ import { disposeValkyrieWings } from '../effects/valkyrie-wings'
 import { separateWavyHairMaterials } from './wavyHairMaterials'
 import { femaleOutfitMask } from './female-outfit-mask'
 import modularSoleOffsets from './modularSoleOffsets.json'
+import { skinTabard, TABARD_PART, type TabardSkin } from './tabard'
 import {
   applyAppearanceColors,
   disposeAppearanceColors,
@@ -58,7 +61,7 @@ const eagerParts = modularOutfitParts(DEFAULT_MODULAR_OUTFIT)
 const lazyParts = new Set(
   [KNIGHT_MODULAR_OUTFIT, BARBARIAN_MODULAR_OUTFIT, ...PROXIED_OUTFITS]
     .flatMap((outfit) => [...modularOutfitParts(outfit)])
-    .concat(...SELECTABLE_HAIR_PARTS, 'helmet_brilliance')
+    .concat(...SELECTABLE_HAIR_PARTS, 'helmet_brilliance', TABARD_PART)
     .filter((id) => !eagerParts.has(id))
 )
 const outfitParts = new Set([...eagerParts, ...lazyParts])
@@ -70,6 +73,7 @@ const lazyStates = new WeakMap<
     outfitKey?: string
     mask?: ReturnType<typeof femaleOutfitMask>
     maskedParts: string[]
+    tabard?: { skin: TabardSkin; undyed: string } | null
   }
 >()
 const soleOffsets: Record<ModularOutfit['boots'], number> = modularSoleOffsets
@@ -183,6 +187,71 @@ function registerBodyMask(
   state.maskedParts.push(id)
 }
 
+/** Wear a tabard in `skin`, or take it off with null. Only the modular male
+ *  has one. */
+export async function applyCharacterTabard(
+  root: THREE.Object3D,
+  skin: TabardSkin | null,
+  undyed = '#ffffff'
+): Promise<void> {
+  const scene = modularScene(root)
+  if (!scene) return
+  if (scene.userData.female_parts) {
+    femaleTabards.set(scene, skin && { skin, undyed })
+    await showFemaleTabard(root)
+    return
+  }
+  let state = lazyStates.get(scene)
+  if (!state)
+    lazyStates.set(
+      scene,
+      (state = { generation: 0, loads: new Map(), maskedParts: [] })
+    )
+  state.tabard = skin && { skin, undyed }
+  if (skin) {
+    try {
+      await bindLazyPart(scene, state, TABARD_PART)
+    } catch (error) {
+      console.error('Failed to load the tabard', error)
+      return
+    }
+  }
+  if (lazyStates.get(scene) === state) showTabard(scene, state)
+}
+
+const femaleTabards = new WeakMap<
+  THREE.Object3D,
+  { skin: TabardSkin; undyed: string } | null
+>()
+
+async function showFemaleTabard(root: THREE.Object3D) {
+  const scene = modularScene(root)
+  const wanted = scene && femaleTabards.get(scene)
+  if (!scene || wanted === undefined) return
+  let meshes: THREE.SkinnedMesh[] | null
+  try {
+    meshes = await femaleTabardMeshes(root)
+  } catch (error) {
+    console.error('Failed to load the tabard', error)
+    return
+  }
+  const latest = femaleTabards.get(scene)
+  for (const mesh of meshes ?? []) mesh.visible = !!latest
+  if (latest && meshes) skinTabard(meshes, latest.skin, latest.undyed)
+}
+
+function showTabard(
+  scene: THREE.Object3D,
+  state: NonNullable<ReturnType<typeof lazyStates.get>>
+) {
+  const { parts } = outfitMeshes(scene)
+  const meshes = parts.get(TABARD_PART) ?? []
+  for (const mesh of meshes) mesh.visible = !!state.tabard
+  for (const mesh of parts.get('top_guard') ?? [])
+    trimModularClothing(mesh, !!state.tabard && 'guard_tabard')
+  if (state.tabard) skinTabard(meshes, state.tabard.skin, state.tabard.undyed)
+}
+
 /** Keep the current outfit until the latest selection loads. */
 export async function applyCharacterArmor(
   root: THREE.Object3D,
@@ -202,6 +271,7 @@ async function applyArmor(
   const femaleHair = isFemaleHair(hair) ? hair : undefined
   if (await applyFemaleArmorAsync(root, armor, femaleHair)) {
     if (femaleHair) applyAppearanceColors(root, skinnedParts(root), appearance)
+    await showFemaleTabard(root)
     return
   }
   const scene = modularScene(root)
@@ -239,6 +309,7 @@ async function applyArmor(
     )
     state.outfitKey = outfitKey
   }
+  showTabard(scene, state)
   applyAppearanceColors(root, meshes, appearance)
   scene.position.y = soleOffsets[outfit.boots]
 }

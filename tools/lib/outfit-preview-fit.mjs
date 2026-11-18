@@ -8,6 +8,7 @@ const outfits = {
   bard: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
   ceremony: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
   shopkeeper: ['top', 'bottom', 'boots'],
+  guard: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
 }
 const route = /^\/__female-preview\/([a-z]+)-fit\.json$/
 // Paired parts save { left, right }; left is the character's left (+x).

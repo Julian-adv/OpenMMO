@@ -468,5 +468,19 @@
   "tuxedo_gloves.name": "礼服白手套",
   "tuxedo_gloves.description": "长及手腕的素白手套。在家族合并仪式上穿戴。",
   "tuxedo_boots.name": "礼服皮鞋",
-  "tuxedo_boots.description": "低跟的黑色亮面皮鞋。在家族合并仪式上穿着。"
+  "tuxedo_boots.description": "低跟的黑色亮面皮鞋。在家族合并仪式上穿着。",
+  "guard_helmet.name": "卫队铁帽",
+  "guard_helmet.description": "戴在锁子头巾外的宽檐铁帽。奥德马克卫队的配发品。",
+  "guard_top.name": "卫队锁子甲",
+  "guard_top.description": "带锁子领的长袖锁子甲，长及大腿，系皮腰带。奥德马克卫队的配发品。",
+  "guard_pants.name": "卫队长裤",
+  "guard_pants.description": "膝部绑有铁护膝的深灰色毛料长裤。奥德马克卫队的配发品。",
+  "guard_gloves.name": "卫队手套",
+  "guard_gloves.description": "短袖口的栗色皮手套。奥德马克卫队的配发品。",
+  "guard_boots.name": "卫队长靴",
+  "guard_boots.description": "脚踝有带扣皮带、膝下缠着亚麻布的及膝皮靴。奥德马克卫队的配发品。",
+  "guard_tabard.name": "卫队罩袍",
+  "guard_tabard.description": "皮革包边并系腰带的亚麻罩袍。可像披风一样染色，胸前会显示家族纹章。",
+  "guard_spear.name": "卫队长枪",
+  "guard_spear.description": "装有宽铁枪头的白蜡木长枪。奥德马克卫队的配发品。"
 }

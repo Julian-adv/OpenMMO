@@ -81,10 +81,11 @@ class Source:
                 around[index] += [other for other in group if other != index]
         return around
 
-    def align(self, mannequin, target, scale, offset, upright=False):
+    def align(self, mannequin, target, scale, offset, upright=False, rescale=True):
         """Similarity ICP of the mannequin's vertices onto the body; the whole model follows.
 
         `upright` only turns the model about the vertical: a head alone cannot tell a lean from a shift.
+        Without `rescale` the given scale stands.
         """
         tree = cKDTree(target)
         moving = self.points[mannequin]
@@ -99,7 +100,8 @@ class Source:
                 p, q = a - a0, b - b0
                 yaw = np.arctan2((p[:, 2] * q[:, 0] - p[:, 0] * q[:, 2]).sum(), (p[:, 0] * q[:, 0] + p[:, 2] * q[:, 2]).sum())
                 rotation = np.array([[np.cos(yaw), 0, np.sin(yaw)], [0, 1, 0], [-np.sin(yaw), 0, np.cos(yaw)]])
-                scale = ((p @ rotation.T) * q).sum() / (p ** 2).sum()
+                if rescale:
+                    scale = ((p @ rotation.T) * q).sum() / (p ** 2).sum()
             else:
                 rotation, stretch = kabsch(a - a0, b - b0)
                 scale = stretch / ((a - a0) ** 2).sum()

@@ -499,3 +499,39 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
 - 기존 `dagger_double_slash`는 별도 스킬 동작으로 유지한다. 남녀 모듈형 리그에서
   타격 시 손의 전방 진행, 어깨보다 낮은 손 높이, 수평 칼날을 `modularDaggerPack.test.ts`로 검사한다.
 - 처음 만든 코드 기반 찌르기(`daggerStabAnimation.ts`, 커밋 전)는 이 FBX로 대체했다.
+
+## Spear Thrust (2026-11-18)
+
+- 출처: Adobe [Mixamo](https://www.mixamo.com/) `Bayonet Stab.fbx`. 사용자가 2026-11-18 제공했으며 원본은
+  `assets/animations/spear/Bayonet Stab.fbx`에 보관한다(65본, 99프레임, 30fps, SHA-256 `927e3b8c…fa8b`).
+  라이선스는 다른 Mixamo FBX와 같은 Adobe/Mixamo 약관이다. 무료, AI 생성 아님.
+- 파생: `build_dagger_preview.py -- --source assets/animations/spear --pack spear`가
+  `client/public/models/animations/spear.glb`에 `spear_thrust`(1.25초)를 만든다. 스크립트에 `--pack`을 넣었고,
+  기본값으로 다시 만든 `dagger_preview.glb`는 해시가 그대로다.
+  - 원본은 총검을 가슴 높이로 올려 찌른다. 뻗는 정도에 비례해 양쪽 위팔을 내려 두 손이 다 뻗었을 때
+    17cm 낮아지게 했다(중단 찌르기, 사용자 요청).
+  - 당기는 구간에서 양쪽 위팔을 더 뒤로 돌려 창을 더 뒤로 뺀다(사용자 요청). 가장 깊이 당겼을 때 오른손이
+    원본보다 약 9cm 더 뒤에 온다(`THRUST_PULL`). 게임에서는 확인하지 않았다.
+  - 원본 9–65프레임(당기기부터 자세 복귀까지)만 쓰고 0.54배 길이로 줄여, 다 뻗는 시점이 공통 타격 시점
+    540ms에 온다. 수평 루트 이동은 제거해 제자리에서 몸을 낮추며 찌른다.
+- 남녀 모듈형 팩은 `prepare-modular-character.mjs --pack spear`, `prepare-female-knight.mjs --pack spear`.
+- `weapon_animations.csv`의 `spear` 프로필: 일반 공격 `spear_thrust`, 타격 540ms, `offHandGripReach` 0.6,
+  `offHandAhead` true. 대검은 왼손이 오른손 뒤(자루 끝)를 잡지만 창은 왼손이 앞을 잡으므로, 무기의 +X(창끝)를
+  왼손 쪽으로 돌리는 옵션을 새로 넣었다(`twoHandedGrip.ts`). 클립이 재생되는 동안만 적용된다.
+- 대기 `spear_idle`(사용자 요청): 같은 스크립트가 blend 파일의 `idle1`을 복사해, 오른쪽 위팔은 내리고 아래팔을
+  앞으로 수평이 되게 굽혀 팔꿈치를 직각으로 하고(처음 55° 위로 접은 것은 너무 접혔다는 사용자 의견으로 고침) 손을 돌려 창 자루(손 본의 X축)를 수직으로 세운다. 나머지 몸은 `idle1` 그대로다.
+  프로필의 `restIdle`이 true라 이 대기는 쉴 때만 쓰인다. 공격 사이 자세는 공통 전투 대기이고, 이 대기 중에는
+  왼손이 창을 잡지 않는다.
+- 자루 끝이 땅에 닿게(사용자 요청) `handFits.json`의 리그별 `type:spear` 위치로 잡는 곳을 맞췄다: 남성 x 0.003,
+  여성 x 0.037. `modularSpearPack.test.ts`가 두 리그에서 창이 수직이고 자루 끝이 바닥 5mm 안인지 검사한다. 찌를 때도 같은 곳을 잡는다.
+- 모듈형 남녀 리그의 `spear_idle`은 blend에서 온 클립을 쓰지 않는다. 그 클립을 리타깃하면 다리와 발이 평소
+  대기와 다르게 섰다(무릎이 굽고 상체가 뒤로 젖혀짐, 사용자 지적). 두 빌드 스크립트가 `spearRestClip.ts`로 각
+  리그 자신의 `idle1`에서 오른팔 세 본만 같은 규칙으로 다시 풀어 팩에 굽는다. 나머지 몸은 `idle1`과 같다.
+  팩의 blend판 `spear_idle`은 다른 리그용으로 남는다.
+- 대기 중 손가락은 검을 쥘 때의 말아쥔 자세다(사용자 요청). 남성 `idle1`은 이미 검 쥐기 손가락을 담고 있고,
+  여성은 `female-clip-bake.ts`의 `gripMotions`에 `spear_idle`을 넣었다. 자루가 손바닥 안에 오도록 잡는 위치의
+  y·z를 남성은 검 손잡이 중심(0.119, 0.033), 여성은 단검 값(0.112, 0.02)으로 맞췄다.
+- 무기 종류가 spear인 모든 아이템(Spear, Watchman's Spear)과 플레이어·NPC에 적용된다. 이동은 공통 동작이다.
+- 개발 서버에서 남성 캐릭터가 창을 세워 들고 서 있는 것과 두 손으로 창을 잡고 고블린을 찌르는 것을 확인했다. 여성 캐릭터와 NPC 경비병의
+  공격은 확인하지 않았다.
+- 처음에는 단검의 `Stabbing.fbx`로 한 손 찌르기를 만들었고, 같은 날 이 FBX로 바꿨다.

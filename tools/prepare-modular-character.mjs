@@ -100,6 +100,12 @@ const outfitSources = {
       `assets/modular_human_male_01/tuxedo/tripo_v1/${slot}_tuxedo.glb`,
     ]),
   ),
+  guard: Object.fromEntries(
+    ["helmet", "top", "pants", "gloves", "boots", "tabard"].map((slot) => [
+      `${slot}_guard`,
+      `assets/modular_human_male_01/guard/tripo_v1/${slot}_guard.glb`,
+    ]),
+  ),
   brilliance: {
     helmet_brilliance:
       "assets/items/helm_of_brilliance/tripo_v2/fitted_v3/male/helmet_brilliance.glb",
@@ -135,6 +141,7 @@ const packs = [
   "great_sword",
   "riding",
   "dagger_preview",
+  "spear",
   "cart_push",
 ];
 const hash = (path) =>
@@ -143,7 +150,7 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard and tuxedo equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
+    "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard, tuxedo and guard equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
   inputs: {},
   outputs: {},
 };
@@ -395,6 +402,14 @@ async function preparePacks(runtime, modular) {
     corrected.set(name, clip);
     profile.iron_sword_by_clip[name] = profile.iron_sword_by_clip.idle1;
   }
+  // The pack's own spear_idle is for other rigs: here it stands as this rig's idle1 does.
+  const { spearRestClip } = await server.ssrLoadModule(
+    "/src/lib/utils/spearRestClip.ts",
+  );
+  corrected.set(
+    "spear_idle",
+    spearRestClip(base.scene, corrected.get("idle1")),
+  );
   report.inputs[`${tuned}/animations.glb`] = hash(`${tuned}/animations.glb`);
   report.inputs[`${tuned}/hand-grips.json`] = hash(`${tuned}/hand-grips.json`);
   for (const name of selectedPack ? [selectedPack] : packs) {

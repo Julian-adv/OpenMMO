@@ -31,11 +31,13 @@
     disposeCharacterSkeletons,
     loadCharacterModel,
     applyCharacterArmor,
+    applyCharacterTabard,
     loadCharacterAnimationPack,
     modularSwordAttachment,
   } from '../utils/characterModel'
   import { capeColorOf, getItemDef } from '../data/itemDefs'
   import { capeTextureUrl } from '../utils/networkUtils'
+  import { wornTabard } from '../utils/tabard'
   import { isTorchItemDefId } from '../stores/inventoryStore'
   import {
     FALLBACK_TORCH_TIP_LOCAL_OFFSET,
@@ -141,6 +143,7 @@
   let setupDone = $state(false)
   let setupGeneration = 0
   let weaponIdle: THREE.AnimationClip | undefined
+  let weaponRestIdle = false
 
   $effect(() => {
     const root = modelRoot
@@ -153,6 +156,7 @@
         .then((clips) => {
           if (cancelled) return
           weaponIdle = profile.idle ? clips.get(profile.idle) : undefined
+          weaponRestIdle = !!profile.restIdle
           playIdleAnimation()
         })
         .catch((error) => console.error('Failed to load weapon preview', error))
@@ -250,9 +254,14 @@
       } else if (!mainHand) poseOffHandProp(prop, worldModel, modelPath)
       ;(socket ?? bone).add(prop)
       heldProps.push(prop)
-      const gripReach = getWeaponAnimation(itemDefId)?.offHandGripReach
-      if (mainHand && gripReach) {
-        weaponGrip = createTwoHandedGrip(characterRoot, prop, gripReach)
+      const grip = getWeaponAnimation(itemDefId)
+      if (mainHand && grip?.offHandGripReach) {
+        weaponGrip = createTwoHandedGrip(
+          characterRoot,
+          prop,
+          grip.offHandGripReach,
+          grip.offHandAhead
+        )
       }
 
       if (isTorchItemDefId(itemDefId)) lightTorch(prop)
@@ -294,8 +303,18 @@
     attachHeldItem(characterRoot, worn?.main_hand, true)
     attachHeldItem(characterRoot, worn?.off_hand, false)
 
+    const tabard = wornTabard(
+      worn?.back,
+      worn?.back_color,
+      capeTextureUrl(worn?.back_texture)
+    )
+    void applyCharacterTabard(
+      characterRoot,
+      tabard?.skin ?? null,
+      tabard?.undyed
+    )
     const capeColor = capeColorOf(worn?.back, worn?.back_color)
-    if (!capeColor) return
+    if (tabard || !capeColor) return
 
     const fit = fitCapeToSkeleton(
       characterRoot,
@@ -487,7 +506,9 @@
     }
 
     // Update cloth and flames after the pose, even for unselected slots.
-    weaponGrip?.update(currentAction?.getClip() === weaponIdle)
+    weaponGrip?.update(
+      currentAction?.getClip() === weaponIdle && !weaponRestIdle
+    )
     capeRig?.update(delta, null)
     if (modelRoot) {
       updateValkyrieWings(modelRoot, delta, currentAction)

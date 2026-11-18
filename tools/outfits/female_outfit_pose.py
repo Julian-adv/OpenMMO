@@ -67,7 +67,7 @@ def icp(points, tree, offset, iterations=30):
 class ArmPose:
     """Per-side forearm rotation about the elbow and rigid hand fit, blended along the arm."""
 
-    def __init__(self, bones, body_points, body_faces, body_weights, bone_names, arm_points, gloves):
+    def __init__(self, bones, body_points, body_faces, body_weights, bone_names, arm_points, gloves, arm_reach=None):
         self.sides = {}
         for side in ('Left', 'Right'):
             shoulder, elbow, wrist = (bones[side + n] for n in ('Arm', 'ForeArm', 'Hand'))
@@ -75,7 +75,11 @@ class ArmPose:
             forearm_axis = unit(wrist - elbow)
             s = (sleeve - elbow) @ forearm_axis
             length = np.linalg.norm(wrist - elbow)
-            band = sleeve[(s > .25 * length) & (s < .85 * length)]
+            band = (s > .25 * length) & (s < .85 * length)
+            if arm_reach:
+                # A hauberk's hip stands as far out as the arm: only points this near the body's forearm are sleeve.
+                band &= np.linalg.norm(sleeve - elbow - np.outer(s, forearm_axis), axis=1) < arm_reach
+            band = sleeve[band]
             slices = [band[np.abs((band - elbow) @ forearm_axis - t) < .015] for t in np.linspace(.3, .8, 6) * length]
             centers = np.array([part.mean(0) for part in slices if len(part) > 10])
             assert len(centers) >= 4, f'{side} forearm centerline has {len(centers)} slices'

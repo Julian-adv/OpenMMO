@@ -27,6 +27,9 @@
     }
   },
   "modular_female": {
+    "type:spear": {
+      "position": [0.037, 0.112, 0.02]
+    },
     "model:weapons/sword.glb": {
       "position": [0.0652, 0.0422, -0.0282],
       "rotation": [0, 0, 0.2]
@@ -52,6 +55,9 @@
     }
   },
   "modular_male": {
+    "type:spear": {
+      "position": [0.003, 0.119, 0.033]
+    },
     "model:weapons/mace.glb": {
       "position": [0.02, 0.12, 0.05]
     },

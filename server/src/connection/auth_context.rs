@@ -14,11 +14,16 @@ impl AuthContext {
     /// Verified-email allowlist for admin APIs and game commands.
     pub fn is_admin(&self, claims: &crate::google_auth::GoogleClaims) -> bool {
         claims.email_verified == Some(true)
-            && claims.email.as_deref().is_some_and(|email| {
-                self.admin_emails
-                    .iter()
-                    .any(|a| a.eq_ignore_ascii_case(email))
-            })
+            && claims
+                .email
+                .as_deref()
+                .is_some_and(|email| self.is_admin_email(email))
+    }
+
+    pub fn is_admin_email(&self, email: &str) -> bool {
+        self.admin_emails
+            .iter()
+            .any(|a| a.eq_ignore_ascii_case(email))
     }
 }
 

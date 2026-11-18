@@ -1,5 +1,5 @@
 {
-  "source": "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard and tuxedo equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
+  "source": "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard, tuxedo and guard equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
   "inputs": {
     "assets/modular_human_male_01/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "assets/modular_human_male_01/fitted/hair_crop.glb": "5e8acb389f575331008c36dd94afcbf3831c90f53ca21ab0a7bbe666539f2472",
@@ -58,7 +58,14 @@
     "assets/modular_human_male_01/tuxedo/tripo_v1/top_tuxedo.glb": "422a2ed82da756e386e27a346635c080cb0c18382339c3619ad7158be3f41be3",
     "assets/modular_human_male_01/tuxedo/tripo_v1/pants_tuxedo.glb": "d6a19940c0ee9a8cecf7710617d9088605db20e55967885750832bd837805c4d",
     "assets/modular_human_male_01/tuxedo/tripo_v1/gloves_tuxedo.glb": "16a0574cf473b4e181152f17f909e3bd0a29a3d530947111ca9a8ecb78b11270",
-    "assets/modular_human_male_01/tuxedo/tripo_v1/boots_tuxedo.glb": "c7b625214d67b120824782d044e7c5db0ed3d519b3b0093dcd1324528b78619f"
+    "assets/modular_human_male_01/tuxedo/tripo_v1/boots_tuxedo.glb": "c7b625214d67b120824782d044e7c5db0ed3d519b3b0093dcd1324528b78619f",
+    "assets/modular_human_male_01/guard/tripo_v1/helmet_guard.glb": "aef633f796174bd40c54e30aa90f098ed46a6f6302f08f01b9fa0ce7d2c823cb",
+    "assets/modular_human_male_01/guard/tripo_v1/top_guard.glb": "afadffe8e5ccb6482ce599e1719b5250da0b3f00592d205eac088dbd8953e5d5",
+    "assets/modular_human_male_01/guard/tripo_v1/pants_guard.glb": "d9d5721f4a136e6c9ac405a3357f3fac359feadb44b982f6716f8524255116c3",
+    "assets/modular_human_male_01/guard/tripo_v1/gloves_guard.glb": "175cbc38bdb4f150c56de0cbd92c44b62f7a9ac39da627e7afeb2927ac8c9edc",
+    "assets/modular_human_male_01/guard/tripo_v1/boots_guard.glb": "b211ff73679321bb7b4666bcd882f3a752a60631ba8bec0017df163738a6e3c1",
+    "assets/modular_human_male_01/guard/tripo_v1/tabard_guard.glb": "893dc976ddcd733f5b4010619c1e1be7813d3695d68c04f36573a4d94e35a62a",
+    "client/public/models/animations/spear.glb": "1bd542a89cff8fb00cb2affb0a31b59c72e8024aa555404d2c2cf6ee3f693a15"
   },
   "outputs": {
     "base.glb": "abf1a12178d5df11269afed6793e46ed16796c47174e356708ee73bdf590bdad",
@@ -197,6 +204,16 @@
     "top_tuxedo.glb": "d053c5012b6c679298b552ceab43a3064875e3ce0b93ffd1a5e9addad8152b3b",
     "pants_tuxedo.glb": "781a536daf4bd21b3647f5dd011e30449ef4e9f80b96bd213fd2945c30224e24",
     "gloves_tuxedo.glb": "3167a2828eadf38627a05cc12db6f3d7d5493c4a2505d4650d6528a8c8259871",
-    "boots_tuxedo.glb": "5a6af693c2746249650abca4e2d4ce525f9abeff8c4c63c24da9fbddc926c0ca"
+    "boots_tuxedo.glb": "5a6af693c2746249650abca4e2d4ce525f9abeff8c4c63c24da9fbddc926c0ca",
+    "helmet_guard.glb": "3adcee32e55551b6ec98365882895d630160c1cbd21c5d6e254de211599e2781",
+    "top_guard.glb": "04ed49fe6353db67ebb8da7fdc85b2169cc7ec92dc2847fe8a2d123bb98281b5",
+    "pants_guard.glb": "826a38252877d25891a66e1eb7ad356ad8fd6a862b0bbe088184de76a0634740",
+    "gloves_guard.glb": "19f714d373a9698fb02586ea1711230abc09c735aed56b5e8879a72c808604f3",
+    "boots_guard.glb": "0545f05af32e5ba6dc3e7350f8bc4231c4e6613354ebda33edf24087666f91f3",
+    "tabard_guard.glb": "204a109c41dfc6ec0bbd7f5fc5a8cc482cb38e322eb980ea3eb5d8063b6977bf",
+    "animations/spear.glb": {
+      "sha256": "293c4cfa1793cf4cc0b0d793f6ae311a810dc6e807f79a205828e4f1f63f4b76",
+      "clips": ["spear_thrust", "spear_idle"]
+    }
   }
 }

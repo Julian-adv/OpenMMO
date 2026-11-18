@@ -468,5 +468,19 @@
   "tuxedo_gloves.name": "礼装の白手袋",
   "tuxedo_gloves.description": "手首までの無地の白い手袋。家門の合併式で着用します。",
   "tuxedo_boots.name": "礼装の革靴",
-  "tuxedo_boots.description": "かかとの低い、磨かれた黒い革靴。家門の合併式で着用します。"
+  "tuxedo_boots.description": "かかとの低い、磨かれた黒い革靴。家門の合併式で着用します。",
+  "guard_helmet.name": "警備隊の鉄帽",
+  "guard_helmet.description": "鎖頭巾の上にかぶる、つばの広い鉄帽。アルダーマーク警備隊の支給品です。",
+  "guard_top.name": "警備隊の鎖帷子",
+  "guard_top.description": "鎖の襟が付いた長袖の鎖帷子。太ももまで届き、革の帯を締めます。アルダーマーク警備隊の支給品です。",
+  "guard_pants.name": "警備隊のズボン",
+  "guard_pants.description": "膝に鉄の当て具を付けた濃い灰色の毛織ズボン。アルダーマーク警備隊の支給品です。",
+  "guard_gloves.name": "警備隊の手袋",
+  "guard_gloves.description": "袖口の短い栗色の革手袋。アルダーマーク警備隊の支給品です。",
+  "guard_boots.name": "警備隊の長靴",
+  "guard_boots.description": "足首に留め具付きの帯を巻き、膝下に亜麻布を巻いた膝丈の革長靴。アルダーマーク警備隊の支給品です。",
+  "guard_tabard.name": "警備隊のタバード",
+  "guard_tabard.description": "革で縁取り、帯を締めた亜麻のタバード。マントのように染められ、胸に家門の紋章が現れます。",
+  "guard_spear.name": "警備隊の槍",
+  "guard_spear.description": "幅広の鉄の穂先を付けた長いトネリコの槍。アルダーマーク警備隊の支給品です。"
 }

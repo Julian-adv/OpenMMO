@@ -29,10 +29,13 @@ pub use persistence::{CharacterSaveData, ItemRow, SkillRow, TradeLedgerEntry};
 pub use pricing::{PricingMeeting, PricingState, PRICING_MEASURE_DAYS};
 #[path = "auth_character_deletion.rs"]
 mod character_deletion;
+#[path = "auth_dashboard_sessions.rs"]
+mod dashboard_sessions;
 #[path = "auth_dungeon_population.rs"]
 mod dungeon_population;
 #[path = "auth_enchant_failures.rs"]
 mod enchant_failures;
+pub(crate) use dashboard_sessions::DASHBOARD_SESSION_SECONDS;
 #[path = "auth_estate_storage.rs"]
 mod estate_storage;
 #[path = "auth_family.rs"]
@@ -253,6 +256,7 @@ impl AuthService {
         Self::ensure_field_raid_events_schema(&conn)?;
         Self::ensure_armor_enchant_history_schema(&conn)?;
         Self::ensure_land_history_schema(&conn)?;
+        Self::ensure_dashboard_sessions_schema(&conn)?;
 
         Ok(Self {
             pool,

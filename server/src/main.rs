@@ -7,6 +7,7 @@ mod cape_texture;
 mod cape_texture_routes;
 mod conn_limit;
 mod connection;
+mod dashboard_session;
 mod debuff_defs;
 mod dungeon_defs;
 mod game;

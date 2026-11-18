@@ -19,7 +19,6 @@ export function isModularModel(path: string): boolean {
   return path === MODULAR_MALE_MODEL_PATH || isModularFemaleModel(path)
 }
 
-export const GUARD_CHARACTER_MODEL_PATH = '/models/characters/guard.glb'
 export const FEMALE_BARD_CHARACTER_MODEL_PATH =
   '/models/characters/female_bard.glb'
 export const NIGHT_MERCHANT_CHARACTER_MODEL_PATH =
@@ -94,7 +93,6 @@ const CLASS_GENDER_MODELS: Partial<
 
 /** Named NPC models override their class model. */
 const NPC_MODEL_OVERRIDES: Record<string, string> = {
-  Karl: GUARD_CHARACTER_MODEL_PATH,
   Wick: NIGHT_MERCHANT_CHARACTER_MODEL_PATH,
   Cocoly: PINK_MAID_CHARACTER_MODEL_PATH,
   Aldwin: STEWARD_CHARACTER_MODEL_PATH,

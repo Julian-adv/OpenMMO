@@ -468,5 +468,19 @@
   "tuxedo_gloves.name": "禮服白手套",
   "tuxedo_gloves.description": "長及手腕的素白手套。在家族合併儀式上穿戴。",
   "tuxedo_boots.name": "禮服皮鞋",
-  "tuxedo_boots.description": "低跟的黑色亮面皮鞋。在家族合併儀式上穿著。"
+  "tuxedo_boots.description": "低跟的黑色亮面皮鞋。在家族合併儀式上穿著。",
+  "guard_helmet.name": "衛隊鐵帽",
+  "guard_helmet.description": "戴在鎖子頭巾外的寬簷鐵帽。奧德馬克衛隊的配發品。",
+  "guard_top.name": "衛隊鎖子甲",
+  "guard_top.description": "帶鎖子領的長袖鎖子甲，長及大腿，繫皮腰帶。奧德馬克衛隊的配發品。",
+  "guard_pants.name": "衛隊長褲",
+  "guard_pants.description": "膝部綁有鐵護膝的深灰色毛料長褲。奧德馬克衛隊的配發品。",
+  "guard_gloves.name": "衛隊手套",
+  "guard_gloves.description": "短袖口的栗色皮手套。奧德馬克衛隊的配發品。",
+  "guard_boots.name": "衛隊長靴",
+  "guard_boots.description": "腳踝有帶扣皮帶、膝下纏著亞麻布的及膝皮靴。奧德馬克衛隊的配發品。",
+  "guard_tabard.name": "衛隊罩袍",
+  "guard_tabard.description": "皮革包邊並繫腰帶的亞麻罩袍。可像披風一樣染色，胸前會顯示家族紋章。",
+  "guard_spear.name": "衛隊長槍",
+  "guard_spear.description": "裝有寬鐵槍頭的白蠟木長槍。奧德馬克衛隊的配發品。"
 }

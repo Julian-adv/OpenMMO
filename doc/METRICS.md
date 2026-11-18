@@ -2,9 +2,17 @@
 
 ## 접근 권한
 
-대시보드와 지표 API는 운영자 전용입니다. 모든 `/api/metrics/` 요청에 Google ID 토큰을 `Authorization: Bearer <token>`으로 전달해야 하며, 검증된 이메일이 서버의 `ADMIN_EMAILS` / `--admin-emails`에 포함된 계정만 허용합니다. 일반 계정·미인증 이메일은 403, 누락·위조·만료된 토큰은 401입니다. NPC 토큰과 게임 세션 토큰은 사용할 수 없습니다. 성공·인증 실패 응답 모두 `Cache-Control: no-store`입니다.
+대시보드와 지표 API는 운영자 전용입니다. 모든 `/api/metrics/` 요청은 대시보드 세션 쿠키 또는 `Authorization: Bearer <Google ID 토큰>`으로 인증하며, 검증된 이메일이 서버의 `ADMIN_EMAILS` / `--admin-emails`에 포함된 계정만 허용합니다. `Authorization` 헤더가 있으면 그것만으로 판정하고 쿠키는 보지 않습니다. 일반 계정·미인증 이메일은 403, 누락·위조·만료된 토큰과 세션은 401입니다. NPC 토큰과 게임 세션 토큰은 사용할 수 없습니다. 성공·인증 실패 응답 모두 `Cache-Control: no-store`입니다.
 
-`GET /api/metrics/session`은 같은 권한 검사를 거쳐 204를 반환하며 로그인 화면에서 사용합니다. Google 인증 또는 관리자 목록이 설정되지 않으면 조회를 허용하지 않습니다. 설정 방법은 [대시보드 안내](../dashboard/README.md#접근-권한)를 참고하세요.
+`/api/metrics/session`이 세션을 관리합니다.
+
+| 요청 | 동작 |
+| --- | --- |
+| `POST` + Google ID 토큰 | 30일짜리 세션을 만들고 `dashboard_session` 쿠키를 내려줍니다. 쿠키만으로는 새 세션을 만들 수 없습니다(401). |
+| `GET` | 권한 검사를 통과하면 204입니다. 대시보드가 열릴 때 로그인 유지 여부를 확인합니다. |
+| `DELETE` | 세션을 지우고 쿠키를 비웁니다. |
+
+쿠키는 `HttpOnly; Secure; SameSite=Strict; Path=/api/metrics`이며 게임 API의 쓰기 권한에는 쓰이지 않습니다. 서버는 계정 DB의 `dashboard_sessions`에 토큰의 SHA-256 해시·이메일·만료 시각만 저장하므로 세션은 서버 재시작과 배포 뒤에도 유지됩니다. 요청마다 이메일을 관리자 목록과 다시 대조하므로 목록에서 뺀 계정의 세션은 403이 됩니다. 만료된 행은 새 세션을 만들 때 지웁니다. Google 인증 또는 관리자 목록이 설정되지 않으면 조회를 허용하지 않습니다. 설정 방법은 [대시보드 안내](../dashboard/README.md#접근-권한)를 참고하세요.
 
 ## 영웅담 원장
 

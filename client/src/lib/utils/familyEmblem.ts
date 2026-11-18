@@ -16,7 +16,7 @@ const EMBLEM_DEFAULT = 0x6d1720
 const loader = new THREE.TextureLoader()
 const prints = new Map<string, Promise<THREE.Texture>>()
 
-function loadPrint(url: string) {
+export function loadPrint(url: string) {
   let pending = prints.get(url)
   if (!pending) {
     pending = loader.loadAsync(url).then((map) => {

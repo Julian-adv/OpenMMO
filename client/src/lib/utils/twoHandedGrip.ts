@@ -12,10 +12,15 @@ export class TwoHandedGrip {
     private readonly prop: THREE.Object3D,
     private readonly offHand: THREE.Object3D,
     private readonly reach: number,
-    private readonly fingers: THREE.Object3D[] = []
+    private readonly fingers: THREE.Object3D[] = [],
+    ahead = false
   ) {
     this.rotation = prop.quaternion.clone()
-    this.axis = new THREE.Vector3(-1, 0, 0).applyQuaternion(this.rotation)
+    // The prop's point is +X: the off hand grips behind the main hand, or
+    // ahead of it on a shaft.
+    this.axis = new THREE.Vector3(ahead ? 1 : -1, 0, 0).applyQuaternion(
+      this.rotation
+    )
   }
 
   update(active: boolean) {
@@ -49,7 +54,8 @@ export class TwoHandedGrip {
 export function createTwoHandedGrip(
   root: THREE.Object3D,
   prop: THREE.Object3D,
-  reach: number
+  reach: number,
+  ahead = false
 ): TwoHandedGrip | null {
   const hand = findBoneByName(root, 'LeftHand')
   if (!hand) return null
@@ -59,6 +65,7 @@ export function createTwoHandedGrip(
     prop,
     hand,
     reach,
-    index && thumb ? [index, thumb] : []
+    index && thumb ? [index, thumb] : [],
+    ahead
   )
 }

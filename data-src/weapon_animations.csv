@@ -1,4 +1,5 @@
-id,pack,idle,walk,run,attack,attackImpactMs,offHandGripReach
-great_sword,animations/great_sword.glb,great_sword_idle,great_sword_walk,great_sword_run,great_sword_slash,625,0.3
-dagger,animations/dagger_preview.glb,,,,dagger_stab,540,
-pickaxe,animations/great_sword.glb,,,,great_sword_slash,625,0.3
+id,pack,idle,walk,run,attack,attackImpactMs,offHandGripReach,offHandAhead,restIdle
+great_sword,animations/great_sword.glb,great_sword_idle,great_sword_walk,great_sword_run,great_sword_slash,625,0.3,,
+dagger,animations/dagger_preview.glb,,,,dagger_stab,540,,,
+pickaxe,animations/great_sword.glb,,,,great_sword_slash,625,0.3,,
+spear,animations/spear.glb,spear_idle,,,spear_thrust,540,0.6,true,true

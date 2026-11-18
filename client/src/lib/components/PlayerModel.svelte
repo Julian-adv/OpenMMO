@@ -139,6 +139,7 @@
     disposeCharacterSkeletons,
     loadCharacterModel,
     applyCharacterArmor,
+    applyCharacterTabard,
     loadCharacterAnimationPack,
     modularSwordAttachment,
     MODULAR_SWORD_ATTACHMENT,
@@ -187,6 +188,7 @@
   import { capeTexturePreview } from '../stores/capeTextureStore'
   import { familyInfo, hasFamilyEmblem } from '../stores/familyStore'
   import { capeTextureUrl } from '../utils/networkUtils'
+  import { isTabard, wornTabard } from '../utils/tabard'
   import { capeCollarBiasOverride, capeEnabled } from '../stores/debugStore'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
   import {
@@ -660,9 +662,14 @@
       fishingReel = new FishingReel(characterRoot, weaponObject)
     }
     enchantGrip = new EnchantWeaponGrip(weaponObject)
-    const gripReach = getWeaponAnimation(itemDefId)?.offHandGripReach
-    weaponGrip = gripReach
-      ? createTwoHandedGrip(characterRoot, weaponObject, gripReach)
+    const grip = getWeaponAnimation(itemDefId)
+    weaponGrip = grip?.offHandGripReach
+      ? createTwoHandedGrip(
+          characterRoot,
+          weaponObject,
+          grip.offHandGripReach,
+          grip.offHandAhead
+        )
       : null
   }
 
@@ -986,8 +993,10 @@
   /** The wearer's cloth colour, or null for no cape. `/cape` forces the
    *  default sheet on with no item, for fitting work. */
   const capeColor = $derived(
-    capeColorOf(equippedBackItemId, equippedBackDye) ??
-      (isCurrentPlayer && $capeEnabled ? DEFAULT_CAPE_COLOR : null)
+    isTabard(equippedBackItemId)
+      ? null
+      : (capeColorOf(equippedBackItemId, equippedBackDye) ??
+          (isCurrentPlayer && $capeEnabled ? DEFAULT_CAPE_COLOR : null))
   )
 
   /** The print on that cape, as a URL the cloth can load: the picker's local
@@ -1002,6 +1011,13 @@
           ))
       : capeTextureUrl(backTexture)
   )
+
+  // A tabard takes the cape's dye and print but is a fitted part, not a sheet.
+  $effect(() => {
+    const root = modelRoot
+    const worn = wornTabard(equippedBackItemId, equippedBackDye, capePrint)
+    if (root) void applyCharacterTabard(root, worn?.skin ?? null, worn?.undyed)
+  })
 
   function detachCape() {
     capeRig?.dispose()
@@ -1319,7 +1335,7 @@
 
   function swingIdleClip() {
     return (
-      (weaponAnimationProfile?.idle
+      (weaponAnimationProfile?.idle && !weaponAnimationProfile.restIdle
         ? weaponClips.get(weaponAnimationProfile.idle)
         : undefined) ?? combatIdleClip()
     )
@@ -1956,6 +1972,7 @@
       !riding &&
         !enchantAction?.getEffectiveWeight() &&
         !armorEnchantWeight &&
+        !(weaponAnimationProfile?.restIdle && currentClip === weaponIdle) &&
         (weaponClips.has(currentClip?.name ?? '') ||
           (!!weaponIdle && isArmorEnchantHold(currentClip, weaponIdle)))
     )

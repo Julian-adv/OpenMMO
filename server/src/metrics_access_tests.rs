@@ -48,6 +48,10 @@ async fn serve(access: AuthContext) -> String {
         AuthService::new(crate::test_util::unique_temp_dir("metrics_access").join("game.db"))
             .unwrap(),
     );
+    serve_with(access, auth).await
+}
+
+async fn serve_with(access: AuthContext, auth: Arc<AuthService>) -> String {
     let router = metrics_router(
         Arc::new(make_test_game_state("metrics_access")),
         auth,
@@ -64,6 +68,160 @@ async fn serve(access: AuthContext) -> String {
         ),
     );
     format!("{}/api/metrics", crate::test_util::serve(router).await)
+}
+
+fn admin_access(admin_emails: &[&str]) -> (AuthContext, EncodingKey) {
+    let (verifier, key) = crate::google_auth::test_verifier();
+    let access = AuthContext {
+        google: Some(verifier),
+        npc_token: "test-npc-secret".into(),
+        admin_emails: admin_emails.iter().map(|email| email.to_string()).collect(),
+    };
+    (access, key)
+}
+
+async fn status_with_cookie(url: &str, cookie: &str) -> StatusCode {
+    reqwest::Client::new()
+        .get(url)
+        .header("cookie", cookie)
+        .send()
+        .await
+        .unwrap()
+        .status()
+}
+
+#[tokio::test]
+async fn a_google_sign_in_starts_a_session_cookie_that_opens_every_endpoint_until_sign_out() {
+    let (access, key) = admin_access(&["admin@example.com"]);
+    let url = serve(access).await;
+    let client = reqwest::Client::new();
+    let session_url = format!("{url}/session");
+
+    let response = client
+        .post(&session_url)
+        .bearer_auth(signed_token(&key, &claims()))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(response.headers()["cache-control"], "no-store");
+    let set_cookie = response.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .to_owned();
+    for attribute in [
+        "Max-Age=2592000",
+        "Path=/api/metrics",
+        "HttpOnly",
+        "Secure",
+        "SameSite=Strict",
+    ] {
+        assert!(set_cookie.contains(attribute), "{set_cookie}");
+    }
+    let cookie = set_cookie.split(';').next().unwrap().to_owned();
+    assert!(cookie.starts_with("dashboard_session="));
+
+    for endpoint in ENDPOINTS {
+        let response = client
+            .get(format!("{url}/{endpoint}"))
+            .header("cookie", format!("theme=dark; {cookie}"))
+            .send()
+            .await
+            .unwrap();
+        assert!(response.status().is_success(), "{endpoint}");
+        assert_eq!(response.headers()["cache-control"], "no-store");
+    }
+
+    let renewal = client
+        .post(&session_url)
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(renewal.status(), StatusCode::UNAUTHORIZED);
+    assert!(renewal.headers().get("set-cookie").is_none());
+
+    let expired_bearer = client
+        .get(&session_url)
+        .header("cookie", &cookie)
+        .bearer_auth("malformed-token")
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(expired_bearer.status(), StatusCode::UNAUTHORIZED);
+
+    for rejected in [
+        "dashboard_session=test-npc-secret".to_string(),
+        format!("dashboard_session={}", "0".repeat(64)),
+        "dashboard_session=".to_string(),
+        format!("other_{cookie}"),
+    ] {
+        assert_eq!(
+            status_with_cookie(&session_url, &rejected).await,
+            StatusCode::UNAUTHORIZED,
+            "{rejected}"
+        );
+    }
+
+    let signed_out = client
+        .delete(&session_url)
+        .header("cookie", &cookie)
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(signed_out.status(), StatusCode::NO_CONTENT);
+    assert!(signed_out.headers()["set-cookie"]
+        .to_str()
+        .unwrap()
+        .starts_with("dashboard_session=; Max-Age=0;"));
+    assert_eq!(
+        status_with_cookie(&session_url, &cookie).await,
+        StatusCode::UNAUTHORIZED
+    );
+}
+
+#[tokio::test]
+async fn a_session_outlives_a_restart_but_not_its_expiry_or_its_admin_rights() {
+    let path = crate::test_util::unique_temp_dir("metrics_access_sessions").join("game.db");
+    let auth = Arc::new(AuthService::new(path.clone()).unwrap());
+    let now = unix_now();
+    let live = auth
+        .create_dashboard_session("Admin@example.com", now)
+        .unwrap();
+    let removed = auth
+        .create_dashboard_session("former@example.com", now)
+        .unwrap();
+    let expired = auth
+        .create_dashboard_session(
+            "admin@example.com",
+            now - crate::auth::DASHBOARD_SESSION_SECONDS,
+        )
+        .unwrap();
+    let stored: String = rusqlite::Connection::open(&path)
+        .unwrap()
+        .query_row(
+            "SELECT group_concat(hex(token_hash)) FROM dashboard_sessions",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap();
+    assert!(!stored.to_lowercase().contains(&live));
+    assert_eq!(stored.split(',').count(), 3);
+    drop(auth);
+
+    let (access, _) = admin_access(&["admin@example.com"]);
+    let restarted = Arc::new(AuthService::new(path.clone()).unwrap());
+    let url = format!("{}/session", serve_with(access, restarted).await);
+    for (token, expected) in [
+        (live, StatusCode::NO_CONTENT),
+        (expired, StatusCode::UNAUTHORIZED),
+        (removed, StatusCode::FORBIDDEN),
+    ] {
+        assert_eq!(
+            status_with_cookie(&url, &format!("dashboard_session={token}")).await,
+            expected
+        );
+    }
 }
 
 #[tokio::test]
