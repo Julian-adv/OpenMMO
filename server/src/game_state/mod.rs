@@ -531,6 +531,7 @@ pub struct GameState {
     fences: Arc<RwLock<fence::FenceIndex>>,
     roads: Arc<std::sync::OnceLock<crate::road_index::RoadIndex>>,
     guard_notices_checked: Arc<std::sync::atomic::AtomicI64>,
+    road_snow: Arc<std::sync::Mutex<Vec<road_patrol::ShovelledStretch>>>,
     /// Price index + meeting bookkeeping (doc/PRICING.md), mirrored in DB.
     pricing: Arc<RwLock<crate::auth::PricingState>>,
     dungeon_reset: Arc<RwLock<dungeon::DungeonResetState>>,
@@ -875,6 +876,7 @@ impl GameState {
             fences: Arc::new(RwLock::new(fence::FenceIndex::default())),
             roads: Arc::new(std::sync::OnceLock::new()),
             guard_notices_checked: Arc::default(),
+            road_snow: Arc::default(),
             pricing: Arc::new(RwLock::new(Default::default())),
             dungeon_reset: Arc::new(RwLock::new(Default::default())),
             dungeon_defs,

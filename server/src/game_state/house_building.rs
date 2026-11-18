@@ -278,6 +278,33 @@ impl GameState {
         Ok(())
     }
 
+    /// Delete a house and put its ground back. Returns who stood inside.
+    pub(super) async fn raze_house(&self, house: &HouseData) -> std::io::Result<Vec<PlayerId>> {
+        let (cx, cz) = world_to_chunk(house.origin.x, house.origin.z);
+        self.housing_io.delete_house(&house.id, cx, cz).await?;
+        let occupants = self
+            .players
+            .read()
+            .await
+            .values()
+            .filter(|player| {
+                u8::try_from(player.floor_level).is_ok_and(|floor| {
+                    onlinerpg_shared::furniture::point_in_house_floor(
+                        house,
+                        player.position.x,
+                        player.position.z,
+                        floor,
+                    )
+                })
+            })
+            .map(|player| player.id)
+            .collect();
+        self.passability_remove_house(&house.id).await;
+        let changed = self.restore_demolished_house_terrain(house).await;
+        crate::housing::routes::publish_house_terrain_changes(self, &changed, &[], &[]).await;
+        Ok(occupants)
+    }
+
     pub(super) async fn remove_estate_buildings(
         &self,
         auth: &AuthService,
@@ -306,31 +333,10 @@ impl GameState {
             if !owned && !on_estate {
                 continue;
             }
-            let (cx, cz) = world_to_chunk(house.origin.x, house.origin.z);
-            self.housing_io
-                .delete_house(&house.id, cx, cz)
+            let occupants = self
+                .raze_house(&house)
                 .await
                 .map_err(|error| crate::auth::AuthError::Database(error.to_string()))?;
-            let occupants: Vec<_> = self
-                .players
-                .read()
-                .await
-                .values()
-                .filter(|player| {
-                    u8::try_from(player.floor_level).is_ok_and(|floor| {
-                        onlinerpg_shared::furniture::point_in_house_floor(
-                            &house,
-                            player.position.x,
-                            player.position.z,
-                            floor,
-                        )
-                    })
-                })
-                .map(|player| player.id)
-                .collect();
-            self.passability_remove_house(&house.id).await;
-            let changed = self.restore_demolished_house_terrain(&house).await;
-            crate::housing::routes::publish_house_terrain_changes(self, &changed, &[], &[]).await;
             self.pending_estate_evictions
                 .write()
                 .await

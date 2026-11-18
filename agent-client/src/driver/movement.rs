@@ -268,6 +268,10 @@ const STRIKES: u32 = 3;
 const STRIKE_EVERY: std::time::Duration = std::time::Duration::from_millis(1100);
 /// Longer than any walk-up and strike, so an aborted lap still lets go of the weapon.
 const STRIKE_HOLD: std::time::Duration = std::time::Duration::from_secs(40);
+/// How far apart a guard stops to shovel a snowy road.
+const SHOVEL_EVERY_M: f32 = 10.0;
+/// How long one bout of shovelling takes; the `snow_dig` clip runs this long.
+const SHOVEL_BOUT: std::time::Duration = std::time::Duration::from_millis(4900);
 
 async fn send_patrol(state: &Arc<Mutex<SharedState>>, msg: ClientMessage) {
     if let Err(e) = state.lock().await.send_background_command(msg).await {
@@ -323,19 +327,61 @@ async fn clear_road(state: &Arc<Mutex<SharedState>>, patrol_id: i64, floor: u8) 
     state.lock().await.patrol_strike_until = None;
 }
 
+/// Shovel the road here if snow lies on it, standing still for the bout.
+/// Returns whether there was snow to clear.
+async fn shovel_snow(state: &Arc<Mutex<SharedState>>) -> bool {
+    let seen = state.lock().await.patrol_shovels;
+    send_patrol(state, ClientMessage::PatrolShovel).await;
+    super::execute::wait_for_answer(state, seen, |s| s.patrol_shovels).await;
+    let cleared = {
+        let s = state.lock().await;
+        s.patrol_shovels != seen && s.patrol_shovelled
+    };
+    if cleared {
+        tokio::time::sleep(SHOVEL_BOUT).await;
+    }
+    cleared
+}
+
+/// Shovel here and, while the snow holds, at stops `SHOVEL_EVERY_M` apart on
+/// the way to `(x, z)`, ending one stop short of it.
+async fn shovel_toward(state: &Arc<Mutex<SharedState>>, x: f32, z: f32, floor: u8) {
+    while shovel_snow(state).await {
+        let Some(here) = state
+            .lock()
+            .await
+            .self_player
+            .as_ref()
+            .map(|me| me.position)
+        else {
+            return;
+        };
+        let (dx, dz) = (x - here.x, z - here.z);
+        let left = dx.hypot(dz);
+        if left <= SHOVEL_EVERY_M * 1.5 {
+            return;
+        }
+        let stop = walk::WalkTo::Schedule {
+            x: here.x + dx / left * SHOVEL_EVERY_M,
+            z: here.z + dz / left * SHOVEL_EVERY_M,
+            floor,
+        };
+        if !matches!(
+            execute_walk(state, &stop, Some(false)).await,
+            MoveResult::Arrived
+        ) {
+            return;
+        }
+    }
+}
+
 /// One road-patrol lap: out along the entry's waypoints and back to `pos`.
 /// Resumes at `SharedState::patrol_reached`.
 pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: ScheduleEntry) {
     let Some(patrol) = &entry.patrol else {
         return;
     };
-    let start = {
-        let mut s = state.lock().await;
-        if s.patrol_reached == 0 {
-            s.patrol_warned.clear();
-        }
-        s.patrol_reached
-    };
+    let start = state.lock().await.patrol_reached;
     let patrol_id = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |elapsed| elapsed.as_secs() as i64);
@@ -368,6 +414,9 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
             for attempt in 0..3 {
                 if patrol.sweeps {
                     clear_road(&state, patrol_id, entry.floor_level).await;
+                }
+                if attempt == 0 {
+                    shovel_toward(&state, wp[0], wp[2], entry.floor_level).await;
                 }
                 match execute_walk(&state, &to, Some(false)).await {
                     MoveResult::Arrived => {
@@ -1111,6 +1160,7 @@ mod tests {
                     sectors_tag: "test".into(),
                     rain_override: Some(1.0),
                     snow_override: false,
+                    snow_laid: false,
                 });
             }
             assert_eq!(
@@ -1123,6 +1173,7 @@ mod tests {
                 sectors_tag: "test".into(),
                 rain_override: Some(0.0),
                 snow_override: false,
+                snow_laid: false,
             });
             assert_eq!(
                 resolve_due_schedule(&state, schedule).await,

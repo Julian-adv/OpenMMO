@@ -296,13 +296,16 @@ pub struct SharedState {
     /// movement (like `trade_busy`) and adds a stay-put prompt line;
     /// `stop_fishing` stays the deliberate exit.
     pub self_fishing: bool,
-    /// Owners already warned on this patrol lap.
-    pub patrol_warned: std::collections::HashSet<String>,
     /// Waypoints behind us on the current lap; a lap broken off by a fight resumes there.
     pub patrol_reached: usize,
     /// The fence the last scout found, and how many scouts were answered.
     pub patrol_target: Option<onlinerpg_shared::Position>,
     pub patrol_scouts: u64,
+    /// Answers to `PatrolShovel`, and whether the latest one cleared snow.
+    pub patrol_shovels: u64,
+    pub patrol_shovelled: bool,
+    /// Stretches shovelled since the guard last heard about it.
+    pub patrol_snow_bouts: u32,
     /// Break-outs answered, whether the last one freed us, and walks blocked
     /// in a row since anything last worked.
     pub patrol_breakouts: u64,
@@ -544,10 +547,12 @@ impl SharedState {
             outfit_sales_reopen_at: None,
             outfit_gifts_reopen_at: None,
             self_fishing: false,
-            patrol_warned: Default::default(),
             patrol_reached: 0,
             patrol_target: None,
             patrol_scouts: 0,
+            patrol_shovels: 0,
+            patrol_shovelled: false,
+            patrol_snow_bouts: 0,
             patrol_breakouts: 0,
             patrol_broke_out: false,
             patrol_blocked: 0,

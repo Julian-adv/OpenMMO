@@ -19,6 +19,13 @@ describe('SnowCoverTracker', () => {
     expect(tracker.value).toBeCloseTo(0.5)
   })
 
+  it('lays forced snow at once when asked to', () => {
+    const tracker = new SnowCoverTracker()
+    tracker.update(0.016, () => 0, null)
+    for (let i = 0; i < 20; i++) tracker.update(1, () => 0, 1, true)
+    expect(tracker.value).toBeGreaterThan(0.95)
+  })
+
   it('builds cover under forced snow and melts it slowly afterwards', () => {
     const tracker = new SnowCoverTracker()
     tracker.update(0.016, () => 0, null)

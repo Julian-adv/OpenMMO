@@ -22,6 +22,8 @@ pub struct WeatherState {
     pub rain_override: Option<f32>,
     /// The forced `rain_override` falls as snow.
     pub snow_override: bool,
+    /// The forced snow already lies deep, for testing what lying snow sets off.
+    pub snow_laid: bool,
     /// Sector bytes loaded at boot and served to clients.
     pub sectors_json: Bytes,
     /// Content hash of `sectors_json`; clients re-fetch only when it changes.
@@ -37,6 +39,7 @@ impl WeatherState {
             bias,
             rain_override: None,
             snow_override: false,
+            snow_laid: false,
             sectors_json: Bytes::from(sectors_json),
             sectors_tag,
             sectors: data.sectors,
@@ -150,6 +153,27 @@ impl GameState {
         *self.weather.write().expect("weather lock poisoned") = Some(state);
     }
 
+    /// Whether snow lies on the ground at `(x, z)` now.
+    pub fn snow_lies_at(&self, x: f32, z: f32) -> bool {
+        const LYING: f32 = 0.15;
+        let guard = self.weather.read().expect("weather lock poisoned");
+        let Some(weather) = guard.as_ref() else {
+            return false;
+        };
+        if let Some(forced) = weather.rain_override {
+            return weather.snow_override && forced > 0.0;
+        }
+        let minutes = self.current_total_game_seconds() as f64 / 60.0;
+        onlinerpg_shared::weather::snow_cover_at(
+            &weather.sectors,
+            weather.seed,
+            weather.bias as f64,
+            x,
+            z,
+            minutes,
+        ) > LYING
+    }
+
     pub fn weather_sync_message(&self) -> Option<ServerMessage> {
         self.weather
             .read()
@@ -161,6 +185,7 @@ impl GameState {
                 sectors_tag: w.sectors_tag.clone(),
                 rain_override: w.rain_override,
                 snow_override: w.snow_override,
+                snow_laid: w.snow_laid,
             })
     }
 
@@ -183,21 +208,28 @@ impl GameState {
         admin_id: &PlayerId,
         args: &str,
     ) -> Result<String, String> {
-        let mut args = args.split_whitespace();
-        let (rain_override, snow_override) = match (args.next(), args.next(), args.next()) {
-            (Some(kind @ ("rain" | "snow")), raw, None) => {
-                let amount = parse_bounded(raw.unwrap_or("1"), 0.0..=1.0, "Weather: intensity")?;
-                (Some(amount), kind == "snow" && amount > 0.0)
+        let args = args.split_whitespace();
+        let args: Vec<&str> = args.collect();
+        let (args, snow_laid) = match args.split_last() {
+            Some((&"deep", rest)) if rest.first() == Some(&"snow") => (rest, true),
+            _ => (args.as_slice(), false),
+        };
+        let (rain_override, snow_override) = match args {
+            [kind @ ("rain" | "snow")] | [kind @ ("rain" | "snow"), _] => {
+                let raw = args.get(1).copied().unwrap_or("1");
+                let amount = parse_bounded(raw, 0.0..=1.0, "Weather: intensity")?;
+                (Some(amount), *kind == "snow" && amount > 0.0)
             }
-            (Some("clear"), None, None) => (Some(0.0), false),
-            (Some("auto"), None, None) => (None, false),
+            ["clear"] => (Some(0.0), false),
+            ["auto"] => (None, false),
             _ => {
                 return Err(
-                    "Weather: /weather rain [0..1], /weather snow [0..1], /weather clear, /weather auto"
+                    "Weather: /weather rain [0..1], /weather snow [0..1] [deep], /weather clear, /weather auto"
                         .into(),
                 )
             }
         };
+        let snow_laid = snow_laid && snow_override;
         {
             let mut weather = self.weather.write().expect("weather lock poisoned");
             let weather = weather
@@ -205,6 +237,7 @@ impl GameState {
                 .ok_or("Weather: weather data is not loaded.")?;
             weather.rain_override = rain_override;
             weather.snow_override = snow_override;
+            weather.snow_laid = snow_laid;
         }
         info!(admin = ?admin_id, ?rain_override, snow_override, "admin weather override");
         self.broadcast_weather();

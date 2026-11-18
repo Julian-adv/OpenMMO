@@ -19,6 +19,9 @@ use onlinerpg_shared::notice_board::NoticeBoardRef;
 use std::ops::RangeInclusive;
 use std::time::Duration;
 
+/// The guard is told to grumble once every this many stretches shovelled.
+const SNOW_GRUMBLE_EVERY: u32 = 6;
+
 impl SharedState {
     /// Hand the queued sick-room respawns to the driver, emptying the queue.
     pub fn drain_recent_respawns(&mut self) -> Vec<(String, u32)> {
@@ -1193,13 +1196,26 @@ impl SharedState {
                     owner_name, stall_id
                 ));
             }
-            ServerMessage::PatrolScouted { target, warned } => {
+            ServerMessage::PatrolScouted { target } => {
                 self.patrol_target = *target;
                 self.patrol_scouts += 1;
-                self.note_patrol_warnings(warned);
             }
-            ServerMessage::PatrolSweepResult { warned, seized } => {
-                self.note_patrol_warnings(warned);
+            ServerMessage::PatrolShovelled { cleared } => {
+                self.patrol_shovels += 1;
+                self.patrol_shovelled = *cleared;
+                if *cleared {
+                    if self.patrol_snow_bouts.is_multiple_of(SNOW_GRUMBLE_EVERY) {
+                        self.push_ambient_event(
+                            "[Patrol] Snow lies on the road and it falls to you to shovel it \
+                             clear as you walk your round. It is cold, dull, back-breaking \
+                             work. Grumble about it aloud, briefly and in your own voice."
+                                .to_string(),
+                        );
+                    }
+                    self.patrol_snow_bouts += 1;
+                }
+            }
+            ServerMessage::PatrolSweepResult { seized } => {
                 for seizure in seized {
                     let fate = if seizure.forfeited {
                         "A repeat offence: they are forfeit."
@@ -1207,12 +1223,22 @@ impl SharedState {
                         "A first offence: Captain Karl holds them at his post in Aldermark, \
                          and the owner may buy them back from him at half price."
                     };
-                    self.push_ambient_event(format!(
-                        "[Patrol] You and your partner pulled {} of {}'s fences off the \
-                         public road. {fate} The owner has been sent a letter. Say so aloud \
-                         if anyone is near.",
-                        seizure.fences, seizure.owner
-                    ));
+                    if seizure.fences > 0 {
+                        self.push_ambient_event(format!(
+                            "[Patrol] You and your partner pulled {} of {}'s fences off the \
+                             public road. {fate} The owner has been sent a letter. Say so aloud \
+                             if anyone is near.",
+                            seizure.fences, seizure.owner
+                        ));
+                    }
+                    if seizure.furniture > 0 || seizure.houses > 0 {
+                        self.push_ambient_event(format!(
+                            "[Patrol] You and your partner cleared {} pieces of furniture and \
+                             pulled down {} houses that {} had built on the public road. {fate} \
+                             The owner has been sent a letter. Say so aloud if anyone is near.",
+                            seizure.furniture, seizure.houses, seizure.owner
+                        ));
+                    }
                 }
             }
             ServerMessage::PatrolBrokeOut { seized, recalled } => {
@@ -1220,10 +1246,10 @@ impl SharedState {
                 self.patrol_broke_out = *recalled || !seized.is_empty();
                 for seizure in seized {
                     self.push_ambient_event(format!(
-                        "[Patrol] {}'s fences penned you in on duty. You pulled {} of them \
-                         down; they are forfeit and the owner has been sent a letter. Say so \
-                         aloud if anyone is near.",
-                        seizure.owner, seizure.fences
+                        "[Patrol] {} penned you in on duty. You pulled down {} fences and \
+                         cleared {} pieces of furniture; they are forfeit and the owner has \
+                         been sent a letter. Say so aloud if anyone is near.",
+                        seizure.owner, seizure.fences, seizure.furniture
                     ));
                 }
                 if *recalled {
@@ -1742,23 +1768,6 @@ impl SharedState {
     /// it as the concurrent action's result and rob a dud of its [NoResult].
     pub fn push_ambient_event(&mut self, event: String) {
         self.push_agent_event_inner(event, true, true);
-    }
-
-    /// Tell the guard once per lap about each owner whose fences only earn a warning.
-    fn note_patrol_warnings(&mut self, owners: &[String]) {
-        let warned: Vec<String> = owners
-            .iter()
-            .filter(|owner| self.patrol_warned.insert((*owner).clone()))
-            .cloned()
-            .collect();
-        if !warned.is_empty() {
-            self.push_ambient_event(format!(
-                "[Patrol] Fences belonging to {} stand on the public road here. \
-                 Enforcement has not begun: leave them, but warn anyone nearby that \
-                 the patrol will soon pull down whatever blocks the road.",
-                warned.join(", ")
-            ));
-        }
     }
 
     /// Ambient and quiet: rides along with the next prompt.

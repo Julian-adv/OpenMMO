@@ -1,7 +1,6 @@
 <script lang="ts">
   import { t, locale } from '../i18n'
   import { impoundSession } from '../stores/impoundStore'
-  import { playerGold } from '../stores/inventoryStore'
   import { networkManager } from '../network/socket'
   import { mountOverlay } from '../stores/overlayStack'
   import { itemDisplayName } from '../data/itemDefs'
@@ -34,10 +33,10 @@
         <p class="hint">{$t('impound.empty')}</p>
       {:else}
         <ul>
-          {#each items as item (item.item_def_id)}
+          {#each items as item, index (index)}
             <li>
               <span
-                >{itemDisplayName(item.item_def_id, 0, $locale)} × {item.quantity}</span
+                >{itemDisplayName(item.item_def_id, item.enchant, $locale)} × {item.quantity}</span
               >
               <span>{formatGold(item.fee)}</span>
             </li>
@@ -57,9 +56,7 @@
         >
         <button
           type="button"
-          disabled={session.pending ||
-            items.length === 0 ||
-            $playerGold < total}
+          disabled={session.pending || items.length === 0}
           onclick={reclaim}>{$t('impound.reclaim')}</button
         >
       </div>
@@ -117,6 +114,8 @@
     margin: 0;
     padding: 0;
     list-style: none;
+    max-height: 40vh;
+    overflow-y: auto;
   }
   li,
   .total {

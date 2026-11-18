@@ -437,6 +437,8 @@
   "worn_valkyrie_top.name": "破旧的女武神胸甲",
   "miner_pickaxe.description": "白蜡木柄配沉重铁头的镐。放在背包里就能开采黑脉矿坑的矿石堆和水晶簇。情急之下也能当作一件弱武器。",
   "miner_pickaxe.name": "矿工镐",
+  "snow_shovel.description": "长白蜡木柄上装着包铁边的宽木板。奥尔德马克卫队用它清理道路上的积雪。",
+  "snow_shovel.name": "雪铲",
   "foreman_pickaxe.description": "失控工头使用过的镐。铁制镐头上嵌着黑色水晶脉。沉重的双手武器，比普通的镐更容易挖出矿石。",
   "foreman_pickaxe.name": "工头之镐",
   "blackvein_ore.description": "带紫色纹路的黑色矿石块。商人按重量收购。",

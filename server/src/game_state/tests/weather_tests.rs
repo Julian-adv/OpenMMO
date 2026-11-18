@@ -22,6 +22,7 @@ async fn weather_is_silent_until_loaded_then_broadcasts_seed_bias_and_tag() {
             sectors_tag: tag,
             rain_override,
             snow_override,
+            ..
         } => {
             assert_eq!(seed, 42);
             assert_eq!(bias, 0.5);
@@ -59,7 +60,7 @@ async fn load_weather_reads_the_baked_seed_and_keeps_the_file_bytes() {
     game_state.load_weather(0.75).await;
     assert!(matches!(
         game_state.weather_sync_message(),
-        Some(ServerMessage::WeatherSync { seed: 777, bias, sectors_tag, rain_override: None, snow_override: false })
+        Some(ServerMessage::WeatherSync { seed: 777, bias, sectors_tag, rain_override: None, snow_override: false, .. })
             if bias == 0.75 && sectors_tag == self::sectors_tag(&json)
     ));
     assert_eq!(
@@ -104,7 +105,7 @@ async fn weather_commands_broadcast_overrides_and_preserve_the_automatic_schedul
         assert!(
             matches!(
                 rmp_serde::from_slice::<ServerMessage>(&payload.bytes).unwrap(),
-                ServerMessage::WeatherSync { seed: 42, bias: 0.5, sectors_tag, rain_override, snow_override }
+                ServerMessage::WeatherSync { seed: 42, bias: 0.5, sectors_tag, rain_override, snow_override, .. }
                     if sectors_tag == self::sectors_tag(&json)
                         && rain_override == expected
                         && snow_override == expected_snow
@@ -145,6 +146,8 @@ async fn invalid_weather_commands_do_not_change_or_broadcast_weather() {
         "/weather snow nope",
         "/weather snow 1.1",
         "/weather snow 0.5 extra",
+        "/weather rain deep",
+        "/weather deep",
         "/weather rain nope",
         "/weather rain NaN",
         "/weather rain inf",
@@ -181,4 +184,26 @@ fn weather_override_requires_loaded_weather_data() {
         "Weather: weather data is not loaded."
     );
     assert!(game_state.weather_sync_message().is_none());
+}
+
+#[tokio::test]
+async fn deep_snow_is_laid_at_once_and_only_with_snow() {
+    let game = make_test_game_state("weather_deep");
+    game.add_player(make_player("admin", 0.0, 0.0)).await;
+    game.set_weather(empty_weather(0.5));
+    let laid = |game: &GameState| match game.weather_sync_message() {
+        Some(ServerMessage::WeatherSync { snow_laid, .. }) => snow_laid,
+        _ => panic!("weather sync"),
+    };
+    for (command, expected) in [
+        ("snow deep", true),
+        ("snow 0.5 deep", true),
+        ("snow 0 deep", false),
+        ("snow", false),
+        ("snow deep", true),
+        ("auto", false),
+    ] {
+        game.weather_command(&pid("admin"), command).unwrap();
+        assert_eq!(laid(&game), expected, "{command}");
+    }
 }

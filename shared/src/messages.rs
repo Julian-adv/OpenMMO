@@ -21,14 +21,30 @@ use crate::{fishing, housing, inventory, skills};
 pub struct PatrolSeizure {
     pub owner: String,
     pub fences: u32,
+    /// Whether what was taken is forfeit rather than held for reclaim.
     pub forfeited: bool,
+    /// Furniture and houses pulled off the road.
+    pub furniture: u32,
+    pub houses: u32,
 }
+
+/// Road centreline segments `[ax, az, bx, bz]` shovelled clear at game minute
+/// `at_min`. Snow lies on them again `SNOW_CLEAR_LASTS_MIN` later.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SnowClearing {
+    pub segments: Vec<[f32; 4]>,
+    pub at_min: f64,
+}
+
+/// Game minutes a shovelled stretch stays clear.
+pub const SNOW_CLEAR_LASTS_MIN: f64 = 240.0;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImpoundedItem {
     pub item_def_id: String,
     pub quantity: u32,
     pub fee: i64,
+    pub enchant: i32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -742,6 +758,8 @@ pub enum ClientMessage {
     PatrolScout,
     /// Guard NPC only: one swing at the fence, shown to those nearby.
     PatrolStrike,
+    /// Guard NPC only: shovel the lying snow off the road around the guard.
+    PatrolShovel,
     /// Guard NPC only: pulls down the estate fences penning the guard in.
     /// `recall` sends the guard back to town instead.
     PatrolBreakOut {
@@ -1229,6 +1247,7 @@ impl ClientMessage {
             | PatrolSweep { .. }
             | PatrolScout
             | PatrolStrike
+            | PatrolShovel
             | PatrolBreakOut { .. }
             | ImpoundReclaim { .. }
             | StartLandscapingMode { .. }
@@ -1626,6 +1645,8 @@ pub enum ServerMessage {
         rain_override: Option<f32>,
         /// The forced `rain_override` falls as snow.
         snow_override: bool,
+        /// The forced snow already lies deep instead of building up.
+        snow_laid: bool,
     },
     /// NPC clients only (doc/PRICING.md).
     PricingNotice(crate::pricing::PricingNotice),
@@ -1919,15 +1940,11 @@ pub enum ServerMessage {
         error: Option<String>,
     },
     PatrolSweepResult {
-        /// Owners with fences on the road while enforcement has not begun.
-        warned: Vec<String>,
         seized: Vec<PatrolSeizure>,
     },
-    /// Answer to `PatrolScout`: the nearest fence a sweep would pull down, or
-    /// the owners it would only warn while enforcement has not begun.
+    /// Answer to `PatrolScout`: the nearest thing a sweep would pull down.
     PatrolScouted {
         target: Option<Position>,
-        warned: Vec<String>,
     },
     /// Answer to `PatrolBreakOut`: fences forfeited for penning the guard in,
     /// and whether the guard was sent back to town.
@@ -1938,6 +1955,20 @@ pub enum ServerMessage {
     /// Nearby: a swing with no monster on the other end.
     PlayerSwung {
         player_id: PlayerId,
+    },
+    /// Answer to `PatrolShovel`: whether there was snow here to clear.
+    PatrolShovelled {
+        cleared: bool,
+    },
+    /// Nearby: someone shovelling snow.
+    PlayerShovelled {
+        player_id: PlayerId,
+    },
+    /// Stretches of road shovelled clear of snow. `reset` replaces what the
+    /// client holds; otherwise the stretches are added to it.
+    RoadSnowCleared {
+        reset: bool,
+        stretches: Vec<SnowClearing>,
     },
     ImpoundState {
         npc_player_id: PlayerId,
@@ -2729,6 +2760,7 @@ impl ServerMessage {
             | Self::Recital { .. }
             | Self::PlayerAttacked { .. }
             | Self::PlayerSwung { .. }
+            | Self::PlayerShovelled { .. }
             | Self::DaggerDoubleSlashStarted { .. }
             | Self::DaggerDoubleSlashSkipped { .. }
             | Self::EquipmentEnchantSucceeded { .. }
@@ -2810,6 +2842,7 @@ impl ServerMessage {
             | Self::FenceEditResult { .. }
             | Self::PatrolSweepResult { .. }
             | Self::PatrolScouted { .. }
+            | Self::PatrolShovelled { .. }
             | Self::PatrolBrokeOut { .. }
             | Self::ImpoundState { .. }
             | Self::EstateChestMode { .. }
@@ -2876,6 +2909,7 @@ impl ServerMessage {
             Self::GameTimeSync { .. }
             | Self::DungeonLayoutVariants { .. }
             | Self::WeatherSync { .. }
+            | Self::RoadSnowCleared { .. }
             | Self::ServerNotice { .. }
             | Self::ServerAnnouncement { .. } => DeliveryClass::Global,
             Self::WorldUpdate { .. } => DeliveryClass::Control,

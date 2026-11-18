@@ -116,6 +116,18 @@ tip followed the handle. Other rigs and offhand props kept their previous placem
   `node tools/prepare-female-knight.mjs --pack dagger_preview`. Clip durations stay 53/24 and 49/24 seconds.
   Animation only: no meshes or textures. Source and license are unchanged; no new generation.
 
+## Snow Shovelling (2026-11-18)
+
+- 출처: Adobe [Mixamo](https://www.mixamo.com/) `Digging.fbx`. 사용자가 2026-11-18 내려받아 제공했고 원본은
+  `assets/animations/shovel/Digging.fbx`에 보관한다(146프레임, 30fps, SHA-256 `081230f2…bd77`).
+  라이선스는 다른 Mixamo FBX와 같은 Adobe/Mixamo 약관이다. 무료, AI 생성 아님.
+- 팩: `client/public/models/animations/snow_dig.glb`, 클립 `snow_dig` 하나(4.83초, 전 구간). 수평 루트 이동(최대 12cm)을
+  제거했다. `blender -b --python tools/blender-scripts/build_snow_dig.py`로 기존 전투 아마추어에 굽고 blend는 저장하지 않는다.
+- 모듈형 팩: `characters/modular_{male,female}/animations/snow_dig.glb`
+  (`prepare-modular-character.mjs --pack snow_dig`, `prepare-female-knight.mjs --pack snow_dig`).
+- 런타임: 순찰대가 도로의 눈을 치울 때 `PlayerShovelled`를 받은 캐릭터가 서 있는 동안 한 번 재생한다
+  ([도로 순찰대](../ROAD_PATROL.md#제설)). 손에 삽 모델은 없다. 게임 화면에서는 확인하지 않았다.
+
 ## Ore Cart Push (2026-11-06)
 
 - Source: Adobe [Mixamo](https://www.mixamo.com/) `Push Stop.fbx` (65 bones, 79 frames at 30 fps),

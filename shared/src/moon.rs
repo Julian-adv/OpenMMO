@@ -8,7 +8,7 @@ use crate::world::GameDateTime;
 pub const GAME_START_YEAR: i64 = 217;
 pub const GAME_DAYS_PER_MONTH: i64 = 30;
 pub const GAME_MONTHS_PER_YEAR: i64 = 12;
-const SERIN_PERIOD_DAYS: i64 = 20;
+pub const SERIN_PERIOD_DAYS: i64 = 20;
 const SERIN_PHASE_OFFSET_DAYS: i64 = 5;
 const ELDOR_PERIOD_DAYS: i64 = 30;
 const ELDOR_PHASE_OFFSET_DAYS: i64 = 0;

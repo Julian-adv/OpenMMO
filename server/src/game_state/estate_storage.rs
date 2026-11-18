@@ -90,7 +90,13 @@ impl EstateChestIndex {
 
     #[cfg(test)]
     pub(super) fn nearby(&self, position: &Position, floor_level: i8) -> Vec<&EstateChest> {
-        let radius = super::EVENT_DELIVERY_RADIUS;
+        let mut nearby = self.around(position, super::EVENT_DELIVERY_RADIUS);
+        nearby.retain(|chest| chest.floor_level == floor_level);
+        nearby
+    }
+
+    /// Furniture on any floor within `radius` of `position`.
+    pub(super) fn around(&self, position: &Position, radius: f32) -> Vec<&EstateChest> {
         let mut nearby = Vec::new();
         let min_z = ((position.z - radius) / 32.0).floor() as i32;
         let max_z = ((position.z + radius) / 32.0).floor() as i32;
@@ -108,10 +114,9 @@ impl EstateChestIndex {
                     continue;
                 };
                 nearby.extend(bucket.iter().filter_map(|id| {
-                    self.by_id.get(id).filter(|chest| {
-                        chest.floor_level == floor_level
-                            && chest.position.dist_xz_sq(position) <= radius * radius
-                    })
+                    self.by_id
+                        .get(id)
+                        .filter(|chest| chest.position.dist_xz_sq(position) <= radius * radius)
                 }));
             }
         }

@@ -299,7 +299,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v161: female `HairStyle::LongWavy`.
 /// v162: NPC outfits: `OfferOutfit`/`QueryOutfit`/`RespondOutfitOffer`,
 /// `OutfitOffered`/`OutfitStatus`.
-pub const PROTOCOL_VERSION: u32 = 162;
+/// v163: `PatrolSeizure.furniture`/`houses`, `ImpoundedItem.enchant`; the patrol
+/// no longer warns, so `warned` left `PatrolScouted` and `PatrolSweepResult`.
+/// `PatrolShovel`/`PatrolShovelled`/`PlayerShovelled`/`RoadSnowCleared`, guards
+/// shovelling snow off the road. `WeatherSync.snow_laid`.
+pub const PROTOCOL_VERSION: u32 = 163;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -535,6 +539,7 @@ mod tests {
                 sectors_tag: "0123456789abcdef".into(),
                 rain_override,
                 snow_override,
+                snow_laid: false,
             })
             .unwrap();
             match deserialize_server_msg(&bytes).unwrap() {
@@ -544,6 +549,7 @@ mod tests {
                     sectors_tag,
                     rain_override: decoded_override,
                     snow_override: decoded_snow,
+                    ..
                 } => {
                     assert_eq!(seed, 42);
                     assert_eq!(bias, 1.0);

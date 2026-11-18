@@ -166,6 +166,13 @@
     CART_PUSH_PACK,
     cartPushes,
   } from '../stores/cartPushStore'
+  import {
+    SNOW_DIG_CLIP,
+    SNOW_DIG_MS,
+    SNOW_DIG_PACK,
+    SNOW_SHOVEL_ITEM,
+    snowDigs,
+  } from '../stores/roadSnowStore'
   import { currentDungeonId } from '../stores/dungeonStore'
   import { pickRandom } from '../utils/randomUtils'
   import {
@@ -757,12 +764,34 @@
       ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
       : mainHand
   )
+  /** Bumped when a bout of shovelling ends, so the shovel leaves the hand. */
+  let snowDigEnded = $state(0)
+  const shovelling = $derived.by(() => {
+    void snowDigEnded
+    const id = isCurrentPlayer ? $gameStore.currentPlayer?.id : remotePlayerId
+    const at = id === undefined ? undefined : $snowDigs.get(id)
+    return at !== undefined && Date.now() - at < SNOW_DIG_MS
+  })
+  $effect(() => {
+    if (!shovelling) return
+    const id = modelPlayerId()
+    const at = id === undefined ? undefined : $snowDigs.get(id)
+    if (at === undefined) return
+    const timer = setTimeout(
+      () => snowDigEnded++,
+      Math.max(0, at + SNOW_DIG_MS - Date.now())
+    )
+    return () => clearTimeout(timer)
+  })
   const equippedMainHandItemId = $derived(
-    $miningPlayers.has(
-      (isCurrentPlayer ? $gameStore.currentPlayer?.id : remotePlayerId) ?? -1
-    ) && !PICKAXE_ITEMS.includes(wornMainHandItemId ?? '')
-      ? PICKAXE_ITEM
-      : wornMainHandItemId
+    shovelling
+      ? SNOW_SHOVEL_ITEM
+      : $miningPlayers.has(
+            (isCurrentPlayer ? $gameStore.currentPlayer?.id : remotePlayerId) ??
+              -1
+          ) && !PICKAXE_ITEMS.includes(wornMainHandItemId ?? '')
+        ? PICKAXE_ITEM
+        : wornMainHandItemId
   )
 
   let attachedWeaponItemId: string | null = null
@@ -776,15 +805,36 @@
     return id === undefined ? undefined : get(daggerSkillCasts).get(id)
   }
   let cartPushClip: THREE.AnimationClip | undefined
-  /** When this player's cart push was broadcast, while its clip plays. */
-  function cartPushAt() {
-    if (!cartPushClip || riding || playerState !== 'idle') return undefined
+  let snowDigClip: THREE.AnimationClip | undefined
+  /** The cart push or bout of shovelling this player is in the middle of. */
+  function toilNow() {
+    if (riding || playerState !== 'idle') return undefined
     const id = modelPlayerId()
-    const at = id === undefined ? undefined : $cartPushes.get(id)
-    return at !== undefined && Date.now() - at < cartPushClip.duration * 1000
-      ? at
-      : undefined
+    if (id === undefined) return undefined
+    for (const [clip, at] of [
+      [cartPushClip, $cartPushes.get(id)],
+      [snowDigClip, $snowDigs.get(id)],
+    ] as const) {
+      if (clip && at !== undefined && Date.now() - at < clip.duration * 1000) {
+        return { clip, at }
+      }
+    }
+    return undefined
   }
+  $effect(() => {
+    const root = modelRoot
+    const id = modelPlayerId()
+    if (!root || snowDigClip || id === undefined || !$snowDigs.has(id)) return
+    let cancelled = false
+    void loadWeaponAnimations(modelPath, root, { pack: SNOW_DIG_PACK })
+      .then((clips) => {
+        if (!cancelled) snowDigClip = clips.get(SNOW_DIG_CLIP)
+      })
+      .catch((error) => console.error('Failed to load the snow dig', error))
+    return () => {
+      cancelled = true
+    }
+  })
   $effect(() => {
     const root = modelRoot
     if (!root || !$currentDungeonId) return
@@ -1418,11 +1468,11 @@
       )
       return
     }
-    const pushAt = cartPushAt()
-    if (pushAt !== undefined && cartPushClip) {
-      if (currentAction?.getClip() === cartPushClip) return
-      startAction(cartPushClip, true, 0.15)
-      seekCurrentAction((Date.now() - pushAt) / 1000)
+    const toil = toilNow()
+    if (toil) {
+      if (currentAction?.getClip() === toil.clip) return
+      startAction(toil.clip, true, 0.15)
+      seekCurrentAction((Date.now() - toil.at) / 1000)
       return
     }
     if (castClip) {
@@ -1901,7 +1951,7 @@
         (playerState !== 'interact' || interactionAnim === EXCAVATE_EMOTE_ANIM)
     const handsOnOars =
       boating && canRow && (rowing || (boatMount?.rowingWeight ?? 0) >= 0.001)
-    const pushing = cartPushAt() !== undefined
+    const pushing = toilNow()?.clip === cartPushClip && !!cartPushClip
     if (weaponObject) {
       weaponObject.visible =
         !riding &&
@@ -2238,7 +2288,7 @@
     // Update animation state
     if (validAnimations.length > 0) {
       const stabLandsAt = chargeStabLandsAt()
-      const pushAt = cartPushAt()
+      const pushAt = toilNow()?.at
       const stateKey =
         boating && canRow
           ? 'boating'

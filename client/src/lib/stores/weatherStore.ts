@@ -9,6 +9,8 @@ export interface ServerWeather {
   rainOverride: number | null
   /** The forced precipitation falls as snow. */
   snowOverride: boolean
+  /** The forced snow already lies deep instead of building up. */
+  snowLaid?: boolean
   /** Names the sector list the server loaded; the list is fetched per tag. */
   sectorsTag: string
 }

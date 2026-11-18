@@ -143,6 +143,7 @@ const packs = [
   "dagger_preview",
   "spear",
   "cart_push",
+  "snow_dig",
 ];
 const hash = (path) =>
   createHash("sha256")

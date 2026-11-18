@@ -47,6 +47,7 @@
   import GameSceneSnowLayer from './game-scene/GameSceneSnowLayer.svelte'
   import { snowCover } from '../shaders/snow-cover-nodes'
   import { SnowCoverTracker } from '../utils/snowCover'
+  import { RoadSnowPainter } from '../utils/roadSnowPainter'
   import { leavesLeft, setFoliageDay } from '../shaders/foliage-season-nodes'
   import { winterDay } from '../utils/foliageSeason'
   import {
@@ -233,6 +234,7 @@
   const rainPuddleUniforms = createRainPuddleUniforms()
   let puddlesVisible = true
   const snowCoverTracker = new SnowCoverTracker()
+  const roadSnowPainter = new RoadSnowPainter()
   let pinnedSnowCover: number | null = null
   let pinnedWinterDay: number | null = null
   let terrainTiles = $state<TerrainTile[]>([])
@@ -869,9 +871,18 @@
                   currentPlayer.position.z
                 )
               : null,
-          weatherNow ? (forcedPrecip(weatherNow)?.snow ?? null) : null
+          weatherNow ? (forcedPrecip(weatherNow)?.snow ?? null) : null,
+          weatherNow?.snowLaid ?? false
         )
         snowCover.value = $isUnderground ? 0 : (pinnedSnowCover ?? cover)
+        if (currentPlayer) {
+          roadSnowPainter.update(
+            realDeltaSeconds,
+            currentPlayer.position.x,
+            currentPlayer.position.z,
+            gameMinutes
+          )
+        }
         loopProfiler.record('snow', performance.now() - snowStart)
       }
 

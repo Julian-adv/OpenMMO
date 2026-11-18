@@ -85,6 +85,21 @@ impl RoadIndex {
         self.within(x, z, ROAD_QUIET_M)
     }
 
+    /// Centreline segments passing within `reach` of `(x, z)`.
+    pub fn segments_near(&self, x: f32, z: f32, reach: f32) -> Vec<Segment> {
+        let mut found: Vec<Segment> = Vec::new();
+        for cx in cell(x - reach)..=cell(x + reach) {
+            for cz in cell(z - reach)..=cell(z + reach) {
+                for segment in self.cells.get(&(cx, cz)).into_iter().flatten() {
+                    if point_segment_distance(x, z, segment) <= reach && !found.contains(segment) {
+                        found.push(*segment);
+                    }
+                }
+            }
+        }
+        found
+    }
+
     fn within(&self, x: f32, z: f32, reach: f32) -> bool {
         self.cells.get(&(cell(x), cell(z))).is_some_and(|segments| {
             segments

@@ -215,6 +215,7 @@ alone clears it in 150. It costs about 25 µs in wasm. Seed 42, midwinter
 | Southeast (6000, 16000) | 3.5 % | 10 % | 5 % |
 
 Snow sets off the `cold` debuff instead of `wet` ([DEBUFF.md](DEBUFF.md)).
+`/weather snow [intensity] deep` also lays the full cover at once (`snow_laid`), for testing what lying snow sets off, such as guards shovelling the road.
 `/weather snow [intensity]` forces snowfall; the client builds and melts the
 forced cover locally at the midwinter pace, since the override has no
 history. Protocol 103: cells now fall as snow and `WeatherSync` carries

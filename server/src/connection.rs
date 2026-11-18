@@ -1141,12 +1141,17 @@ async fn handle_client_message(
         }
         ClientMessage::PatrolScout => {
             if let Some(id) = &state.player_id {
-                game_state.patrol_scout(id, auth_service).await;
+                game_state.patrol_scout(id).await;
             }
         }
         ClientMessage::PatrolStrike => {
             if let Some(id) = &state.player_id {
                 game_state.patrol_strike(id).await;
+            }
+        }
+        ClientMessage::PatrolShovel => {
+            if let Some(id) = &state.player_id {
+                game_state.patrol_shovel(id).await;
             }
         }
         ClientMessage::PatrolBreakOut { recall } => {

@@ -355,6 +355,7 @@ impl super::GameState {
             datetime,
         });
         messages.extend(self.weather_sync_message());
+        messages.push(self.road_snow_message());
         if let Some(inventory) = self.get_player_inventory(id).await {
             messages.push(ServerMessage::InventoryState { inventory });
         }

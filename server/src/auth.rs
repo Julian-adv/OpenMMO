@@ -54,7 +54,9 @@ mod gold_sinks;
 mod land;
 #[path = "auth_road_patrol.rs"]
 mod road_patrol;
-pub(crate) use road_patrol::{ImpoundedStack, RoadSeizure};
+#[cfg(test)]
+pub(crate) use road_patrol::IMPOUND_HOLD_SECONDS;
+pub(crate) use road_patrol::{ImpoundedStack, RoadClearance, RoadSeizure};
 #[path = "auth_landscaping.rs"]
 mod landscaping;
 #[path = "auth_loot_tally.rs"]

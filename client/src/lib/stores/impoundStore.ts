@@ -5,6 +5,7 @@ export interface ImpoundedItem {
   item_def_id: string
   quantity: number
   fee: number
+  enchant: number
 }
 
 /** Holds seized goods for buy-back; mirrors `GUARD_CAPTAIN` on the server. */

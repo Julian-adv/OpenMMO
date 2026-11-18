@@ -1,4 +1,4 @@
-import type * as THREE from 'three'
+import * as THREE from 'three'
 import { MeshStandardNodeMaterial, type Node } from 'three/webgpu'
 import {
   Fn,
@@ -20,11 +20,49 @@ import {
   max,
   fwidth,
   mx_noise_float,
+  texture,
 } from 'three/tsl'
 
 /** 0..1 snow lying around the player, read by every snowy material; one
  *  value covers the view since a cell's edge is hundreds of metres wide. */
 export const snowCover = uniform(0)
+
+/** Metres the cleared-road mask covers, and its texels per side. */
+export const ROAD_CLEAR_SIZE_M = 160
+export const ROAD_CLEAR_RESOLUTION = 320
+/** 255 where a shovelled road lies; painted around `roadClearCentre`. */
+export const roadClearData = new Uint8Array(
+  ROAD_CLEAR_RESOLUTION * ROAD_CLEAR_RESOLUTION
+)
+export const roadClearTexture = new THREE.DataTexture(
+  roadClearData,
+  ROAD_CLEAR_RESOLUTION,
+  ROAD_CLEAR_RESOLUTION,
+  THREE.RedFormat
+)
+roadClearTexture.magFilter = THREE.LinearFilter
+roadClearTexture.minFilter = THREE.LinearFilter
+roadClearTexture.needsUpdate = true
+export const roadClearCentre = uniform(new THREE.Vector2())
+/** 0 while no road is clear, so the mask sample is skipped. */
+export const roadClearActive = uniform(0)
+
+/** 0..1 how much of the lying snow a shovelled road has lost here. */
+function roadCleared(): Node<'float'> {
+  return Fn(() => {
+    const cleared = float(0).toVar()
+    If(roadClearActive.greaterThan(0.5), () => {
+      const uv = positionWorld.xz
+        .sub(roadClearCentre)
+        .div(ROAD_CLEAR_SIZE_M)
+        .add(0.5)
+      // The mask has one level; an implicit-gradient sample may not sit in
+      // a branch.
+      cleared.assign(texture(roadClearTexture, uv).level(float(0)).r)
+    })
+    return cleared
+  })()
+}
 
 interface SnowSurface {
   color: Node<'vec3'>
@@ -79,7 +117,7 @@ export function snowMask(
 ): Node<'float'> {
   return Fn(() => {
     const mask = float(0).toVar()
-    const cover = snowCover.mul(gate)
+    const cover = snowCover.mul(gate).mul(float(1).sub(roadCleared()))
     // A normal first read inside the branch is unset for lighting when skipped.
     const up = upness.toVar()
     If(cover.greaterThan(0.001), () => {

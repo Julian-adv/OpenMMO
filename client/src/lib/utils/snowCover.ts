@@ -15,11 +15,13 @@ export class SnowCoverTracker {
   value = 0
 
   /** `sample` returns the shared model's cover at the player, or null when
-   *  it cannot be evaluated yet. `overrideSnow` is the forced snowfall. */
+   *  it cannot be evaluated yet. `overrideSnow` is the forced snowfall;
+   *  `laid` puts its full cover down at once. */
   update(
     seconds: number,
     sample: () => number | null,
-    overrideSnow: number | null
+    overrideSnow: number | null,
+    laid = false
   ): number {
     const dt = Math.max(0, seconds)
     this.sinceSample += dt
@@ -40,6 +42,7 @@ export class SnowCoverTracker {
             this.overrideCover + (snowing * dt) / OVERRIDE_FILL_SECONDS
           )
         : Math.max(0, this.overrideCover - dt / OVERRIDE_MELT_SECONDS)
+    if (laid && snowing > 0.02) this.overrideCover = 1
     const goal = Math.max(this.target, this.overrideCover)
     this.value += (goal - this.value) * (1 - Math.exp(-dt / EASE_SECONDS))
     return this.value

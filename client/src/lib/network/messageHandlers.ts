@@ -116,6 +116,7 @@ import { cartRollSpeed, dungeonManager } from '../managers/dungeonManager'
 import { setDoorState } from '../stores/objectDoorStore'
 import { parseDoorId } from './doorId'
 import { recordCartPush } from '../stores/cartPushStore'
+import { applyRoadSnowCleared, recordSnowDig } from '../stores/roadSnowStore'
 import { queueXpArrival, releaseXpArrival } from '../managers/xpArrival'
 import {
   setInventory,
@@ -1525,6 +1526,12 @@ export function handleServerMessage(
       })
       break
     }
+    case 'PlayerShovelled':
+      recordSnowDig(data.player_id)
+      break
+    case 'RoadSnowCleared':
+      applyRoadSnowCleared(data.reset, data.stretches)
+      break
     case 'WeatherSync': {
       setWeather({
         seed: data.seed,
@@ -1532,6 +1539,7 @@ export function handleServerMessage(
         sectorsTag: data.sectors_tag,
         rainOverride: data.rain_override ?? null,
         snowOverride: data.snow_override ?? false,
+        snowLaid: data.snow_laid ?? false,
       })
       break
     }
