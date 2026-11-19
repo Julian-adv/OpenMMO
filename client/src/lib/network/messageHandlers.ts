@@ -271,6 +271,7 @@ import {
   MUSIC_EMOTE_ANIM,
   SLASH_EMOTE_ANIMS,
 } from '../stores/emoteStore'
+import { clearDanceBeat, setDanceBeat } from '../stores/danceBeatStore'
 import { respawnPoseRequest } from '../stores/respawnPoseStore'
 import { syncOwnFloor } from './ownFloor'
 import {
@@ -520,6 +521,8 @@ function logSpokenLine(playerId: number, text: string) {
 
 /** Spawn a remote player's visual, apply any object interaction, and store it in game state. */
 function addRemotePlayerToState(state: GameState, sp: ServerPlayer) {
+  // A fresh appearance starts beatless; a dancer's PlayerDanceSync follows.
+  clearDanceBeat(sp.id)
   remotePlayerManager.initPlayer(sp.id, sp.position, sp.rotation)
   if (sp.object_type) {
     applyObjectInteraction(
@@ -542,6 +545,7 @@ function removeRemotePlayerFromState(state: GameState, playerId: number) {
   refreshBardZone(state.otherPlayers)
   // A leaving player's FishingEnded may never arrive; drop their bobber.
   removeBobber(playerId)
+  clearDanceBeat(playerId)
 }
 
 export type MessageEvents = {
@@ -822,6 +826,7 @@ export function handleServerMessage(
             stopMusicPerformance(id)
             stopPlayerInstrument(id)
             removeBobber(id)
+            clearDanceBeat(id)
           }
           state.otherPlayers.clear()
           return state
@@ -2249,6 +2254,11 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerDanceSync':
+      // PlayerModel seeks the loop to this beat, for us and for remotes.
+      setDanceBeat(data.player_id, data.elapsed_secs * 1000)
+      break
+
     case 'PlayerInstrumentNotes': {
       playRemoteInstrumentNotes(
         data.player_id,
@@ -2260,6 +2270,8 @@ export function handleServerMessage(
     }
 
     case 'PlayerInteractionChanged': {
+      // The old loop's beat ends here; a new loop's PlayerDanceSync follows.
+      clearDanceBeat(data.player_id)
       // Leaving the strum ends the tune, for the performer too.
       applyInteractionChange(data.player_id, data.object_type ?? null)
       if (data.object_type !== MUSIC_EMOTE_ANIM) {

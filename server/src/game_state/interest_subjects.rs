@@ -237,6 +237,17 @@ impl Interest {
                     if matches!(msg, ServerMessage::PlayerInteractionChanged { object_type, .. } if object_type.as_deref() != Some(onlinerpg_shared::messages::MUSIC_EMOTE)) {
                         snapshot.retain(|entry| !matches!(entry, ServerMessage::PlayerMusicStarted { .. } | ServerMessage::PlayerInstrumentStarted { .. }));
                     }
+                    // A new pose ends the old beat; a new loop sends its own.
+                    if matches!(msg, ServerMessage::PlayerInteractionChanged { .. }) {
+                        snapshot.retain(|entry| !matches!(entry, ServerMessage::PlayerDanceSync { .. }));
+                    }
+                });
+            }
+            ServerMessage::PlayerDanceSync { player_id, .. } => {
+                self.update_snapshot(&format!("player:{player_id}"), msg.clone(), |snapshot| {
+                    snapshot
+                        .retain(|entry| !matches!(entry, ServerMessage::PlayerDanceSync { .. }));
+                    snapshot.push(msg.clone());
                 });
             }
             ServerMessage::PlayerMusicStarted { player_id, .. }

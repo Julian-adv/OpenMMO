@@ -308,7 +308,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v165: female `FaceStyle::Elegant`.
 /// v166: `ChangeAppearance`/`AppearanceChangeResult`/`PlayerAppearanceChanged`, the
 /// hair salon.
-pub const PROTOCOL_VERSION: u32 = 166;
+/// v167: `JoinDance` and `PlayerDanceSync`: join a nearby dance in step.
+pub const PROTOCOL_VERSION: u32 = 167;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

@@ -22,6 +22,7 @@
   import TradeWindow from './TradeWindow.svelte'
   import FishingPrompt from './FishingPrompt.svelte'
   import ChargeTargetPrompt from './ChargeTargetPrompt.svelte'
+  import DanceJoinPrompt from './DanceJoinPrompt.svelte'
   import TradeOfferToast from './TradeOfferToast.svelte'
   import OutfitOfferToast from './OutfitOfferToast.svelte'
   import PartyInviteToast from './PartyInviteToast.svelte'
@@ -295,6 +296,7 @@
     <NpcContextMenu />
     <FishingPrompt />
     <ChargeTargetPrompt />
+    <DanceJoinPrompt />
   {/if}
 
   {#if !$mapEditorMode}

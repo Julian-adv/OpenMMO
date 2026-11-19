@@ -299,6 +299,17 @@ fn party_positions_do_not_wake_the_llm() {
     assert!(s.events.is_empty());
 }
 
+#[test]
+fn dance_beats_neither_wake_nor_buffer() {
+    let (mut s, _rx) = test_state();
+    let beat = ServerMessage::PlayerDanceSync {
+        player_id: PlayerId::from(2),
+        elapsed_secs: 1.0,
+    };
+    assert_eq!(s.push_event(beat), EventUrgency::Noise);
+    assert!(s.events.is_empty());
+}
+
 /// An invalid_target rejection is the server saying the monster does not
 /// exist; the stale entry must leave the list instead of being offered
 /// to the LLM again next turn.

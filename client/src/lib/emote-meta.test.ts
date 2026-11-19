@@ -12,6 +12,9 @@ import {
   HELD_EMOTE_ANIMS,
   isEmoteAnim,
   isSelfEndingEmote,
+  JOIN_DANCE_MAX_RISE_M,
+  JOIN_DANCE_RANGE_M,
+  JOINABLE_DANCE_ANIMS,
   LOOPING_EMOTE_ANIMS,
   MUSIC_EMOTE_ANIM,
   ONE_SHOT_EMOTE_ANIMS,
@@ -60,6 +63,23 @@ describe('emote panel metadata', () => {
     expect(new Set(rustEmoteList('LOOPING_EMOTES'))).toEqual(
       LOOPING_EMOTE_ANIMS
     )
+  })
+
+  it('mirrors JOINABLE_DANCES and its range from shared/src/messages.rs', () => {
+    expect(new Set(rustEmoteList('JOINABLE_DANCES'))).toEqual(
+      JOINABLE_DANCE_ANIMS
+    )
+    for (const dance of JOINABLE_DANCE_ANIMS) {
+      expect(LOOPING_EMOTE_ANIMS.has(dance), dance).toBe(true)
+    }
+    const rust = readFileSync(
+      path.resolve(__dirname, '../../../shared/src/messages.rs'),
+      'utf-8'
+    )
+    const range = rust.match(/pub const JOIN_DANCE_RANGE_M: f32 = ([\d.]+);/)
+    expect(Number(range?.[1])).toBe(JOIN_DANCE_RANGE_M)
+    const rise = rust.match(/pub const JOIN_DANCE_MAX_RISE_M: f32 = ([\d.]+);/)
+    expect(Number(rise?.[1])).toBe(JOIN_DANCE_MAX_RISE_M)
   })
 
   it('derives one labelled entry per accepted emote', () => {

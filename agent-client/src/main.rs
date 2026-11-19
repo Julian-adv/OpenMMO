@@ -562,6 +562,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerInteractionChanged { .. } => "PlayerInteractionChanged",
         ServerMessage::PlayerMusicStarted { .. } => "PlayerMusicStarted",
         ServerMessage::PlayerInstrumentStarted { .. } => "PlayerInstrumentStarted",
+        ServerMessage::PlayerDanceSync { .. } => "PlayerDanceSync",
         ServerMessage::PlayerInstrumentNotes { .. } => "PlayerInstrumentNotes",
         ServerMessage::InteractionRejected { .. } => "InteractionRejected",
         ServerMessage::AltarStatus { .. } => "AltarStatus",

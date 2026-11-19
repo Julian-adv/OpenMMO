@@ -603,6 +603,11 @@ class NetworkManager {
     this.sendMessage('StartInstrument')
   }
 
+  /** Dance beside `targetId`, in step with them (`JoinDance`). */
+  sendJoinDance(targetId: number) {
+    this.sendMessage({ JoinDance: { target_id: targetId } })
+  }
+
   sendInstrumentNotes(events: readonly InstrumentNoteEvent[]) {
     if (events.length === 0) return
     this.sendMessage({

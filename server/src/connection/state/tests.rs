@@ -60,10 +60,8 @@ fn furniture_tips_are_limited_per_customer_and_item_kind() {
 #[test]
 fn instrument_batch_limiter_allows_four_per_second_with_a_four_batch_burst() {
     let start = Instant::now();
-    let mut limiter = InstrumentBatchLimiter {
-        tokens: INSTRUMENT_BATCH_BURST,
-        last: start,
-    };
+    let mut limiter =
+        RateLimiter::starting_at(INSTRUMENT_BATCHES_PER_SEC, INSTRUMENT_BATCH_BURST, start);
 
     for _ in 0..4 {
         assert!(limiter.allow_at(start));

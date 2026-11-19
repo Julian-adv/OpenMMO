@@ -1,8 +1,8 @@
 use super::*;
 use onlinerpg_shared::furniture::FurniturePlacement;
-use onlinerpg_shared::pathfinding::{RuntimeFloorGrid, RuntimePassability};
+use onlinerpg_shared::pathfinding::{PassabilityCache, RuntimeFloorGrid, RuntimePassability};
 
-fn room(floor_level: u8, y_base: f32, cells: Vec<u8>) -> RuntimePassability {
+pub(super) fn room(floor_level: u8, y_base: f32, cells: Vec<u8>) -> RuntimePassability {
     RuntimePassability {
         house_origin_x: 98.0,
         house_origin_z: 49.0,
@@ -27,7 +27,7 @@ fn room(floor_level: u8, y_base: f32, cells: Vec<u8>) -> RuntimePassability {
     }
 }
 
-fn chair() -> FurniturePlacement {
+pub(super) fn chair() -> FurniturePlacement {
     FurniturePlacement {
         id: 7,
         type_id: "chair".into(),
@@ -414,4 +414,35 @@ async fn leaving_a_chair_to_play_an_instrument_keeps_the_new_performance() {
         .await;
     assert!(!game.live_instrument_players.read().await.contains(&id));
     assert_eq!(game.players.read().await[&id].object_id, Some(7));
+}
+
+/// A step check near a wall just across the world's x seam still sees it.
+#[test]
+fn segments_across_the_world_seam_meet_walls_on_the_far_side() {
+    use onlinerpg_shared::{WORLD_MAX_X, WORLD_MIN_X};
+    let mut cells = vec![0; 24];
+    for row in 0..4 {
+        cells[row * 6 + 1] = 2;
+        cells[row * 6 + 2] = 8;
+    }
+    let mut wall = room(0, 5.0, cells);
+    wall.house_origin_x = WORLD_MIN_X;
+    wall.min_x = WORLD_MIN_X;
+    wall.max_x = WORLD_MIN_X + 6.0;
+    let cache = PassabilityCache::from([("seam".to_string(), wall)]);
+    let at = |x: f32| Position { x, y: 5.0, z: 50.5 };
+    let from = at(WORLD_MAX_X - 1.0);
+
+    assert!(!super::super::player_interaction::clear_segment(
+        &cache,
+        from,
+        at(WORLD_MIN_X + 1.85),
+        0
+    ));
+    assert!(super::super::player_interaction::clear_segment(
+        &cache,
+        from,
+        at(WORLD_MIN_X + 1.3),
+        0
+    ));
 }

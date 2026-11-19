@@ -1,11 +1,11 @@
-use super::{estate_storage, passability::regions_around, GameState};
+use super::{dance::Stand, estate_storage, passability::regions_around, GameState};
 use crate::types::{Player, PlayerId, Position, ServerMessage};
 use onlinerpg_shared::estate_storage::{
     estate_storage_def, is_estate_storage_item, INTERACTION_RANGE,
 };
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
 use onlinerpg_shared::pathfinding::{self, PassabilityCache};
-use onlinerpg_shared::{shortest_world_delta_x, wrap_world_x};
+use onlinerpg_shared::{shortest_world_delta_x, wrap_world_x, WORLD_WIDTH_X};
 use std::{collections::HashMap, sync::OnceLock};
 
 #[derive(serde::Deserialize)]
@@ -72,7 +72,12 @@ pub(super) fn interaction_message(player: &Player) -> ServerMessage {
     }
 }
 
-fn clear_segment(cache: &PassabilityCache, from: Position, to: Position, floor: u8) -> bool {
+pub(super) fn clear_segment(
+    cache: &PassabilityCache,
+    from: Position,
+    to: Position,
+    floor: u8,
+) -> bool {
     let dx = shortest_world_delta_x(from.x, to.x);
     let dz = to.z - from.z;
     if pathfinding::is_movement_blocked(
@@ -86,13 +91,30 @@ fn clear_segment(cache: &PassabilityCache, from: Position, to: Position, floor: 
     ) {
         return false;
     }
+    let (lo_x, hi_x) = (
+        from.x.min(from.x + dx) - 0.31,
+        from.x.max(from.x + dx) + 0.31,
+    );
+    let (lo_z, hi_z) = (from.z.min(to.z) - 0.31, from.z.max(to.z) + 0.31);
+    let near: Vec<_> = cache
+        .values()
+        .filter(|entry| {
+            !entry.yields_to_trapped_mover
+                && entry.max_z >= lo_z
+                && entry.min_z <= hi_z
+                && [0.0, WORLD_WIDTH_X, -WORLD_WIDTH_X]
+                    .iter()
+                    .any(|shift| entry.max_x >= lo_x - shift && entry.min_x <= hi_x - shift)
+        })
+        .collect();
+    if near.is_empty() {
+        return true;
+    }
     let steps = (dx.hypot(dz) / 0.1).ceil().max(1.0) as usize;
     (1..=steps).all(|step| {
         let t = step as f32 / steps as f32;
         !pathfinding::is_circle_blocked_by_passability(
-            cache
-                .values()
-                .filter(|entry| !entry.yields_to_trapped_mover),
+            near.iter().copied(),
             wrap_world_x(from.x + dx * t),
             from.z + dz * t,
             0.31,
@@ -187,7 +209,28 @@ impl GameState {
         Some((placement, cache, offset))
     }
 
-    async fn interaction_exit(&self, player: &Player) -> Position {
+    /// Whether a player at `from` can walk to and stand at `to` on `floor`:
+    /// a storey under it, no wall between, and room to stand.
+    pub(super) fn can_step_to(
+        &self,
+        cache: &PassabilityCache,
+        floor: u8,
+        from: Position,
+        to: Position,
+    ) -> bool {
+        (floor == 0 || pathfinding::storey_ground_y(cache, floor, to.x, to.z, to.y).is_some())
+            && clear_segment(cache, from, to, floor)
+            && !pathfinding::is_circle_blocked_on_floor(
+                &self.passability_read(),
+                to.x,
+                to.z,
+                0.31,
+                floor,
+                Some(to.y),
+            )
+    }
+
+    pub(super) async fn interaction_exit(&self, player: &Player) -> Position {
         let cache = match (player.object_type.as_deref(), player.object_id) {
             (Some(kind), Some(id)) => self
                 .interaction_placement(player, kind, id)
@@ -214,20 +257,7 @@ impl GameState {
                     .surface_ground_y(floor, &position, player.position.y, None)
                     .await;
                 if (position.y - player.position.y).abs() > 0.75
-                    || (floor > 0
-                        && pathfinding::storey_ground_y(
-                            &cache, floor, position.x, position.z, position.y,
-                        )
-                        .is_none())
-                    || !clear_segment(&cache, player.position, position, floor)
-                    || pathfinding::is_circle_blocked_on_floor(
-                        &self.passability_read(),
-                        position.x,
-                        position.z,
-                        0.31,
-                        floor,
-                        Some(position.y),
-                    )
+                    || !self.can_step_to(&cache, floor, player.position, position)
                 {
                     continue;
                 }
@@ -243,17 +273,44 @@ impl GameState {
         object_type: Option<String>,
         object_id: Option<u32>,
     ) {
-        if object_type.is_some() {
+        self.apply_player_interaction(player_id, object_type, object_id, None)
+            .await;
+    }
+
+    /// [`Self::set_player_interaction`], first moving the player to a
+    /// `JoinDance` spot when `stand` is given. Returns whether it was applied.
+    pub(super) async fn apply_player_interaction(
+        &self,
+        player_id: &PlayerId,
+        object_type: Option<String>,
+        object_id: Option<u32>,
+        stand: Option<&Stand>,
+    ) -> bool {
+        if object_type.is_some() && stand.is_none() {
             self.bump_action_version(player_id).await;
         }
+        let destinations: Vec<Position> = stand.iter().map(|stand| stand.spot).collect();
         let Some(mut movement) = self
-            .lock_player_movement(*player_id, &[], INTERACTION_RANGE + 0.5, true, None)
+            .lock_player_movement(
+                *player_id,
+                &destinations,
+                INTERACTION_RANGE + 0.5,
+                true,
+                None,
+            )
             .await
         else {
-            return;
+            return false;
         };
         let previous = movement.player;
+        if let Some(stand) = stand {
+            if !self.stand_holds(stand, &previous).await {
+                return false;
+            }
+            self.bump_action_version(player_id).await;
+        }
         let furniture_change = object_id.is_some() || previous.object_id.is_some();
+        let relocates = furniture_change || stand.is_some();
         let mut position = previous.position;
         let mut rotation = previous.rotation;
         let mut rejection = None;
@@ -294,8 +351,12 @@ impl GameState {
             }) {
                 rejection = Some("occupied");
             }
-        } else if previous.object_id.is_some() {
+        } else if previous.object_id.is_some() && stand.is_none() {
             position = self.interaction_exit(&previous).await;
+        }
+        if let Some(stand) = stand {
+            position = stand.spot;
+            rotation = stand.rotation;
         }
         if let Some(reason) = rejection {
             self.send_direct_message(
@@ -307,18 +368,27 @@ impl GameState {
             .await;
             self.send_direct_message(player_id, interaction_message(&previous))
                 .await;
-            return;
+            self.resend_dance_beat(player_id).await;
+            return false;
         }
         if object_type.is_some() || previous.object_id.is_some() {
             self.cancel_goal_movement_locked(player_id, &mut movement.state)
                 .await;
         }
+        // Before the new pose, so no join pairs it with the old beat.
+        let keeps_beat = object_type
+            .as_deref()
+            .is_some_and(super::dance::is_looping_emote)
+            && (stand.is_some() || object_type == previous.object_type);
+        if !keeps_beat {
+            self.end_dance_beat(player_id).await;
+        }
         let player = {
             let mut players = self.players.write().await;
             let Some(player) = players.get_mut(player_id) else {
-                return;
+                return false;
             };
-            if furniture_change {
+            if relocates {
                 player.position = position;
                 player.rotation = rotation;
             }
@@ -335,7 +405,7 @@ impl GameState {
             self.remove_live_instrument(player_id).await;
         }
         let message = interaction_message(&player);
-        if furniture_change {
+        if relocates {
             self.finish_position_update(
                 player_id,
                 previous.position,
@@ -354,5 +424,6 @@ impl GameState {
         {
             self.interrupt_battle_hymn(player_id).await;
         }
+        true
     }
 }

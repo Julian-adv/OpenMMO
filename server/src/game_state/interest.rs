@@ -42,8 +42,14 @@ impl Subject {
     fn current_snapshot(&self) -> Vec<ServerMessage> {
         let mut snapshot = self.snapshot.clone();
         for message in &mut snapshot {
-            if let ServerMessage::PlayerMusicStarted { elapsed_secs, .. } = message {
-                *elapsed_secs += self.snapshot_at.elapsed().as_secs_f32();
+            match message {
+                ServerMessage::PlayerMusicStarted { elapsed_secs, .. } => {
+                    *elapsed_secs += self.snapshot_at.elapsed().as_secs_f32();
+                }
+                ServerMessage::PlayerDanceSync { elapsed_secs, .. } => {
+                    *elapsed_secs += self.snapshot_at.elapsed().as_secs_f64();
+                }
+                _ => {}
             }
         }
         snapshot
@@ -264,6 +270,11 @@ impl Interest {
         message: ServerMessage,
     ) {
         let id = format!("player:{}", player.id);
+        let pose = player.object_type.as_deref();
+        let strumming = pose == Some(onlinerpg_shared::messages::MUSIC_EMOTE);
+        // A new pose's own beat, if any, follows this message.
+        let looping = pose.is_some_and(super::dance::is_looping_emote)
+            && !matches!(message, ServerMessage::PlayerInteractionChanged { .. });
         let extras = self
             .subjects
             .get(&id)
@@ -272,14 +283,11 @@ impl Interest {
                     .current_snapshot()
                     .into_iter()
                     .skip(1)
-                    .filter(|message| {
-                        player.object_type.as_deref()
-                            == Some(onlinerpg_shared::messages::MUSIC_EMOTE)
-                            || !matches!(
-                                message,
-                                ServerMessage::PlayerMusicStarted { .. }
-                                    | ServerMessage::PlayerInstrumentStarted { .. }
-                            )
+                    .filter(|message| match message {
+                        ServerMessage::PlayerMusicStarted { .. }
+                        | ServerMessage::PlayerInstrumentStarted { .. } => strumming,
+                        ServerMessage::PlayerDanceSync { .. } => looping,
+                        _ => true,
                     })
                     .collect::<Vec<_>>()
             })
@@ -1274,5 +1282,174 @@ mod tests {
             outcome: onlinerpg_shared::fishing::FishingOutcome::Aborted,
         });
         assert_eq!(events(&mut rx)[0].change, InterestChange::Delete);
+    }
+
+    /// A late viewer gets the beat advanced to now; a new pose drops it.
+    #[test]
+    fn dance_enter_restores_the_beat_until_the_pose_changes() {
+        let mut interest = Interest::default();
+        let mut dancer = make_player("dancer", 0.0, 0.0);
+        dancer.object_type = Some("twist".into());
+        interest.publish_state(&ServerMessage::PlayerAppeared {
+            player: dancer.clone(),
+        });
+        interest.publish_state(&ServerMessage::PlayerDanceSync {
+            player_id: dancer.id,
+            elapsed_secs: 1.0,
+        });
+        interest
+            .subjects
+            .get_mut(&format!("player:{}", dancer.id))
+            .unwrap()
+            .snapshot_at -= std::time::Duration::from_secs(2);
+        let mut rx = watch(&mut interest, &make_player("late_dance_viewer", 5.0, 0.0));
+        let messages: Vec<_> = events(&mut rx)
+            .into_iter()
+            .flat_map(|event| event.messages)
+            .collect();
+        let appeared = messages
+            .iter()
+            .position(
+                |m| matches!(m, ServerMessage::PlayerAppeared { player } if player.id == dancer.id),
+            )
+            .expect("the dancer appears");
+        let beat = messages
+            .iter()
+            .position(|m| matches!(m, ServerMessage::PlayerDanceSync { elapsed_secs, .. } if *elapsed_secs >= 3.0))
+            .expect("the beat is advanced to the moment of entry");
+        assert!(appeared < beat, "the clip exists before it is sought");
+
+        dancer.object_type = None;
+        interest.publish_state(&ServerMessage::PlayerInteractionChanged {
+            player_id: dancer.id,
+            object_type: None,
+            object_id: None,
+            position: dancer.position,
+            rotation: dancer.rotation,
+            floor_level: dancer.floor_level,
+        });
+        let mut after_rx = watch(&mut interest, &make_player("after_dance_viewer", 6.0, 0.0));
+        assert!(!events(&mut after_rx)
+            .iter()
+            .flat_map(|event| &event.messages)
+            .any(|m| matches!(m, ServerMessage::PlayerDanceSync { .. })));
+    }
+
+    /// A pose change that moves the dancer drops the old beat, whether they
+    /// sit down or step into another dance, whose own beat follows.
+    #[test]
+    fn a_relocating_pose_change_drops_the_beat() {
+        for (pose, object_id) in [("chair", Some(7)), ("macarena", None)] {
+            let mut interest = Interest::default();
+            let mut dancer = make_player("moved_dancer", 0.0, 0.0);
+            dancer.object_type = Some("twist".into());
+            interest.publish_state(&ServerMessage::PlayerAppeared {
+                player: dancer.clone(),
+            });
+            interest.publish_state(&ServerMessage::PlayerDanceSync {
+                player_id: dancer.id,
+                elapsed_secs: 1.0,
+            });
+            let from = dancer.position;
+            dancer.object_type = Some(pose.into());
+            dancer.object_id = object_id;
+            dancer.position.x = 1.0;
+            let message = ServerMessage::PlayerInteractionChanged {
+                player_id: dancer.id,
+                object_type: dancer.object_type.clone(),
+                object_id: dancer.object_id,
+                position: dancer.position,
+                rotation: dancer.rotation,
+                floor_level: dancer.floor_level,
+            };
+            interest.publish_player_movement(&dancer, from, dancer.floor_level, message);
+
+            let mut rx = watch(&mut interest, &make_player("moved_viewer", 5.0, 0.0));
+            let messages: Vec<_> = events(&mut rx)
+                .into_iter()
+                .flat_map(|event| event.messages)
+                .collect();
+            assert!(messages.iter().any(
+                |m| matches!(m, ServerMessage::PlayerAppeared { player } if player.id == dancer.id)
+            ));
+            assert!(
+                !messages
+                    .iter()
+                    .any(|m| matches!(m, ServerMessage::PlayerDanceSync { .. })),
+                "{pose}"
+            );
+        }
+    }
+
+    /// A dancer who turns in place keeps the beat for later arrivals.
+    #[test]
+    fn a_move_that_keeps_the_dance_keeps_the_beat() {
+        let mut interest = Interest::default();
+        let mut dancer = make_player("turning_dancer", 0.0, 0.0);
+        dancer.object_type = Some("twist".into());
+        interest.publish_state(&ServerMessage::PlayerAppeared {
+            player: dancer.clone(),
+        });
+        interest.publish_state(&ServerMessage::PlayerDanceSync {
+            player_id: dancer.id,
+            elapsed_secs: 1.0,
+        });
+        dancer.rotation += 1.0;
+        let message = ServerMessage::PlayerMoved {
+            player_id: dancer.id,
+            position: dancer.position,
+            rotation: dancer.rotation,
+            floor_level: dancer.floor_level,
+            sprinting: false,
+        };
+        interest.publish_player_movement(&dancer, dancer.position, dancer.floor_level, message);
+
+        let mut rx = watch(&mut interest, &make_player("turn_viewer", 5.0, 0.0));
+        assert!(events(&mut rx)
+            .iter()
+            .flat_map(|event| &event.messages)
+            .any(|m| matches!(m, ServerMessage::PlayerDanceSync { .. })));
+    }
+
+    /// Republishes carry the beat forward without losing fractions of a ms.
+    #[test]
+    fn dance_beat_survives_many_republishes_without_drifting() {
+        let mut interest = Interest::default();
+        let mut dancer = make_player("busy_dancer", 0.0, 0.0);
+        dancer.object_type = Some("twist".into());
+        interest.publish_state(&ServerMessage::PlayerAppeared {
+            player: dancer.clone(),
+        });
+        let started = std::time::Instant::now();
+        interest.publish_state(&ServerMessage::PlayerDanceSync {
+            player_id: dancer.id,
+            elapsed_secs: 1.0,
+        });
+        let subject = format!("player:{}", dancer.id);
+        for _ in 0..500 {
+            interest.subjects.get_mut(&subject).unwrap().snapshot_at -=
+                std::time::Duration::from_micros(900);
+            interest.publish_state(&ServerMessage::PlayerHealthUpdate {
+                player_id: dancer.id,
+                health: 10,
+                max_health: 10,
+            });
+        }
+        let mut rx = watch(&mut interest, &make_player("late_busy_viewer", 5.0, 0.0));
+        let beat = events(&mut rx)
+            .into_iter()
+            .flat_map(|event| event.messages)
+            .find_map(|m| match m {
+                ServerMessage::PlayerDanceSync { elapsed_secs, .. } => Some(elapsed_secs),
+                _ => None,
+            })
+            .expect("the beat rides the snapshot");
+        // 1 s to start with, 500 × 0.9 ms of republishes, plus the real time
+        // the loop took.
+        let real = started.elapsed().as_secs_f64();
+        assert!(
+            beat > 1.449 && beat < 1.451 + real,
+            "beat drifted to {beat} s instead of 1.45 s + {real} s"
+        );
     }
 }
