@@ -93,12 +93,14 @@ def bake(path, part, points, paired, keep_pending=False, arms=None):
 
 # Sleeve-end offsets move a sleeve's end across the upper arm, linearly from this far below the shoulder
 # joint; sleeve vertices lie within SLEEVE_RADIUS of the upper-arm axis. Same as sleeveEndDeformer in female-part-fit.ts.
+# A short puffed sleeve starts nearer the shoulder and stands farther out (`start`, `radius`); `fade` then eases
+# the move in over that distance outward of the shoulder joint, where the sleeve meets the bodice.
 SLEEVE_START = .09
 SLEEVE_RADIUS = .07
 SLEEVE_END_INSET = .015
 
 
-def sleeve_end(points, joints, ends):
+def sleeve_end(points, joints, ends, start=SLEEVE_START, radius=SLEEVE_RADIUS, fade=0):
     """`joints[side]` is the (shoulder, elbow) bind position in glTF space; `ends` holds cm offsets per side."""
     p = points @ TO_GLTF.T
     for side, key in ((1, 'left'), (-1, 'right')):
@@ -110,11 +112,14 @@ def sleeve_end(points, joints, ends):
         d = p - shoulder
         s = d @ axis
         r = np.linalg.norm(d - s[:, None] * axis, axis=1)
-        sleeve = (p[:, 0] * side > shoulder[0] * side) & (r < SLEEVE_RADIUS) & (s > SLEEVE_START)
+        sleeve = (p[:, 0] * side > shoulder[0] * side) & (r < radius) & (s > start)
         if not sleeve.any():
             continue
         end = s[sleeve].max() - SLEEVE_END_INSET
-        t = (s[sleeve] - SLEEVE_START) / (end - SLEEVE_START)
+        t = (s[sleeve] - start) / (end - start)
+        if fade:
+            u = np.clip((p[sleeve, 0] - shoulder[0]) * side / fade, 0, 1)
+            t = t * u * u * (3 - 2 * u)
         offset = ends[key]
         p[sleeve] += t[:, None] * (offset['forward'] / 100 * forward + offset['out'] / 100 * out)
     return p @ TO_GLTF

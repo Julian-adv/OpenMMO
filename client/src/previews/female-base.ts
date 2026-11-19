@@ -39,6 +39,8 @@ import {
   partFitter,
   SLEEVE_END_KEYS,
   sleeveEndDeformer,
+  TUBE_SLEEVE,
+  type SleeveShape,
   type PartFit,
   type PartFitKey,
   type PartFitter,
@@ -1435,7 +1437,11 @@ export async function showFemaleBase(
     if (fitters.has(part)) outfitMask.setEquipped(part, !showSkinToggle.checked)
   }
   // Parts whose sleeves are aligned as one tube, so their ends can be moved by hand.
-  const sleeveEndParts = new Set(['top-ranger'])
+  // Shapes match `sleeve_end` in fit_female_outfit.py.
+  const sleeveEndParts = new Map<string, SleeveShape>([
+    ['top-ranger', TUBE_SLEEVE],
+    ['top-maid', { start: 0.03, radius: 0.12, fade: 0.03 }],
+  ])
   const sleeveEnds = new Map<string, Record<PartSide, SleeveEnd>>()
   const sleeveEndsOf = (part: string) => {
     let ends = sleeveEnds.get(part)
@@ -2129,7 +2135,8 @@ export async function showFemaleBase(
                     bindPosition('RightArm'),
                     bindPosition('RightForeArm'),
                   ],
-                }
+                },
+                sleeveEndParts.get(part)
               )
               after = (point) =>
                 deform(point, (side) => sleeveEndsOf(part)[side])

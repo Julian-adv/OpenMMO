@@ -67,7 +67,8 @@ def icp(points, tree, offset, iterations=30):
 class ArmPose:
     """Per-side forearm rotation about the elbow and rigid hand fit, blended along the arm."""
 
-    def __init__(self, bones, body_points, body_faces, body_weights, bone_names, arm_points, gloves, arm_reach=None):
+    def __init__(self, bones, body_points, body_faces, body_weights, bone_names, arm_points, gloves, arm_reach=None,
+                 fit_arm=False):
         self.sides = {}
         for side in ('Left', 'Right'):
             shoulder, elbow, wrist = (bones[side + n] for n in ('Arm', 'ForeArm', 'Hand'))
@@ -87,7 +88,9 @@ class ArmPose:
             if np.dot(tripo_axis, forearm_axis) < 0:
                 tripo_axis = -tripo_axis
             forearm = rigid(rotation_between(tripo_axis, forearm_axis), elbow, elbow)
-            hand_columns = [i for i, n in enumerate(bone_names) if n.startswith(side + 'Hand')]
+            # A glove past the elbow is fitted to the whole arm: placed by the hand alone its tube swung off the arm.
+            hand_columns = [i for i, n in enumerate(bone_names) if n.startswith(side + 'Hand')
+                            or fit_arm and n in (side + 'ForeArm', side + 'Arm')]
             hand_faces = body_faces[(body_weights[:, hand_columns].sum(1)[body_faces] > .5).all(1)]
             tree = BVHTree.FromPolygons([Vector(p) for p in body_points], hand_faces.tolist())
             glove = apply(forearm, gloves[side])

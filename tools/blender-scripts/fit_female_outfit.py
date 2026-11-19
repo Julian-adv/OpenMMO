@@ -186,24 +186,30 @@ OUTFITS = {
             # Satin gloves to above the elbow, each topped with a frill and a bow. They cover the whole forearm,
             # whose skin came through at the elbow in the idle pose. The frill stands off the arm, and the skin
             # hidden near it by whole triangles left notches above it: the arm is cut 1 cm inside the rim instead.
+            # Fitted to the hand alone the long tube stood 2 cm behind the elbow, so the whole arm places it; then
+            # it turns as one piece until wrist and opening are centred on the arm.
             'gloves': dict(nodes=['left_glove', 'right_glove'], version='fitted_v1',
                            hide_bones=('LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm'),
-                           clip_cuff=.01, cuff_past_elbow=True),
+                           clip_cuff=.01, cuff_past_elbow=True, fit_arm=True, align_ends=True),
             # Bodice with collar, bib, puff sleeves and corset waist; the arms stay bare below the sleeve cuffs.
             # The corset is drawn 1.5 cm tighter than the body's waist, so the skin that stands out of it is not
             # restored: it showed as a band of belly between corset and waistband.
             # Generated alone on a bust by tools/split-female-maid-top.py: the bodice that came with the whole
             # outfit had its collar at the trapezius, narrower than the neck there.
             'top': dict(nodes=['top'], version='fitted_v1', hide_underwear=(1.15, 1.7),
-                        clip_hem=dict(keep='below', within=.25), clip_sleeve=.01,
+                        clip_hem=dict(keep='below', within=.25), clip_sleeve=dict(frill=-.012), align_sleeves='rigid',
+                        sleeve_end=dict(start=.03, radius=.12, fade=.03),
                         rigid_collar=1.535,
                         hide_neck=dict(above=1.47, collar=1.545, level=.62, within=.1),
                         model=dict(source='tripo_top_v2/segmented.glb',
                                    sha256='6c20ac95d269b96c79ea33a892e036d9154a98c61b517a443d6c14ac1eb868f9', scale=1)),
             # Short skirt over a petticoat with the apron, its waistband and the back bow, hung from the hips as a
             # bell: skinned to the thighs its hem tore apart between the legs at a walk.
+            # The waistband ring stood 1.7 cm behind the body's waist, inside the belly at the front: the skirt
+            # moves forward as one piece.
             'bottom': dict(nodes=['skirt'], version='fitted_v1', hide_underwear=(.8, 1.25),
-                           clip_hem=dict(keep='above', within=.25),
+                           clip_hem=dict(keep='above', within=.25, shift=.01), model=dict(offset_y=-.017),
+                           drop_lining=dict(near=.025, below=1.05, scraps=1.15, layer=500),
                            robe=dict(waist_height_m=1.18, hem_height_m=.81, center_z_m=-.02, waist_radii_m=[.14, .11],
                                      driven_below_m=1.13, blend_m=.08, lift=1, max_angle=1.2,
                                      colliders=[dict(bone=side + bone, center=[sign * x, y, z], radii=radii)
@@ -215,13 +221,16 @@ OUTFITS = {
             # every heel shares, and the heel tip 2.5 cm short of it: the shoe is raised as one piece and the heel
             # stretched by half the gap, as on the ceremony pumps.
             'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=LEGS, rigid_post=.075,
-                          lower_shoe=-.0102, extend_heel={'gap': .0127}, clip_hem=dict(keep='above', within=.4)),
+                          lower_shoe=-.0102, extend_heel={'gap': .0127}, clip_hem=dict(keep='above', within=.4, per_side=True, shift=-.003), level_tops=True,
+                          taper=dict(opening=.03, ankle=.07, ankle_fade=.05, clearance=.002, reach=.13)),
             'helmet': dict(nodes=['helmet'], version='fitted_v1'),
         }),
 }
 COVER_RAY = .06
 # Sleeve alignment fades in over this distance from the shoulder joint, leaving the shoulder pads in place.
 SLEEVE_BLEND = (.03, .09)
+# A long glove's opening is measured this far below its top, past the frill and bow (`align_ends`).
+GLOVE_TRIM = .04
 # The sleeve is cut this far inside the glove cuff, toward the hand.
 SLEEVE_CUT_INSET = .01
 # A sleeve with `cut_skin_band` is cut this far above its skin-coloured end band.
@@ -360,7 +369,7 @@ if {'top', 'left_glove', 'right_glove'} <= world.keys():
                    {'Left': np.vstack([top[top[:, 0] > .2], world['left_glove']]),
                     'Right': np.vstack([top[top[:, 0] < -.2], world['right_glove']])},
                    {'Left': world['left_glove'], 'Right': world['right_glove']},
-                   arm_reach=CONFIG.get('arm_reach'))
+                   arm_reach=CONFIG.get('arm_reach'), fit_arm=PARTS.get('gloves', {}).get('fit_arm', False))
 else:
     pose = StillArms()
 for name, obj in list(imported.items()):
@@ -434,7 +443,69 @@ def drop_skin():
     return len(drop)
 
 
+def drop_lining(spec):
+    """Delete the shell generated inside a skirt: tubes round the thighs and a piece between them.
+
+    It showed dark under the skirt and its cover hid the skin and underwear behind it in ragged patches. Its
+    faces lie within `near` of the body below `below` with a skirt layer (a piece of `layer` faces or more)
+    outside them in every outward direction; the skirt's own faces over the buttocks lie as near but have
+    nothing outside.
+    """
+    edit = bmesh.new()
+    edit.from_mesh(mesh)
+    edit.faces.ensure_lookup_table()
+    body = BVHTree.FromPolygons([Vector(p) for p in heel_points], bf.tolist())
+    # Only the skirt's large layers count as outside: a bow tail lying on the skirt covered its faces as well.
+    positions = np.array([v.co for v in edit.verts])
+    corners = np.array([[v.index for v in f.verts] for f in edit.faces])
+    layers = corners[component_sizes(positions, corners) >= spec['layer']]
+    own = BVHTree.FromPolygons([Vector(p) for p in positions], layers.tolist())
+    drop = []
+    for face in edit.faces:
+        centre = face.calc_center_median()
+        if centre.z > spec['below'] or body.find_nearest(centre)[3] > spec['near']:
+            continue
+        out = Vector((centre.x, centre.y + .01, 0)).normalized()
+        rays = [Matrix.Rotation(np.radians(turn), 3, 'Z') @ out + Vector((0, 0, lift))
+                for turn in (-40, -20, 0, 20, 40) for lift in (0, .35)]
+        if sum(own.ray_cast(centre + ray.normalized() * .004, ray.normalized(), .4)[0] is not None for ray in rays) >= 8:
+            drop.append(face)
+    count = len(drop)
+    bmesh.ops.delete(edit, geom=drop, context='FACES')
+    # Scraps the shell leaves hanging inside the skirt, some by a single corner, so pieces are joined by shared
+    # edges only. The lacing and bows are as small but sit above `scraps`.
+    edit.verts.index_update()
+    edit.faces.ensure_lookup_table()
+    welded = np.unique(np.round([v.co for v in edit.verts], 5), axis=0, return_inverse=True)[1].ravel()
+    across = {}
+    for face in edit.faces:
+        ids = [welded[v.index] for v in face.verts]
+        for a, b in zip(ids, ids[1:] + ids[:1]):
+            across.setdefault((min(a, b), max(a, b)), []).append(face.index)
+    piece = np.full(len(edit.faces), -1)
+    for start in range(len(edit.faces)):
+        if piece[start] >= 0:
+            continue
+        piece[start], stack = start, [start]
+        while stack:
+            ids = [welded[v.index] for v in edit.faces[stack.pop()].verts]
+            for a, b in zip(ids, ids[1:] + ids[:1]):
+                for other in across[(min(a, b), max(a, b))]:
+                    if piece[other] < 0:
+                        piece[other] = start
+                        stack.append(other)
+    sizes = np.bincount(piece)[piece]
+    scraps = [f for f in edit.faces if sizes[f.index] < 20 and max(v.co.z for v in f.verts) < spec['scraps']]
+    count += len(scraps)
+    bmesh.ops.delete(edit, geom=scraps, context='FACES')
+    edit.to_mesh(mesh)
+    edit.free()
+    mesh.update()
+    return count
+
+
 dropped_skin = drop_skin() if SPEC.get('drop_skin') else 0
+dropped_lining = drop_lining(SPEC['drop_lining']) if 'drop_lining' in SPEC else 0
 source = np.array([v.co for v in mesh.vertices])
 faces = np.array([p.vertices[:] for p in mesh.polygons])
 
@@ -564,6 +635,9 @@ def align_sleeves_rigid(points):
         sleeve_c, skin_c = centres(points[sleeve], s_sleeve), centres(skin, s_skin)
         pivot = sleeve_c[0]
         offset = np.array([0, (skin_c[0] - pivot)[1], 0])
+        # A sleeve ending near the blend leaves too short a baseline between its slices: it turns about the shoulder joint.
+        if stations[1] - stations[0] < .05:
+            pivot, offset = bones[side + 'Arm'], np.zeros(3)
         rotation = rotation_between(sleeve_c[1] - pivot, skin_c[1] - pivot - offset)
         q = points[sleeve]
         moved = (q - pivot) @ rotation.T + pivot + offset
@@ -623,6 +697,156 @@ def align_sleeves(points):
                               'vertices': int(sleeve.sum()), 'max_mm': float(np.linalg.norm(shift, axis=1).max() * 1000),
                               'median_mm': float(np.median(np.linalg.norm(shift, axis=1)) * 1000)}
     return sleeve_shift
+
+
+def align_glove_ends(points):
+    """Turn and move each long glove as one piece so its wrist and its opening sit on the base arm.
+
+    The arm and hand inside are hidden, so only the two ends show against skin (user request 2026-11-19). The
+    glove turns about its wrist slice until the slice below its cuff trim is centred on the arm; no vertex moves
+    against another.
+    """
+    shifts = {}
+    for side, sign in (('Left', 1), ('Right', -1)):
+        glove = points[:, 0] * sign > 0
+        columns = [i for i, n in enumerate(names) if n in (side + 'Arm', side + 'ForeArm')]
+        skin = rest_points[bw[:, columns].sum(1) > .5]
+        s_glove, _ = arm_param(points[glove], side)
+        s_skin, _ = arm_param(skin, side)
+        upper = np.linalg.norm(bones[side + 'ForeArm'] - bones[side + 'Arm'])
+        lower = np.linalg.norm(bones[side + 'Hand'] - bones[side + 'ForeArm'])
+        stations = [upper + lower - .02, s_glove.min() + GLOVE_TRIM]
+
+        def centres(q, s):
+            out = []
+            for station in stations:
+                start, end = ('Arm', 'ForeArm') if station < upper else ('ForeArm', 'Hand')
+                axis = bones[side + end] - bones[side + start]
+                axis /= np.linalg.norm(axis)
+                across = np.cross(axis, [0, 1, 0])
+                across /= np.linalg.norm(across)
+                frame = np.array([across, np.cross(across, axis)])
+                near = q[np.abs(s - station) < .015]
+                assert len(near) > 8, f'{side} glove station {station:.3f} has too few points'
+                # Percentiles: a bow or seam on one side pulled the plain extent off centre.
+                low, high = np.percentile(near @ frame.T, [5, 95], axis=0)
+                out.append((low + high) / 2 @ frame + (bones[side + start] @ axis + station - (0 if station < upper else upper)) * axis)
+            return np.array(out)
+
+        glove_c, skin_c = centres(points[glove], s_glove), centres(skin, s_skin)
+        rotation = rotation_between(glove_c[1] - glove_c[0], skin_c[1] - skin_c[0])
+        moved = (points[glove] - glove_c[0]) @ rotation.T + skin_c[0]
+        shift = np.linalg.norm(moved - points[glove], axis=1)
+        points[glove] = moved
+        after = centres(points[glove], arm_param(points[glove], side)[0])
+        shifts[side] = {'stations_m': [float(v) for v in stations],
+                        'rotation_deg': float(np.degrees(np.arccos(np.clip((np.trace(rotation) - 1) / 2, -1, 1)))),
+                        'offsets_before_mm': (np.linalg.norm(glove_c - skin_c, axis=1) * 1000).round(1).tolist(),
+                        'offsets_after_mm': (np.linalg.norm(after - skin_c, axis=1) * 1000).round(1).tolist(),
+                        'max_mm': float(shift.max() * 1000)}
+    return shifts
+
+
+def closed_rim(own, up):
+    """Edge points of a tube generated closed, on one leg.
+
+    A tilted top with stray spikes: a band below the highest point caught only its high side. The edge is the
+    highest point in each direction round the leg, less the spikes that stand off the plane through them.
+    """
+    height = own[:, 2].max() if up == 1 else own[:, 2].min()
+    top = own[(own[:, 2] - height) * up > -.08]
+    angle = np.arctan2(*(top[:, :2] - top[:, :2].mean(0)).T)
+    sector = np.floor((angle + np.pi) / (2 * np.pi) * 48).astype(int) % 48
+    rim = np.array([top[sector == k][np.argmax(top[sector == k][:, 2] * up)] for k in np.unique(sector)])
+    for _ in range(3):
+        fit = np.linalg.lstsq(np.c_[rim[:, :2], np.ones(len(rim))], rim[:, 2], rcond=None)[0]
+        rim = rim[np.abs(rim[:, 2] - np.c_[rim[:, :2], np.ones(len(rim))] @ fit) < .004]
+    return rim
+
+
+def level_tops(points):
+    """Press whatever stands above each stocking's edge plane down onto it: spikes showed over the lace."""
+    record = {}
+    for side, sign in (('Left', 1), ('Right', -1)):
+        leg = points[:, 0] * sign > 0
+        rim = closed_rim(points[leg], 1)
+        centre = rim.mean(0)
+        normal = np.linalg.svd(rim - centre)[2][2]
+        normal *= np.sign(normal[2])
+        above = np.maximum((points[leg] - centre) @ normal, 0)
+        points[leg] -= above[:, None] * normal
+        record[side] = {'vertices': int((above > 1e-5).sum()), 'max_mm': float(above.max() * 1000)}
+    return record
+
+
+def taper_stockings(points, faces, spec):
+    """Scale each stocking across the leg so its opening and its ankle are as wide as the base leg.
+
+    The leg inside is hidden, so only the two ends are measured (user request 2026-11-19): the factor runs
+    linearly between them, which keeps the tube smooth where matching every slice would not. The opening is
+    also centred on the thigh, a shift that falls to nothing at the ankle, where the tube joins the shoe. The
+    opening's values hold above it; below the ankle the factor fades out, leaving the shoe as generated.
+    """
+    record = {}
+    for side, sign in (('Left', 1), ('Right', -1)):
+        joints = [bones[side + n] for n in ('UpLeg', 'Leg', 'Foot')]
+        lengths = [np.linalg.norm(b - a) for a, b in zip(joints, joints[1:])]
+
+        def along(q):
+            best = np.full(len(q), np.inf)
+            s, foot = np.zeros(len(q)), np.zeros((len(q), 3))
+            start = 0.
+            for (a, b), length in zip(zip(joints, joints[1:]), lengths):
+                direction = (b - a) / length
+                t = np.clip((q - a) @ direction, 0, length)
+                nearest = a + t[:, None] * direction
+                distance = np.linalg.norm(q - nearest, axis=1)
+                closer = distance < best
+                best[closer], s[closer], foot[closer] = distance[closer], start + t[closer], nearest[closer]
+                start += length
+            return s, foot
+
+        leg = points[:, 0] * sign > 0
+        s_cloth, foot_cloth = along(points[leg])
+        ankle = sum(lengths) - spec['ankle']
+        tube = np.linalg.norm(points[leg] - foot_cloth, axis=1) < spec['reach']
+        stations = [s_cloth[tube].min() + spec['opening'], ankle]
+        factors, centres = [], []
+        for station in stations:
+            a, b = (joints[0], joints[1]) if station < lengths[0] else (joints[1], joints[2])
+            axis = (b - a) / np.linalg.norm(b - a)
+            origin = a + (station if station < lengths[0] else station - lengths[0]) * axis
+            across = np.cross(axis, [0, 1, 0])
+            across /= np.linalg.norm(across)
+            frame = np.array([across, np.cross(across, axis)])
+
+            def section(vertices, triangles):
+                """Where the surface crosses the station plane: vertex slabs missed rings on the sparse thigh."""
+                depth = (vertices - origin) @ axis
+                cut = []
+                for i, k in ((0, 1), (1, 2), (2, 0)):
+                    da, db = depth[triangles[:, i]], depth[triangles[:, k]]
+                    crossing = (da * db < 0)
+                    t = (da[crossing] / (da[crossing] - db[crossing]))[:, None]
+                    cut.append(vertices[triangles[crossing, i]] * (1 - t) + vertices[triangles[crossing, k]] * t)
+                cut = np.vstack(cut)
+                cut = cut[(cut[:, 0] * sign > 0) & (np.linalg.norm(cut - origin, axis=1) < spec['reach'])]
+                assert len(cut) > 8, f'{side} stocking station {station:.3f} has too few points'
+                coords = (cut - origin) @ frame.T
+                return np.ptp(coords, axis=0), (coords.min(0) + coords.max(0)) / 2
+
+            cloth_size, cloth_centre = section(points, faces)
+            skin_size, skin_centre = section(bp, bf)
+            factors.append((skin_size.sum() + 4 * spec['clearance']) / cloth_size.sum())
+            centres.append((skin_centre - cloth_centre * factors[-1]) @ frame)
+        fade = 1 - smoothstep((s_cloth - ankle) / spec['ankle_fade'])
+        factor = 1 + (np.interp(s_cloth, stations, factors) - 1) * fade
+        shift = centres[0] * np.interp(s_cloth, stations, [1, 0])[:, None]
+        points[leg] = foot_cloth + (points[leg] - foot_cloth) * factor[:, None] + shift
+        record[side] = {'stations_m': [float(v) for v in stations], 'factors': [float(v) for v in factors],
+                        'opening_shift_mm': (centres[0] * 1000).round(1).tolist(),
+                        'ankle_offset_mm': (centres[1] * 1000).round(1).tolist()}
+    return record
 
 
 def cut_hem(edit):
@@ -898,11 +1122,16 @@ sole_colour = None
 arms = {sign: (bones[side + 'ForeArm'] @ TO_GLTF.T, bones[side + 'Hand'] @ TO_GLTF.T)
         for side, sign in (('Left', 1), ('Right', -1))}
 heel_extension = {}
+levelled_tops = {}
 sleeve_shift = {}
 sleeve_cut = {}
 hem_cut = hem_height = None
 if heel:
     # Boots are skinned in the heel pose, then returned to bind space where preview adjustments apply.
+    if 'taper' in SPEC:
+        sleeve_shift = taper_stockings(points, faces, SPEC['taper'])
+    if SPEC.get('level_tops'):
+        levelled_tops = level_tops(points)
     order, values = skin_weights(points)
     if 'rigid_post' in SPEC:
         order, values, rigid_post_vertices = rigid_posts(points, order, values, SPEC['rigid_post'])
@@ -925,6 +1154,8 @@ else:
     # One-tube sleeves are aligned before the saved fits, which then move them as the preview showed.
     if RIGID_SLEEVES:
         sleeve_shift = align_sleeves_rigid(points)
+    if SPEC.get('align_ends'):
+        sleeve_shift = align_glove_ends(points)
     points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending, arms=arms)
     if SPEC.get('align_sleeves') is True:
         sleeve_shift = align_sleeves(points)
@@ -935,7 +1166,7 @@ else:
         sleeve_ends = sleeve_end_total(preview_fits)
         joints = {sign: (bones[side + 'Arm'] @ TO_GLTF.T, bones[side + 'ForeArm'] @ TO_GLTF.T)
                   for side, sign in (('Left', 1), ('Right', -1))}
-        points = sleeve_end(points, joints, sleeve_ends)
+        points = sleeve_end(points, joints, sleeve_ends, **SPEC.get('sleeve_end', {}))
     order, values = skin_weights(points)
 
 for vertex, point in zip(mesh.vertices, points):
@@ -1126,12 +1357,37 @@ if 'clip_cuff' in SPEC:
 if 'clip_sleeve' in SPEC:
     # A sleeve that ends on the bare arm: as at a glove cuff, arm skin is cut along the plane of the sleeve's end,
     # `clip_sleeve` metres inside it, and hidden up the sleeve from there.
+    frill = SPEC['clip_sleeve'].get('frill') if isinstance(SPEC['clip_sleeve'], dict) else None
+    if frill is not None:
+        # A cuff band with a white frill hanging from it: the frill flares off the arm, and a cut near its tips
+        # showed a hole under it. The plane is fitted to the frill and set where it meets the band, `frill` metres
+        # into the band (negative: down into the frill). At 3 mm into the band skin stood out between band and frill.
+        pixels = [base_colour_pixels(m) for m in mesh.materials]
+        uv = mesh.uv_layers.active.data
+        white = np.zeros(len(points), bool)
+        for polygon in mesh.polygons:
+            u, v = np.mean([uv[i].uv for i in polygon.loop_indices], axis=0)
+            if texel(pixels[polygon.material_index], u, v).min() > .6:
+                white[list(polygon.vertices)] = True
     for side, sign in (('Left', 1), ('Right', -1)):
-        axis = bones[side + 'Hand'] - bones[side + 'ForeArm']
-        axis /= np.linalg.norm(axis)
-        sleeve = points[points[:, 0] * sign > SLEEVE_SIDE]
-        along = (sleeve - bones[side + 'ForeArm']) @ axis
-        origin = bones[side + 'ForeArm'] + axis * (np.percentile(along, 99) - SPEC['clip_sleeve'])
+        if frill is None:
+            axis = bones[side + 'Hand'] - bones[side + 'ForeArm']
+            axis /= np.linalg.norm(axis)
+            sleeve = points[points[:, 0] * sign > SLEEVE_SIDE]
+            along = (sleeve - bones[side + 'ForeArm']) @ axis
+            origin = bones[side + 'ForeArm'] + axis * (np.percentile(along, 99) - SPEC['clip_sleeve'])
+        else:
+            upper = bones[side + 'ForeArm'] - bones[side + 'Arm']
+            upper /= np.linalg.norm(upper)
+            offset = points - bones[side + 'Arm']
+            reach = offset @ upper
+            ring = points[white & (points[:, 0] * sign > bones[side + 'Arm'][0] * sign) & (reach > .06)
+                          & (np.linalg.norm(offset - reach[:, None] * upper, axis=1) < .12)]
+            assert len(ring) > 30, f'{side} sleeve frill has {len(ring)} vertices'
+            centre = ring.mean(0)
+            axis = np.linalg.svd(ring - centre)[2][2]
+            axis *= np.sign(axis @ upper)
+            origin = centre + axis * (np.percentile((ring - centre) @ axis, 3) - frill)
         depth = (rest_points - origin) @ axis
         columns = [i for i, n in enumerate(names) if n in (side + 'Arm', side + 'ForeArm') or n.startswith(side + 'Hand')]
         arm = (bw[:, columns].sum(1) > .5)[bf].all(1)
@@ -1169,7 +1425,6 @@ if 'clip_hem' in SPEC:
     # The plane is fitted to the edge: a preview fit tilted the bodice hem 2 cm up at the back, and a level cut
     # at its lowest point left that much of the waist missing above the hem.
     up = 1 if SPEC['clip_hem']['keep'] == 'above' else -1
-    height = points[:, 2].max() if up == 1 else points[:, 2].min()
     cloth_ids = np.unique(np.round(points, 5), axis=0, return_inverse=True)[1].ravel()
     uses = {}
     for face in cloth_ids[faces]:
@@ -1178,26 +1433,36 @@ if 'clip_hem' in SPEC:
             uses[key] = uses.get(key, 0) + 1
     cloth_points = np.zeros((cloth_ids.max() + 1, 3))
     cloth_points[cloth_ids] = points
-    rim = np.array([(cloth_points[a] + cloth_points[b]) / 2 for (a, b), count in uses.items() if count == 1])
-    rim = rim[(rim[:, 2] - height) * up > -HEM_BAND] if len(rim) else rim
-    if not len(rim):
-        # A stocking top generated closed has no open edge: the cap that closes it is the edge.
-        rim = cloth_points[(cloth_points[:, 2] - height) * up > -HEM_CAP]
-    hem_centre = rim.mean(0)
-    hem_normal = np.linalg.svd(rim - hem_centre)[2][2]
-    hem_normal *= np.sign(hem_normal[2]) * up
-    depth = (rest_points - hem_centre) @ hem_normal
-    kept = (depth > 0)[bf]
-    near = (np.abs(rest_points[:, 0]) < SPEC['clip_hem']['within'])[bf].all(1)
-    if 'hide_underwear' in SPEC:
-        near &= (islands[bf] == skin_island).all(1)
-    straddling = near & kept.any(1) & ~kept.all(1)
-    hidden[straddling | (near & kept.all(1) & (depth[bf].max(1) < .03))] = False
-    # A triangle on the covered side with a corner on the edge is not cut, and coverage missed two on a thigh.
-    hidden[near & ~kept.any(1) & (depth[bf].max(1) > -.002)] = True
-    cuff_clips.append({'point': (hem_centre @ TO_GLTF.T).round(5).tolist(),
-                       'normal': (hem_normal @ TO_GLTF.T).round(5).tolist(),
-                       'triangle_indices': np.flatnonzero(straddling).tolist()})
+    open_rim = np.array([(cloth_points[a] + cloth_points[b]) / 2 for (a, b), count in uses.items() if count == 1])
+    # `per_side` fits each leg's edge its own plane: one plane through both stocking tops missed each by its tilt.
+    for sign in (1, -1) if SPEC['clip_hem'].get('per_side') else (0,):
+        own = cloth_points[cloth_points[:, 0] * sign >= 0]
+        height = own[:, 2].max() if up == 1 else own[:, 2].min()
+        rim = open_rim[open_rim[:, 0] * sign >= 0] if len(open_rim) else open_rim
+        rim = rim[(rim[:, 2] - height) * up > -HEM_BAND] if len(rim) else rim
+        if not len(rim):
+            # A stocking top generated closed has no open edge: the cap that closes it is the edge.
+            rim = own[(own[:, 2] - height) * up > -HEM_CAP]
+            if sign:
+                rim = closed_rim(own, up)
+        hem_centre = rim.mean(0)
+        hem_normal = np.linalg.svd(rim - hem_centre)[2][2]
+        hem_normal *= np.sign(hem_normal[2]) * up
+        # `shift` moves the cut toward the bare side: a band tighter than the body let skin just past its edge through.
+        # Negative, the skin runs that far into the cloth and leaves no gap at the edge.
+        hem_centre = hem_centre + hem_normal * SPEC['clip_hem'].get('shift', 0)
+        depth = (rest_points - hem_centre) @ hem_normal
+        kept = (depth > 0)[bf]
+        near = ((np.abs(rest_points[:, 0]) < SPEC['clip_hem']['within']) & (rest_points[:, 0] * sign >= 0))[bf].all(1)
+        if 'hide_underwear' in SPEC:
+            near &= (islands[bf] == skin_island).all(1)
+        straddling = near & kept.any(1) & ~kept.all(1)
+        hidden[straddling | (near & kept.all(1) & (depth[bf].max(1) < .03))] = False
+        # A triangle on the covered side with a corner on the edge is not cut, and coverage missed two on a thigh.
+        hidden[near & ~kept.any(1) & (depth[bf].max(1) > -.002)] = True
+        cuff_clips.append({'point': (hem_centre @ TO_GLTF.T).round(5).tolist(),
+                           'normal': (hem_normal @ TO_GLTF.T).round(5).tolist(),
+                           'triangle_indices': np.flatnonzero(straddling).tolist()})
 if 'clip_edge' in SPEC:
     # A curved open edge such as a neckline: each skin triangle it crosses is cut by the plane through its nearest
     # edge segment, square to the cloth there. `above` and `within` (m) pick the edge; skin stays EDGE_OVERLAP inside it.
@@ -1406,7 +1671,8 @@ report = {'date': date.today().isoformat(), 'outfit': OUTFIT, 'part': PART, 'sou
           **({'heel_lift_m': -foot_shift} if CONFIG['on_heels'] else {}),
           **({'heel_pose_degrees': HEEL_DEGREES, 'leg_hidden_below_rim_m': rim_heights,
               **({} if CONFIG['on_heels'] else {'foot_stretch_m': foot_shift, 'ankle_band_m': ANKLE_BAND})} if heel else {}),
-          'triangles': len(faces), 'vertices': len(points), **({'dropped_skin_faces': dropped_skin} if dropped_skin else {}), 'skin_distance_mm': percentiles(depths),
+          'triangles': len(faces), 'vertices': len(points), **({'dropped_skin_faces': dropped_skin} if dropped_skin else {}),
+          **({'dropped_lining_faces': dropped_lining} if dropped_lining else {}), **({'levelled_tops': levelled_tops} if levelled_tops else {}), 'skin_distance_mm': percentiles(depths),
           'pushout': False, 'poke_depth_m': POKE_DEPTH,
           'hidden_body_triangles': int(hidden.sum()), 'restored_visible_triangles': restored, 'motion_poke_triangles': motion_pokes,
           'brush_triangles': {'hide': len(brush.get('hide', [])), 'show': len(brush.get('show', []))},

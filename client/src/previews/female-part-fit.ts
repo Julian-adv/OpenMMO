@@ -137,9 +137,9 @@ type Source = {
 }
 
 // Keep in sync with sleeve_end in tools/outfits/female_outfit_adjust.py.
-const SLEEVE_START = 0.09
-const SLEEVE_RADIUS = 0.07
 const SLEEVE_END_INSET = 0.015
+export type SleeveShape = { start: number; radius: number; fade: number }
+export const TUBE_SLEEVE: SleeveShape = { start: 0.09, radius: 0.07, fade: 0 }
 
 /**
  * Moves each sleeve's end across the upper arm, linearly from the shoulder; `joints[side]` is the
@@ -147,7 +147,8 @@ const SLEEVE_END_INSET = 0.015
  */
 export function sleeveEndDeformer(
   positions: Float32Array[],
-  joints: Record<PartSide, [THREE.Vector3, THREE.Vector3]>
+  joints: Record<PartSide, [THREE.Vector3, THREE.Vector3]>,
+  shape = TUBE_SLEEVE
 ) {
   const frames = ([1, -1] as const).map((side) => {
     const [shoulder, elbow] = joints[side]
@@ -167,7 +168,7 @@ export function sleeveEndDeformer(
     d.subVectors(p, frame.shoulder)
     const s = d.dot(frame.axis)
     const r = d.addScaledVector(frame.axis, -s).length()
-    return r < SLEEVE_RADIUS && s > SLEEVE_START ? s : undefined
+    return r < shape.radius && s > shape.start ? s : undefined
   }
   for (const array of positions)
     for (let i = 0; i < array.length; i += 3) {
@@ -182,7 +183,13 @@ export function sleeveEndDeformer(
     for (const frame of frames) {
       const s = along(frame, p)
       if (s === undefined) continue
-      const t = (s - SLEEVE_START) / (frame.end - SLEEVE_START)
+      let t = (s - shape.start) / (frame.end - shape.start)
+      if (shape.fade)
+        t *= THREE.MathUtils.smoothstep(
+          (p.x - frame.shoulder.x) * frame.side,
+          0,
+          shape.fade
+        )
       const { forward, out } = endFor(frame.side)
       p.addScaledVector(frame.forward, (t * forward) / 100).addScaledVector(
         frame.out,

@@ -79,15 +79,31 @@ for side, x_sign in (('left', 1), ('right', -1)):
     stocking = BVHTree.FromPolygons([Vector(p) for p in xp], stocking_faces.tolist())
     rim = xp[np.unique(stocking_faces)][:, 1].max()
     for facing, z_sign in (('front', 1), ('back', -1)):
-        rows, dense = [], []
-        for height in np.linspace(TOP, rim - OVERLAP, ROWS):
+        # A taut strap: straight from its top to its clasp, bending only where the thigh stands in the way.
+        # Following the skin row by row made it wander.
+        heights = np.linspace(TOP, rim - OVERLAP, ROWS)
+        ends = []
+        for height in heights[[0, -1]]:
             band = bp[leg & (np.abs(bp[:, 1] - height) < .015)]
-            x = (band[:, 0].min() + band[:, 0].max()) / 2
+            ends.append((band[:, 0].min() + band[:, 0].max()) / 2)
+        down = heights[0] - heights
+        xs = np.interp(down, down[[0, -1]], ends)
+        depth = []
+        for x, height in zip(xs, heights):
             origin = Vector((x, height, z_sign * .4))
             hits = [surface.ray_cast(origin, Vector((0, 0, -z_sign)), .8)[0] for surface in (thigh, stocking)]
-            z = max(hit[2] * z_sign for hit in hits if hit is not None) * z_sign
-            rows.append([x, height, z + z_sign * (LIFT + THICKNESS / 2)])
-            hit, _, face, _ = thigh.find_nearest(Vector((x, height, z)))
+            depth.append(max(hit[2] * z_sign for hit in hits if hit is not None) + LIFT + THICKNESS / 2)
+        hull = [0]
+        for i in range(1, ROWS):
+            while len(hull) > 1 and ((depth[hull[-1]] - depth[hull[-2]]) * (down[i] - down[hull[-2]])
+                                     <= (depth[i] - depth[hull[-2]]) * (down[hull[-1]] - down[hull[-2]])):
+                hull.pop()
+            hull.append(i)
+        taut = np.interp(down, down[hull], np.array(depth)[hull])
+        rows, dense = [], []
+        for x, height, out in zip(xs, heights, taut):
+            rows.append([x, height, out * z_sign])
+            hit, _, face, _ = thigh.find_nearest(Vector((x, height, out * z_sign)))
             dense.append(barycentric(np.array(hit), bp[leg_faces[face]]) @ bw[leg_faces[face]])
         rows, dense = np.array(rows), np.array(dense)
         start = sum(len(p) for p in points)
@@ -151,7 +167,8 @@ report = {'date': date.today().isoformat(), 'strap_count': 4, 'width_m': WIDTH, 
           'top_height_m': TOP, 'triangles': len(faces), 'vertices': len(points),
           'sources': {str(path.relative_to(ROOT)): hashlib.sha256(path.read_bytes()).hexdigest() for path in (BODY, BOOTS)},
           'anchors': anchors, 'output_sha256': hashlib.sha256(target.read_bytes()).hexdigest(),
-          'method': 'Four modelled ribbons with a clasp each, laid 3 mm over the thigh skin and the stocking top, '
-                    'with the thigh skin weights under them. No generation.'}
+          'method': 'Four modelled ribbons with a clasp each, drawn taut from under the skirt to the stocking top, 3 mm '
+                    'clear of the thigh where it stands in the way, with the thigh skin weights under them. '
+                    'No generation.'}
 (OUTPUT / 'fitting.json').write_text(json.dumps(report, indent=2) + '\n')
 print('REPORT', json.dumps(report))
