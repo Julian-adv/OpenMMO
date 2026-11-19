@@ -87,7 +87,9 @@ export function loadCharacterModel(
     return loadFemaleCharacter(path, detail, femaleFace(appearance?.face))
   if (path !== MODULAR_MALE_MODEL_PATH) return loadGLB(path)
   const face =
-    appearance?.face === 'custom' ? 'default' : (appearance?.face ?? 'default')
+    appearance?.face === 'custom' || appearance?.face === 'elegant'
+      ? 'default'
+      : (appearance?.face ?? 'default')
   let maleModel = maleModels.get(face)
   if (!maleModel) {
     const ids = [...eagerParts]

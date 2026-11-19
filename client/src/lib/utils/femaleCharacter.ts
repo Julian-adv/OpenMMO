@@ -142,10 +142,10 @@ const pairedBaseClips = new WeakMap<GLTF, THREE.AnimationClip[]>()
 // The close-up face parts and the assembled scenes holding their own copies of their geometry.
 const closeupFaceParts = new Map<string, GLTF>()
 const closeupScenes: THREE.Object3D[] = []
-export type FemaleFace = 'ranger' | 'chic'
-/** A saved `custom` shows the chic face and every other value the ranger face (user decision 2026-11-11). */
+export type FemaleFace = 'ranger' | 'chic' | 'elegant'
+/** A saved `custom` shows the chic face, `elegant` its own, and every other value the ranger face. */
 export const femaleFace = (face?: string): FemaleFace =>
-  face === 'custom' ? 'chic' : 'ranger'
+  face === 'custom' ? 'chic' : face === 'elegant' ? 'elegant' : 'ranger'
 // Body triangles the face part replaces, and the body triangle each neck strip triangle stands in for.
 interface FacePart {
   body_triangles: number

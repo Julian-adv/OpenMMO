@@ -1,8 +1,8 @@
-# 여성 상체(머리·목·어깨) 생성물 — 세 번째 얼굴 시안
+# 여성 상체(머리·목·어깨) 생성물 — 세 번째 여성 얼굴 `elegant`
 
-2026-11-19. 몸체의 승모근이 커 보인다는 지적에 따라, 어깨까지의 상체를 따로 생성해 몸체에 붙이려던 시도다(사용자 결정). 상체로는 붙이지 않았고, 목 위를 세 번째 여성 얼굴 시안으로 피팅했다(아래 "얼굴 시안"). 게임에는 아직 넣지 않았다.
+2026-11-19. 몸체의 승모근이 커 보인다는 지적에 따라, 어깨까지의 상체를 따로 생성해 몸체에 붙이려던 시도다(사용자 결정). 상체로는 붙이지 않았고, 목 위를 세 번째 여성 얼굴로 피팅해 게임에 넣었다(아래 "얼굴"과 "게임 연결").
 
-- 참고 이미지: 사용자 제공 이미지(SHA-256 `3a488a95…1e6f`). 출처와 이용 조건을 확인하지 못해 공개 저장소에 올리지 않았다. 원화의 인상 참고로만 썼다. 게임에 넣기 전에 사용자 확인이 필요하다.
+- 참고 이미지: 사용자 제공 이미지(SHA-256 `3a488a95…1e6f`). 출처와 이용 조건을 확인하지 못해 공개 저장소에 올리지 않았다. 원화의 인상 참고로만 썼다. 사용자 요청으로 게임에 연결했으나(2026-11-19) 출처와 이용 조건은 여전히 확인되지 않았다. 배포 전에 사용자 확인이 필요하다.
 - 원화: OpenAI Codex built-in ImageGen(`codex exec`), **ChatGPT Pro 20x**, OpenAI 생성 출력물 이용 조건. `bust-front-v1.png` `165fa387…2a2d`, 프롬프트 `bust-front-v1-prompt.txt`. 피부 톤 기준으로 시크 얼굴의 민머리 원화를 같이 넣었다. 사용자 승인.
 - Tripo API 유료 크레딧, `P2-20260801`, detailed PBR, face_limit 10000, 정면 한 장, seed 111903. 작업 ID `ca0a829f-20fd-46e5-be40-018a91208d28`, 120크레딧(1480 → 1360). 출력 `model_url.glb` `01952ce8…7348`, 9,575 triangles. [Tripo 이용 조건](https://developers.tripo3d.ai/en/terms).
 - 파일은 `assets/modular_human_female_01/faces/tripo_bust_v1/`.
@@ -23,9 +23,9 @@
 
 몸체 정점을 수식으로 내려 승모근을 줄인 시안도 만들었으나 표면이 울퉁불퉁해져 버렸다(사용자 판단).
 
-## 얼굴 시안 — 2026-11-19
+## 얼굴 — 2026-11-19
 
-사용자 요청으로 목 위를 [시크 얼굴](modular-female-chic-face.md)과 같은 절차로 붙였다. 임시 이름 `elegant`.
+사용자 요청으로 목 위를 [시크 얼굴](modular-female-chic-face.md)과 같은 절차로 붙였다. 이름 `elegant`.
 `tools/fit-female-ranger-face.py --face elegant`, 결과 `base_elegant.glb`, 기록 `fitting.json`.
 
 - 회전·균일 스케일 0.339·이동 `[0, 1.6271, -0.008]`m. 턱과 정수리 높이를 순찰자·시크 얼굴에 맞춘 배율이다. 위 표의 0.398은 어깨에 맞춘 배율이라 머리가 컸다.
@@ -48,16 +48,31 @@
 - 홍채: 다시 그리지 않았다. 중심 x ∓0.0335/0.0331m, y 1.6865m, 반지름 7.2/7.1mm.
 - 헤어 보정(`femaleHairFits.json`의 `elegant`): 순찰자 두피를 이 두피에 맞춘 변환(균일 98.9%, 위로 0.22cm, 뒤로 0.08cm, 평균 오차 1.8mm)을 넣고
   사용자가 미리보기에서 조정했다. 단발과 긴 머리는 계산값보다 0.9–1.6cm 위, 배율 97%가 되었다. 묶은 머리와 긴 웨이브는 계산값 그대로다.
-- 미리보기: `/modular-character-preview.html?character=female-face&face=elegant`. 피팅 원본을 바로 읽는다.
+- 미리보기: `/modular-character-preview.html?character=female-face&face=elegant`. 게임과 같은 `base.glb`와 `face_elegant.glb`를 읽고, `&source=preview`를 붙이면 피팅 원본을 읽는다.
 - 피팅 도구가 다시 만드는 `face-eye-albedo.png`·`face-orm.png`·`body-neck-*.png`·`iris_cleanup_v1/input-*.png`와 검토 렌더는 사용자 요청으로 지웠다.
 - 도구를 고친 뒤에도 시크 얼굴의 `base_chic.glb`·`fitting.json`은 바이트 단위로 그대로다.
+
+## 게임 연결 — 2026-11-19
+
+생성 화면에서 고르는 세 번째 여성 얼굴이다(사용자 요청). 저장 값 `elegant`와 표시 이름 "우아한 얼굴"은 작업 중에 붙인 이름이고 사용자가 확정하지 않았다. 저장 값은 배포 뒤에는 바꾸기 어렵다.
+
+- 저장 값: `FaceStyle::Elegant`(`elegant`)을 새로 두었다. 여성은 `custom`·`elegant`를 그대로 두고 나머지는 `default`로, 남성은 둘 다 `default`로 맞춘다.
+  새 값이 와이어에 실리므로 프로토콜 165. 기존 캐릭터의 얼굴은 바뀌지 않는다.
+- 파츠 `face_elegant.glb`(1024², 1.13MB)·`face_elegant_512.glb`(512², 1.00MB).
+  [1024² 기록](modular-female-elegant-face-runtime.json), [512² 기록](modular-female-elegant-face-runtime-512.json).
+- 표시: `femaleFace`가 `elegant`를 이 얼굴로 돌린다. 눈색 원 `ELEGANT_FEMALE_EYE`(중심 x 0.0335/0.0331m, y 1.6865m, 반지름 7.5/7.4mm).
+- 썸네일 `female-face-elegant.png`: `render_female_hair_thumbnail.py`에 `base_elegant.glb`와 단발 헤어 보정(오른쪽 0.5cm, 위 1cm, 뒤 0.3cm, 97%)을 주어 512² 렌더한 뒤 128²로 줄였다. 로컬 렌더다.
+
+- 투구: 두상이 순찰자 얼굴과 가깝다. 높이 1.66m 위에서 순찰자 두상보다 바깥으로 나온 양은 정수리 최대 2.7mm, 이마 2.5mm, 뒤통수 4.8mm, 옆 4.7mm다
+  (시크 얼굴은 이마 8.3mm, 옆 7.6mm). 투구를 씌운 렌더는 하지 않았다.
+- `female-knight-runtime-sources.json`의 `femaleCharacter.ts` 해시는 도구를 다시 돌리지 않고 손으로 고쳤다.
 
 ### 남은 일
 
 - 사선에서 먼 쪽 눈의 속눈썹 가닥이 눈꼬리 밖으로 조금 나온다. 귀 뒤 텍스처에 얼룩이 있다. 이마와 콧등의 하이라이트가 색 텍스처에 구워져 있다.
-- 게임 연결(이름, 저장할 얼굴 값, 파츠 `face_*.glb`, 눈색 원, 썸네일)은 하지 않았다.
-- Blender 렌더와 수치로 확인했고, 브라우저는 사용자가 미리보기에서 확인했다.
+- Blender 렌더와 수치로 확인했고, 브라우저는 사용자가 미리보기에서 확인했다. 게임 안 생성 화면과 월드에서는 확인하지 않았다.
 
 ```bash
 cd tools && ../.venv/bin/python project-female-face-eyes.py --face elegant && ../.venv/bin/python fit-female-ranger-face.py --face elegant
+node tools/prepare-female-custom-face.mjs --face elegant && node tools/prepare-female-custom-face.mjs --face elegant --size 512
 ```

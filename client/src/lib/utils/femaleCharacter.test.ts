@@ -72,7 +72,7 @@ const hasAssets = existsSync(
 )
 
 describe.skipIf(!hasAssets)('female face selection', () => {
-  it('shows the chic face for a saved custom face and the ranger face otherwise, on the canonical rig', async () => {
+  it('shows the chic face for a saved custom face, the elegant face for its own and the ranger face otherwise, on the canonical rig', async () => {
     const original = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
     for (const face of ['default', 'ranger'] as const)
       expect(
@@ -82,9 +82,14 @@ describe.skipIf(!hasAssets)('female face selection', () => {
       face: 'custom',
     })
     expect(chic).not.toBe(original)
+    const elegant = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH, {
+      face: 'elegant',
+    })
+    expect(elegant).not.toBe(chic)
     for (const [model, face] of [
       [original, 'ranger'],
       [chic, 'chic'],
+      [elegant, 'elegant'],
     ] as const) {
       expect(model.scene.userData.modular_face).toBe(face)
       const head = skinnedParts(model.scene).find(
@@ -139,6 +144,7 @@ describe.skipIf(!hasAssets)('female face selection', () => {
   it.each([
     ['default', 'face_ranger'],
     ['custom', 'face_chic'],
+    ['elegant', 'face_elegant'],
   ] as const)(
     'releases the close-up %s face part and loads it again on the next close-up',
     async (face, part) => {

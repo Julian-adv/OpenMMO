@@ -57,6 +57,7 @@ task `8a0f1d71-088d-4dae-ad4f-88c10a5ecc1e`, 120크레딧(4120 → 4000). Tripo 
 
 사용자 결정(2026-11-11): 저장된 `face` 값 `custom`을 이 얼굴로, 나머지를 순찰자 얼굴로 표시한다(`femaleFace`).
 서버는 여성 얼굴을 `default`·`custom` 둘만 저장하므로 서버·프로토콜·저장 데이터는 바꾸지 않았다.
+세 번째 얼굴은 2026-11-19에 새 값 `elegant`로 들어갔다([기록](modular-female-bust.md)).
 기존 `custom` 여성 캐릭터는 순찰자 얼굴에서 이 얼굴로 바뀐다.
 
 - 파츠 `face_chic.glb`(1024², 1.18MB)·`face_chic_512.glb`(512², 1.04MB): `node tools/prepare-female-custom-face.mjs --face chic [--size 512]`.

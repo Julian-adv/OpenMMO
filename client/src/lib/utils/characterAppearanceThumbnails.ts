@@ -12,8 +12,9 @@ import femaleLongWavy from '../../assets/character-appearance/female-hair-long-w
 import femaleTwintail from '../../assets/character-appearance/female-hair-twintail.png'
 import femaleDefaultFace from '../../assets/character-appearance/female-face-default.png'
 import femaleCustomFace from '../../assets/character-appearance/female-face-custom.png'
+import femaleElegantFace from '../../assets/character-appearance/female-face-elegant.png'
 
-// `default` is the ranger face and `custom` the chic face (femaleFace in femaleCharacter.ts).
+// `default` is the ranger face, `custom` the chic face and `elegant` its own (femaleFace in femaleCharacter.ts).
 export const FEMALE_FACE_OPTIONS = [
   {
     value: 'default',
@@ -24,6 +25,11 @@ export const FEMALE_FACE_OPTIONS = [
     value: 'custom',
     label: 'characterCreate.faceCustom',
     thumbnail: femaleCustomFace,
+  },
+  {
+    value: 'elegant',
+    label: 'characterCreate.faceElegant',
+    thumbnail: femaleElegantFace,
   },
 ] as const
 

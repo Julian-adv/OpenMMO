@@ -30,7 +30,7 @@ export type CharacterClass =
 export type Gender = 'male' | 'female'
 
 export type CharacterAppearance = {
-  face: 'default' | 'rugged' | 'ranger' | 'custom'
+  face: 'default' | 'rugged' | 'ranger' | 'custom' | 'elegant'
   hair:
     | 'crop'
     | 'wavy_bone'

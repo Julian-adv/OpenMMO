@@ -28,6 +28,13 @@ pub enum FaceStyle {
     Rugged,
     Ranger,
     Custom,
+    Elegant,
+}
+
+impl FaceStyle {
+    fn is_female(self) -> bool {
+        matches!(self, Self::Custom | Self::Elegant)
+    }
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,7 +167,7 @@ impl CharacterAppearance {
             } else {
                 self.hair
             };
-            let face = if self.face == FaceStyle::Custom {
+            let face = if self.face.is_female() {
                 FaceStyle::Default
             } else {
                 self.face
@@ -187,8 +194,8 @@ impl CharacterAppearance {
                 (hair, hair.texture_color())
             };
             Self {
-                face: if self.face == FaceStyle::Custom {
-                    FaceStyle::Custom
+                face: if self.face.is_female() {
+                    self.face
                 } else {
                     FaceStyle::Default
                 },
@@ -389,6 +396,30 @@ mod appearance_tests {
         assert_eq!(
             appearance.for_character(&CharacterClass::Merchant, Gender::Female),
             CharacterAppearance::default()
+        );
+    }
+
+    #[test]
+    fn elegant_face_is_kept_for_females_only() {
+        let appearance: CharacterAppearance =
+            serde_json::from_str(r#"{"face":"elegant","hair":"bob"}"#).unwrap();
+        assert_eq!(appearance.face, FaceStyle::Elegant);
+        let bytes = rmp_serde::to_vec(&appearance).unwrap();
+        assert_eq!(
+            rmp_serde::from_slice::<CharacterAppearance>(&bytes).unwrap(),
+            appearance
+        );
+        assert_eq!(
+            appearance
+                .for_character(&CharacterClass::Knight, Gender::Female)
+                .face,
+            FaceStyle::Elegant
+        );
+        assert_eq!(
+            appearance
+                .for_character(&CharacterClass::Knight, Gender::Male)
+                .face,
+            FaceStyle::Default
         );
     }
 }

@@ -88,6 +88,7 @@ export async function showFemaleBase(
       <select id="female-face">
         <option value="ranger">기본 얼굴</option>
         <option value="chic">새 얼굴 (custom)</option>
+        <option value="elegant">우아한 얼굴 (elegant)</option>
       </select>
       <label for="female-hair">헤어</label>
       <select id="female-hair">
@@ -400,9 +401,10 @@ export async function showFemaleBase(
     MeshoptDecoder
   )
   const faceSelect = document.getElementById('female-face') as HTMLSelectElement
+  const requestedFace = new URLSearchParams(location.search).get('face')
   const face: FemaleFace =
-    new URLSearchParams(location.search).get('face') === 'chic'
-      ? 'chic'
+    requestedFace === 'chic' || requestedFace === 'elegant'
+      ? requestedFace
       : 'ranger'
   faceSelect.value = face
   const hairSelect = document.getElementById('female-hair') as HTMLSelectElement

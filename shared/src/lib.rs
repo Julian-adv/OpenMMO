@@ -304,7 +304,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `PatrolShovel`/`PatrolShovelled`/`PlayerShovelled`/`RoadSnowCleared`, guards
 /// shovelling snow off the road. `WeatherSync.snow_laid`.
 /// v164: female `HairStyle::Twintail`.
-pub const PROTOCOL_VERSION: u32 = 164;
+/// v165: female `FaceStyle::Elegant`.
+pub const PROTOCOL_VERSION: u32 = 165;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

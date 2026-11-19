@@ -69,7 +69,7 @@
     "assets/items/valkyrie_boots/fitted_v1/body-occlusion.json": "e5fd12be641d3917f5f152681d25f310bfd7351989605636d6e0530cb75d664c",
     "assets/items/valkyrie_gloves/fitted_v3/body-occlusion.json": "2e67e4b201465d13889f5b6ea64aecfde8e63a2c347074e172c1c4c944a22448",
     "assets/items/valkyrie_helmet/fitted_v2/body-occlusion.json": "319a3f4848040f2cef370435ca95acbbdfa968c8d9544710391860dee620a7a2",
-    "client/src/lib/utils/femaleCharacter.ts": "104a56416ebfeb0c950e9b816529b25492e56ac874de6d0fa1aa73d3dede0f83",
+    "client/src/lib/utils/femaleCharacter.ts": "03e0810b7dcc28dadb5e8ceb12508a2d76814099f05b2b440cae8b50bbe407dd",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/top_female_caveman.glb": "e447242db6e34cb2ab8b0f67cbb621f4dee14ad036dfee7f193be4f80a78f23f",
     "assets/items/female_caveman_top/tripo_v1/fitted_v7/body-occlusion.json": "95494be44e0f651739bf853c24e783172338fab0dcf2cd79c7a3361195c7dd9f",
     "assets/items/female_caveman_bottom/tripo_v1/fitted_v9/bottom_female_caveman.glb": "ce641e30dcebe965a0c4aac09a5e233c5887d0aa81be2218875bf3866819b6f9",

@@ -91,9 +91,18 @@ const CHIC_FEMALE_EYE: Eye = {
   front: 0.03,
   eyeballUv: true,
 }
+// Iris centres and radius from the elegant face fit (fitting.json `irises`).
+const ELEGANT_FEMALE_EYE: Eye = {
+  x: [0.0335, 0.0331],
+  y: 1.6865,
+  radius: [0.0075, 0.0074],
+  front: 0.03,
+  eyeballUv: true,
+}
 const FEMALE_FACE_EYES: Record<string, Eye> = {
   face_ranger: RANGER_FEMALE_EYE,
   face_chic: CHIC_FEMALE_EYE,
+  face_elegant: ELEGANT_FEMALE_EYE,
 }
 // Mean linear luminance of each female hair texture, so the chosen color is the mean albedo.
 const linearLuminance = (hex: string) => {

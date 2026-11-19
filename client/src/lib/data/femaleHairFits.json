@@ -148,6 +148,18 @@
       "rotate-x": 0,
       "rotate-y": 0,
       "rotate-z": 0
+    },
+    "twintail": {
+      "move-x": 0,
+      "move-y": 0.8,
+      "move-z": 1,
+      "scale": 100,
+      "scale-x": 100,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
     }
   },
   "elegant": {

@@ -8,12 +8,12 @@ import { prune } from '@gltf-transform/functions'
 import { MeshoptDecoder, MeshoptEncoder } from 'meshoptimizer'
 
 const directory = 'client/public/models/characters/modular_female'
-// `--face ranger|chic` builds a bald-head face part; the default is the older custom face.
+// `--face ranger|chic|elegant` builds a bald-head face part; the default is the older custom face.
 const face = process.argv.includes('--face') ? process.argv[process.argv.indexOf('--face') + 1] : 'custom'
-const dates = { custom: '2026-11-08', ranger: '2026-11-10', chic: '2026-11-11' }
+const dates = { custom: '2026-11-08', ranger: '2026-11-10', chic: '2026-11-11', elegant: '2026-11-19' }
 assert.ok(Object.hasOwn(dates, face))
 const bald = face !== 'custom'
-const folders = { chic: 'tripo_chic_v2' }
+const folders = { chic: 'tripo_chic_v2', elegant: 'tripo_bust_v1' }
 const source = bald
   ? `assets/modular_human_female_01/faces/${folders[face] ?? `tripo_${face}_v1`}/base_${face}.glb`
   : 'assets/modular_human_female_01/faces/tripo_custom_v1/base_custom_preview.glb'
