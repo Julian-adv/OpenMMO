@@ -153,8 +153,8 @@
   "elegant": {
     "bob": {
       "move-x": 0.5,
-      "move-y": 1.55,
-      "move-z": -0.8,
+      "move-y": 1,
+      "move-z": -0.3,
       "scale": 97,
       "scale-x": 100,
       "scale-y": 100,

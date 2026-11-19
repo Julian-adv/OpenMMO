@@ -40,7 +40,13 @@ FACES = {
                 'iris': (4600, (640, 400), .1765, {'L': .0975, 'R': -.098}), 'retouched_irises': False,
                 'lashes_on_lids': True, 'ease_seam_weights': True, 'eye_piece_limit': 150,
                 # Generated with skin metalness near 0.52, which shone like lacquer; the other heads have about 0.04.
-                'metallic': .04},
+                'metallic': .04, 'round_pupil': .34, 'lash_length': 1, 'lash_roots_on_lid': True, 'lash_span': (.03, .9),
+                # Along the upper rim, and degrees above straight outwards, from the first strand to the last.
+                'lash_wing': {'count': 3, 'span': (.93, 1), 'angles': (28, 4)},
+                # Tripo frame units and sRGB.
+                'lash_line': {'width': .003, 'fade': .003, 'amount': .85, 'colour': (.13, .08, .07)},
+                'brows': {'y': (.2, .25), 'from': .03, 'to': .2, 'amount': .8, 'colour': (.3, .2, .16),
+                          'tail': {'length': .04, 'drop': .006, 'taper': .6, 'half_width': .0032}}},
 }
 FACE = OUT = SOURCE = SCALE = OFFSET = IRIS = IRIS_SCALE = IRIS_SIZE = IRIS_Y = IRIS_Z = None
 
@@ -279,6 +285,113 @@ def iris_record(centre, radius, side, **more):
             'iris_radius_fitted_m': radius / IRIS_SCALE * SCALE}
 
 
+def texels(pixels, corners, uv):
+    """Texel coordinates one triangle covers, with their positions on it."""
+    height, width = pixels.shape[:2]
+    uv = uv * [width - 1, height - 1]
+    lo = np.maximum(np.floor(uv.min(0)).astype(int) - 1, 0)
+    hi = np.minimum(np.ceil(uv.max(0)).astype(int) + 1, [width - 1, height - 1])
+    x, y = np.meshgrid(np.arange(lo[0], hi[0] + 1), np.arange(lo[1], hi[1] + 1))
+    samples = np.column_stack([x.ravel(), y.ravel()])
+    matrix = np.column_stack([uv[1] - uv[0], uv[2] - uv[0]])
+    if abs(np.linalg.det(matrix)) < 1e-10:
+        return samples[:0], corners[:0]
+    weights = (samples - uv[0]) @ np.linalg.inv(matrix).T
+    bary = np.column_stack([1 - weights.sum(1), weights])
+    inside = np.all(bary >= -.6 / max(np.ptp(uv, axis=0).max(), 1), axis=1)
+    return samples[inside], bary[inside] @ corners
+
+
+def region_texels(pixels, points, triangles, uvs):
+    found = [texels(pixels, points[triangle], uvs[triangle]) for triangle in triangles]
+    return np.concatenate([f[0] for f in found]), np.concatenate([f[1] for f in found])
+
+
+def paint_pupil(pixels, points, triangles, uvs, side, centre, radius, color, front_x):
+    """A round pupil over the generated one, whose baked highlights cut into its outline."""
+    samples, world = region_texels(pixels, points, triangles, uvs)
+    col = (world[:, 2] - IRIS_Z[side]) * IRIS_SCALE + IRIS_SIZE[0] / 2
+    row = IRIS_SIZE[1] / 2 - (world[:, 1] - IRIS_Y) * IRIS_SCALE
+    reach = np.hypot(row - centre[0], col - centre[1]) / radius
+    keep = (world[:, 0] > front_x) & (reach < 1.15)
+    fade = (1 - custom.smoothstep((reach[keep] - .85) / .3))[:, None]
+    px, py = samples[keep].T
+    pixels[py, px] = pixels[py, px] * (1 - fade) + color * fade
+    return int(keep.sum())
+
+
+def paint_brows(pixels, points, faces, uvs, balls, spec):
+    """Deepen the generated eyebrows where they are: texels darker than the skin around them move towards `colour`."""
+    low, high = spec['y']
+    centres = points[faces].mean(1)
+    near = (centres[:, 0] > .12) & (centres[:, 1] > low - .01) & (centres[:, 1] < high + .01) & (np.abs(centres[:, 2]) < .2)
+    # The eyeballs' hidden tops are dark and would count as brow.
+    near[balls] = False
+    samples, world = region_texels(pixels, points, faces[near], uvs)
+    keep = (world[:, 1] > low) & (world[:, 1] < high)
+    samples, world = samples[keep], world[keep]
+    px, py = samples.T
+    light = pixels[py, px].mean(1)
+    # Skin brightness as a plane over height and distance from the midline, from the brighter texels.
+    basis = np.column_stack([np.ones(len(world)), world[:, 1], np.abs(world[:, 2])])
+    skin = light > np.percentile(light, 40)
+    plane = np.linalg.lstsq(basis[skin], light[skin], rcond=None)[0]
+    darker = 1 - light / (basis @ plane)
+    edge = custom.smoothstep((world[:, 1] - low) / .006) * custom.smoothstep((high - world[:, 1]) / .006)
+    weight = custom.smoothstep((darker - spec['from']) / (spec['to'] - spec['from'])) * edge * spec['amount']
+    pixels[py, px] = pixels[py, px] * (1 - weight[:, None]) + np.array(spec['colour']) * weight[:, None]
+    record = {'texels': int((weight > .05).sum())}
+    if 'tail' in spec:
+        record['tails'] = {side: brow_tail(pixels, points, faces, uvs, world[(weight > .4 * spec['amount']) & (world[:, 2] * sign > 0)], sign, spec)
+                           for side, sign in (('L', 1), ('R', -1))}
+    return record
+
+
+def brow_tail(pixels, points, faces, uvs, brow, sign, spec):
+    """Draw the brow on past its outer end (user sketch 2026-11-19): a tapering stroke that leaves along the brow and arcs down.
+
+    Seen from the front, so lengths are in the front view.
+    """
+    length, drop = spec['tail']['length'], spec['tail']['drop']
+    out = brow[:, 2] * sign
+    end = np.percentile(out, 96)
+    last = out > end - .02
+    slope, level = np.polyfit(out[last], brow[last, 1], 1)
+    start = np.array([end, slope * end + level])
+    half = max(1.5 * np.std(brow[last, 1] - (slope * out[last] + level)), spec['tail']['half_width'])
+    t = np.linspace(-.15, 1, 240)
+    curve = np.column_stack([start[0] + length * t, start[1] + slope * length * t - (slope * length + drop) * np.clip(t, 0, 1) ** 2])
+    centres = points[faces].mean(1)
+    near = ((centres[:, 0] > 0) & (centres[:, 2] * sign > curve[:, 0].min() - .02) & (centres[:, 2] * sign < curve[:, 0].max() + .02)
+            & (centres[:, 1] > curve[:, 1].min() - .02) & (centres[:, 1] < curve[:, 1].max() + .02))
+    samples, world = region_texels(pixels, points, faces[near], uvs)
+    distance, nearest = cKDTree(curve).query(np.column_stack([world[:, 2] * sign, world[:, 1]]))
+    width = half * (1 - spec['tail']['taper'] * np.clip(t[nearest], 0, 1))
+    weight = (1 - custom.smoothstep((distance - width * .5) / (width * .7))) * custom.smoothstep((1 - t[nearest]) / .1) * spec['amount']
+    px, py = samples.T
+    pixels[py, px] = pixels[py, px] * (1 - weight[:, None]) + np.array(spec['colour']) * weight[:, None]
+    return {'start_tripo_zy': start.tolist(), 'slope': float(slope), 'half_width_tripo': float(half), 'texels': int((weight > .05).sum())}
+
+
+def paint_lash_line(pixels, points, faces, uvs, ball, spec):
+    """A dark line along the upper lid rim, so strand lashes rise out of a lash line instead of bare skin."""
+    rim = lid_margins(points, faces, np.zeros(0, dtype=int), ball)[0]
+    rim = np.column_stack([rim[:, 0], gaussian_filter1d(rim[:, 1], 3), gaussian_filter1d(rim[:, 2], 3)])
+    eye = np.zeros(len(faces), dtype=bool)
+    eye[ball] = True
+    centres = points[faces].mean(1)
+    near = (~eye & (centres[:, 2] > rim[:, 0].min() - .02) & (centres[:, 2] < rim[:, 0].max() + .02)
+            & (centres[:, 1] > rim[:, 1].min() - .02) & (centres[:, 1] < rim[:, 1].max() + .02) & (centres[:, 0] > rim[:, 2].min() - .04))
+    samples, world = region_texels(pixels, points, faces[near], uvs)
+    height = world[:, 1] - np.interp(world[:, 2], rim[:, 0], rim[:, 1])
+    inside = (world[:, 2] > rim[0, 0]) & (world[:, 2] < rim[-1, 0])
+    ends = custom.smoothstep((world[:, 2] - rim[0, 0]) / .01) * custom.smoothstep((rim[-1, 0] - world[:, 2]) / .01)
+    weight = (1 - custom.smoothstep((np.abs(height - spec['width'] / 2) - spec['width'] / 2) / spec['fade'])) * inside * ends * spec['amount']
+    px, py = samples.T
+    pixels[py, px] = pixels[py, px] * (1 - weight[:, None]) + np.array(spec['colour']) * weight[:, None]
+    return int((weight > .05).sum())
+
+
 def repair_irises(points, faces, uvs, image):
     """Paint the retouched irises onto the front of both eyeballs; the rest of the colour map is untouched.
 
@@ -292,7 +405,15 @@ def repair_irises(points, faces, uvs, image):
         if not FACES[FACE].get('retouched_irises', True):
             front = np.asarray(Image.open(IRIS / f'front-{side}.png').convert('RGB'), dtype=np.float32) / 255
             visible = np.asarray(Image.open(IRIS / f'visible-{side}.png')) == 255
-            record[side] = iris_record(*fitted_iris_circle(front, visible), side)
+            centre, radius = fitted_iris_circle(front, visible)
+            record[side] = iris_record(centre, radius, side)
+            if 'round_pupil' in FACES[FACE]:
+                dark = front[visible & (front.max(2) < .16)].mean(0)
+                record[side]['pupil_texels'] = paint_pupil(pixels, points, faces[ball_faces[sign]], uvs, side, centre,
+                                                           radius * FACES[FACE]['round_pupil'], dark,
+                                                           balls[sign][:, 0].min() + np.ptp(balls[sign][:, 0]) * .45)
+            if 'lash_line' in FACES[FACE]:
+                record[side]['lash_line_texels'] = paint_lash_line(pixels, points, faces, uvs, ball_faces[sign], FACES[FACE]['lash_line'])
             continue
         polar, centre, radius = clean_iris(side)
         ball = balls[sign]
@@ -332,6 +453,8 @@ def repair_irises(points, faces, uvs, image):
             pixels[py, px] = pixels[py, px] * (1 - fade) + color * fade
             painted += int(keep.sum())
         record[side] = iris_record(centre, radius, side, texels=painted)
+    if 'brows' in FACES[FACE]:
+        record['brows'] = paint_brows(pixels, points, faces, uvs, np.concatenate(list(ball_faces.values())), FACES[FACE]['brows'])
     Image.fromarray(np.round(np.clip(pixels, 0, 1) * 255).astype(np.uint8)).save(OUT / 'face-eye-albedo.png')
     return record
 
@@ -444,28 +567,72 @@ def lashes_on_lids(points, faces, donor_lashes, donor_balls, donor_skip, head_po
 
     A strand keeps its place along the opening's width and its scaled offset from the rim.
     """
-    moved, record = points.copy(), {}
+    moved, record, dropped = points.copy(), {}, []
     donor_surface = np.ones(len(faces), dtype=bool)
     donor_surface[donor_skip] = False
     skin = trimesh.Trimesh(points, faces[donor_surface], process=False)
+    lid = np.ones(len(head_faces), dtype=bool)
+    lid[own_lashes] = False
+    lid[np.concatenate(list(own_balls.values()))] = False
+    lid = trimesh.Trimesh(head_points, head_faces[lid], process=False)
     for side in (1, -1):
         source = lid_margins(points, faces, donor_skip, donor_balls[side])
         target = lid_margins(head_points, head_faces, own_lashes, own_balls[side])
         scale = float(np.ptp(target[0][:, 0]) / np.ptp(source[0][:, 0]))
         strands = [group for group, _ in components(points, faces[donor_lashes[side]])]
+        outside, wing = 0, []
         for strand in strands:
             ids = np.unique(faces[donor_lashes[side]][strand])
-            root = points[ids[np.argmin(trimesh.proximity.closest_point(skin, points[ids])[1])]]
+            root_id = int(np.argmin(trimesh.proximity.closest_point(skin, points[ids])[1]))
+            root = points[ids[root_id]]
             fraction = (root[2] - source[0][0, 0]) / np.ptp(source[0][:, 0])
             rim = int(np.argmin([abs(lid_point(source[k], fraction)[0][1] - root[1]) for k in (0, 1)]))
+            if FACES[FACE].get('lash_roots_on_lid'):
+                # Near the corners both rims are as close; a strand that points up belongs to the upper one.
+                tip = points[ids[np.argmax(np.linalg.norm(points[ids] - root, axis=1))]]
+                rim = int(tip[1] < root[1])
             (start, slope), (end, new_slope) = lid_point(source[rim], fraction), lid_point(target[rim], fraction)
             angle = np.arctan(new_slope) - np.arctan(slope)
             cos, sin = np.cos(angle), np.sin(angle)
             offset = points[ids] - start
             turned = np.column_stack([offset[:, 0], offset[:, 1] * cos + offset[:, 2] * sin, offset[:, 2] * cos - offset[:, 1] * sin])
-            moved[ids] = end + turned * scale
-        record['left' if side > 0 else 'right'] = {'strands': len(strands), 'uniform_scale': scale}
-    return moved, record
+            moved[ids] = end + turned * scale * FACES[FACE].get('lash_length', 1)
+            if FACES[FACE].get('lash_roots_on_lid'):
+                # The strand as one piece, so that its root sits on the lid at the rim. Kept offsets from the rim
+                # left the inner strands standing higher up the lid.
+                moved[ids] += trimesh.proximity.closest_point(lid, [end])[0][0] - moved[ids[root_id]]
+                # `lash_span` runs from the inner corner to the outer one.
+                low, high = FACES[FACE].get('lash_span', (0, 1))
+                outward = fraction if side > 0 else 1 - fraction
+                if not low <= outward <= high:
+                    # Past the rim's ends there is no rim to sit on, and at the corners the two lids' strands cross
+                    # over the eyeball.
+                    if outward > high:
+                        wing.append((float(np.linalg.norm(moved[ids] - moved[ids[root_id]], axis=1).max()), ids, root_id, strand))
+                    else:
+                        dropped.append(donor_lashes[side][strand])
+                        outside += 1
+        # The longest strands of the outer corner fan outwards from the upper rim instead (user sketch 2026-11-19).
+        spec = FACES[FACE].get('lash_wing', {'count': 0})
+        wing.sort(key=lambda item: -item[0])
+        for _, ids, root_id, strand in wing[spec['count']:]:
+            dropped.append(donor_lashes[side][strand])
+            outside += 1
+        wing = wing[:spec['count']]
+        for (_, ids, root_id, strand), along, turn in zip(wing, np.linspace(*spec.get('span', (1, 1)), len(wing)),
+                                                           np.radians(np.linspace(*spec.get('angles', (0, 0)), len(wing)))):
+            root = moved[ids[root_id]].copy()
+            tip = moved[ids[np.argmax(np.linalg.norm(moved[ids] - root, axis=1))]]
+            turn -= np.arctan2(tip[1] - root[1], (tip[2] - root[2]) * side)
+            out, up = (moved[ids, 2] - root[2]) * side, moved[ids, 1] - root[1]
+            moved[ids, 2] = root[2] + (out * np.cos(turn) - up * np.sin(turn)) * side
+            moved[ids, 1] = root[1] + out * np.sin(turn) + up * np.cos(turn)
+            seat = lid_point(target[0], along if side > 0 else 1 - along)[0]
+            moved[ids] += trimesh.proximity.closest_point(lid, [seat])[0][0] - root
+        record['left' if side > 0 else 'right'] = {'strands': len(strands), 'uniform_scale': scale,
+                                                   **({'dropped_corner_strands': int(outside)} if outside else {}),
+                                                   **({'outer_corner_strands': len(wing)} if wing else {})}
+    return moved, record, np.concatenate(dropped) if dropped else np.zeros(0, dtype=int)
 
 
 def transplant_lashes(head_points, head_faces):
@@ -481,7 +648,7 @@ def transplant_lashes(head_points, head_faces):
     if FACES[FACE].get('lashes_on_lids'):
         _, _, donor_ball_faces = eye_parts(points, faces, 16)
         loose = np.concatenate([group for group, corners in components(points, faces) if len(group) <= 16])
-        fitted, lid_record = lashes_on_lids(points, faces, donor_lashes, donor_ball_faces, loose,
+        fitted, lid_record, dropped = lashes_on_lids(points, faces, donor_lashes, donor_ball_faces, loose,
                                             head_points, head_faces, np.concatenate(list(own_lashes.values())), own_ball_faces)
     scale = float(np.mean([np.ptp(own_balls[side][:, 2]) / np.ptp(donor_balls[side][:, 2]) for side in (1, -1)]))
     surface = np.ones(len(head_faces), dtype=bool)
@@ -496,7 +663,7 @@ def transplant_lashes(head_points, head_faces):
         moved[ids] = (points[ids] - source) * scale + target
         if FACES[FACE].get('lashes_on_lids'):
             moved[ids] = fitted[ids]
-        picked.append(donor_lashes[side])
+        picked.append(donor_lashes[side][~np.isin(donor_lashes[side], dropped)] if FACES[FACE].get('lashes_on_lids') else donor_lashes[side])
         distance = trimesh.proximity.closest_point(skin, moved[ids])[1]
         record['left' if side > 0 else 'right'] = {
             'strand_triangles': int(len(donor_lashes[side])), 'replaced_own_triangles': int(len(own_lashes[side])),
