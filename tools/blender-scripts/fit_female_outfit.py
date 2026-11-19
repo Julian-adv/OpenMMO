@@ -221,6 +221,8 @@ OUTFITS = {
             'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=LEGS, rigid_post=.075,
                           lower_shoe=-.0102, extend_heel={'gap': .0127}, level_tops=True,
                           clip_hem=dict(keep='above', within=.4, per_side=True, shift=-.003),
+                          # Leg skin (sRGB) blended into the black knit: opaque black read as leggings.
+                          sheer=dict(skin=(.767, .594, .494), amount=.3, band=.078),
                           taper=dict(opening=.03, ankle=.07, ankle_fade=.05, clearance=.002, reach=.13)),
             'helmet': dict(nodes=['helmet'], version='fitted_v1'),
         }),
@@ -810,6 +812,62 @@ def taper_stockings(points, faces, spec):
                         'opening_shift_mm': (centres[0] * 1000).round(1).tolist(),
                         'ankle_offset_mm': (centres[1] * 1000).round(1).tolist()}
     return record
+
+
+def sheer_stockings(spec):
+    """Blend skin colour into the matte knit of this part's texture so the leg seems to show through.
+
+    The glossy shoe (low roughness) keeps its colour, and so does the lace and welt band, `band` metres down
+    from each stocking's top edge. Picking the band by its tone left the knit's baked shadows black too.
+    """
+    def image_of(socket):
+        shader = next(n for n in mesh.materials[0].node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
+        node = shader.inputs[socket].links[0].from_node
+        while node.type != 'TEX_IMAGE':
+            node = next(i.links[0].from_node for i in node.inputs if i.links)
+        return node.image
+
+    def read(image):
+        values = np.empty(len(image.pixels), dtype=np.float32)
+        image.pixels.foreach_get(values)
+        return values.reshape(image.size[1], image.size[0], -1)
+
+    colour_image = image_of('Base Color')
+    colour, rough = read(colour_image), read(image_of('Roughness'))[:, :, 1]
+    assert rough.shape == colour.shape[:2]
+    height, width = rough.shape
+    position = np.array([v.co for v in mesh.vertices])
+    below = np.zeros(len(position))
+    for sign in (1, -1):
+        leg = position[:, 0] * sign > 0
+        centre, normal = fit_plane(closed_rim(position[leg], 1))
+        below[leg] = (centre - position[leg]) @ (normal * np.sign(normal[2]))
+    depth = np.full((height, width), -1, np.float32)
+    uv = mesh.uv_layers.active.data
+    for polygon in mesh.polygons:
+        corners = np.array([uv[i].uv for i in polygon.loop_indices]) * (width, height)
+        low = np.maximum(np.floor(corners.min(0) - 2).astype(int), 0)
+        high = np.minimum(np.ceil(corners.max(0) + 2).astype(int), (width - 1, height - 1))
+        x, y = np.meshgrid(np.arange(low[0], high[0] + 1) + .5, np.arange(low[1], high[1] + 1) + .5)
+        a, b, c = corners
+        area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
+        if abs(area) < 1e-9:
+            continue
+        # Barycentric weights; texels up to 1.5 px outside an island's edge are taken too.
+        inside = np.ones(x.shape, bool)
+        value = np.zeros(x.shape)
+        for (p, q), opposite in zip(((b, c), (c, a), (a, b)), polygon.vertices):
+            edge = ((q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0])) / area
+            inside &= edge * abs(area) / np.hypot(*(q - p)) > -1.5
+            value += edge * below[opposite]
+        window = depth[low[1]:high[1] + 1, low[0]:high[0] + 1]
+        window[inside] = value[inside]
+    weight = spec['amount'] * smoothstep((rough - .4) / .2) * smoothstep((depth - spec['band']) / .004)
+    colour[:, :, :3] += (np.array(spec['skin'], np.float32) - colour[:, :, :3]) * weight[:, :, None]
+    colour_image.pixels.foreach_set(colour.ravel())
+    colour_image.update()
+    colour_image.pack()
+    return int((weight > .01).sum())
 
 
 def cut_hem(edit):
@@ -1551,6 +1609,7 @@ hidden[brush.get('show', [])] = False
 bpy.ops.object.select_all(action='DESELECT')
 mesh_obj.select_set(True)
 bpy.context.view_layer.objects.active = mesh_obj
+sheer_texels = sheer_stockings(SPEC['sheer']) if 'sheer' in SPEC else 0
 intermediate = OUTPUT / 'geometry.glb'
 bpy.ops.export_scene.gltf(filepath=str(intermediate), export_format='GLB', use_selection=True,
                           export_animations=False, export_skins=False, export_attributes=True, export_tangents=False)
@@ -1632,7 +1691,7 @@ report = {'date': date.today().isoformat(), 'outfit': OUTFIT, 'part': PART, 'sou
           **({'heel_pose_degrees': HEEL_DEGREES, 'leg_hidden_below_rim_m': rim_heights,
               **({} if CONFIG['on_heels'] else {'foot_stretch_m': foot_shift, 'ankle_band_m': ANKLE_BAND})} if heel else {}),
           'triangles': len(faces), 'vertices': len(points), **({'dropped_skin_faces': dropped_skin} if dropped_skin else {}),
-          **({'dropped_lining_faces': dropped_lining} if dropped_lining else {}), **({'levelled_tops': levelled_tops} if levelled_tops else {}), 'skin_distance_mm': percentiles(depths),
+          **({'dropped_lining_faces': dropped_lining} if dropped_lining else {}), **({'levelled_tops': levelled_tops} if levelled_tops else {}), **({'sheer_texels': sheer_texels} if sheer_texels else {}), 'skin_distance_mm': percentiles(depths),
           'pushout': False, 'poke_depth_m': POKE_DEPTH,
           'hidden_body_triangles': int(hidden.sum()), 'restored_visible_triangles': restored, 'motion_poke_triangles': motion_pokes,
           'brush_triangles': {'hide': len(brush.get('hide', [])), 'show': len(brush.get('show', []))},
