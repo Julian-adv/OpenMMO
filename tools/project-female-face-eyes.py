@@ -32,7 +32,7 @@ def main():
     attrs, faces = fit.custom.geometry(doc, raw, doc['meshes'][0]['primitives'][0])
     points, uvs = attrs['POSITION'].astype(np.float64), attrs['TEXCOORD_0'].astype(np.float64)
     color = fit.material_image(doc, raw, doc['materials'][0]['pbrMetallicRoughness']['baseColorTexture'])
-    _, lashes, balls = fit.eye_parts(points, faces, 200)
+    _, lashes, balls = fit.own_eye_parts(points, faces)
     keep = np.ones(len(faces), dtype=bool)
     keep[np.concatenate(list(lashes.values()))] = False
     eye = np.zeros(len(faces), dtype=bool)

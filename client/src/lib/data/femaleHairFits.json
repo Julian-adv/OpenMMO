@@ -149,5 +149,79 @@
       "rotate-y": 0,
       "rotate-z": 0
     }
+  },
+  "elegant": {
+    "bob": {
+      "move-x": 0.5,
+      "move-y": 1.55,
+      "move-z": -0.8,
+      "scale": 97,
+      "scale-x": 100,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "long": {
+      "move-x": -0.4,
+      "move-y": 1.7,
+      "move-z": -0.08,
+      "scale": 97,
+      "scale-x": 97.5,
+      "scale-y": 101,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "ponytail": {
+      "move-x": -0.03,
+      "move-y": -0.0768,
+      "move-z": -0.08,
+      "scale": 98.92,
+      "scale-x": 100,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "long_bangs": {
+      "move-x": -0.2773,
+      "move-y": 0.3,
+      "move-z": -0.2,
+      "scale": 96.45,
+      "scale-x": 91.5,
+      "scale-y": 111.5,
+      "scale-z": 97.5,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "long_wavy": {
+      "move-x": -0.1784,
+      "move-y": 0.8135,
+      "move-z": -0.08,
+      "scale": 98.92,
+      "scale-x": 97.5,
+      "scale-y": 101,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    },
+    "twintail": {
+      "move-x": -0.03,
+      "move-y": 1,
+      "move-z": -0.08,
+      "scale": 100,
+      "scale-x": 100,
+      "scale-y": 100,
+      "scale-z": 100,
+      "rotate-x": 0,
+      "rotate-y": 0,
+      "rotate-z": 0
+    }
   }
 }

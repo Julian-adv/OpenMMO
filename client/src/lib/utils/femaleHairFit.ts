@@ -14,7 +14,12 @@ export const HAIR_FIT_DEFAULT = {
   'rotate-z': 0,
 }
 export type HairFit = typeof HAIR_FIT_DEFAULT
-export type HairFitFace = 'default' | 'custom' | 'ranger' | 'chic'
+export type HairFitFace =
+  | 'default'
+  | 'custom'
+  | 'ranger'
+  | 'chic'
+  | 'elegant'
 export type HairFitStyle =
   | 'bob'
   | 'long'

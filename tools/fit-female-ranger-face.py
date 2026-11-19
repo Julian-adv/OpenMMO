@@ -35,6 +35,12 @@ FACES = {
     'chic': {'date': '2026-11-11', 'folder': 'tripo_chic_v2', 'scale': 0.293, 'offset': [0, 1.6506, 0.008],
              'iris': (4600, (640, 400), .1195, {'L': .0967, 'R': -.1006}), 'retouched_irises': False,
              'lashes_on_lids': True, 'ease_seam_weights': True},
+    # Cut from a head-and-shoulders bust. Its eyeballs are 180 triangles each, under the usual 200 split from lashes.
+    'elegant': {'date': '2026-11-19', 'folder': 'tripo_bust_v1', 'scale': 0.339, 'offset': [0, 1.6271, -0.008],
+                'iris': (4600, (640, 400), .1765, {'L': .0975, 'R': -.098}), 'retouched_irises': False,
+                'lashes_on_lids': True, 'ease_seam_weights': True, 'eye_piece_limit': 150,
+                # Generated with skin metalness near 0.52, which shone like lacquer; the other heads have about 0.04.
+                'metallic': .04},
 }
 FACE = OUT = SOURCE = SCALE = OFFSET = IRIS = IRIS_SCALE = IRIS_SIZE = IRIS_Y = IRIS_Z = None
 
@@ -280,7 +286,7 @@ def repair_irises(points, faces, uvs, image):
     """
     pixels = image.copy()
     height, width = pixels.shape[:2]
-    balls, _, ball_faces = eye_parts(points, faces, 200)
+    balls, _, ball_faces = own_eye_parts(points, faces)
     record = {}
     for side, sign in (('L', 1), ('R', -1)):
         if not FACES[FACE].get('retouched_irises', True):
@@ -378,6 +384,10 @@ def components(points, faces):
     return [(group, points[faces[group]].reshape(-1, 3)) for group in groups]
 
 
+def own_eye_parts(points, faces):
+    return eye_parts(points, faces, FACES[FACE].get('eye_piece_limit', 200))
+
+
 def eye_parts(points, faces, largest):
     """Loose pieces around the eyes in Tripo's frame (+X front, Z sideways): eyeballs and lashes per side."""
     balls, ball_faces, lashes = {}, {}, {1: [], -1: []}
@@ -467,7 +477,7 @@ def transplant_lashes(head_points, head_faces):
     attrs, faces = custom.geometry(donor, donor_raw, donor['meshes'][0]['primitives'][0])
     points = attrs['POSITION'].astype(np.float64)
     donor_balls, donor_lashes, _ = eye_parts(points, faces, 16)
-    own_balls, own_lashes, own_ball_faces = eye_parts(head_points, head_faces, 200)
+    own_balls, own_lashes, own_ball_faces = own_eye_parts(head_points, head_faces)
     if FACES[FACE].get('lashes_on_lids'):
         _, _, donor_ball_faces = eye_parts(points, faces, 16)
         loose = np.concatenate([group for group, corners in components(points, faces) if len(group) <= 16])
@@ -516,7 +526,7 @@ def main():
     head_color = source['materials'][0]['pbrMetallicRoughness']['baseColorTexture']
     # UV1.x marks the eyeballs, so the game's eye colour tint cannot reach the eyelids in front of them.
     eyeball = np.zeros((len(source_attrs['POSITION']), 2))
-    for group in eye_parts(source_attrs['POSITION'], source_faces, 200)[2].values():
+    for group in own_eye_parts(source_attrs['POSITION'], source_faces)[2].values():
         eyeball[np.unique(source_faces[group]), 0] = 1
     source_attrs['TEXCOORD_1'] = eyeball
     irises = repair_irises(source_attrs['POSITION'], source_faces, source_attrs['TEXCOORD_0'],
@@ -548,10 +558,13 @@ def main():
         body, kept_faces, source_attrs, source_faces,
         np.asarray(Image.open(BODY_SKIN / 'body-albedo.png'), dtype=np.float32) / 255,
         np.asarray(Image.open(OUT / 'face-eye-albedo.png'), dtype=np.float32) / 255, 'body-neck-albedo.png')
+    head_orm = material_image(source, source_raw, head_maps['pbrMetallicRoughness']['metallicRoughnessTexture'])
+    if 'metallic' in FACES[FACE]:
+        head_orm[:, :, 2] = np.minimum(head_orm[:, :, 2], FACES[FACE]['metallic'])
+        Image.fromarray(np.round(head_orm * 255).astype(np.uint8)).save(OUT / 'face-orm.png')
     bake_body_neck(
         body, kept_faces, source_attrs, source_faces,
-        np.asarray(Image.open(BODY_SKIN / 'body-orm.png'), dtype=np.float32) / 255,
-        material_image(source, source_raw, head_maps['pbrMetallicRoughness']['metallicRoughnessTexture']), 'body-neck-orm.png')
+        np.asarray(Image.open(BODY_SKIN / 'body-orm.png'), dtype=np.float32) / 255, head_orm, 'body-neck-orm.png')
 
     doc, raw = copy.deepcopy(base), bytearray(base_raw)
     face_material = custom.add_material(doc, raw, source, source_raw)
@@ -563,6 +576,14 @@ def main():
     doc['images'].append({'bufferView': len(doc['bufferViews']) - 1, 'mimeType': 'image/png', 'name': 'Face with retouched irises'})
     doc['textures'].append({'source': len(doc['images']) - 1})
     doc['materials'][face_material]['pbrMetallicRoughness']['baseColorTexture']['index'] = len(doc['textures']) - 1
+    if 'metallic' in FACES[FACE]:
+        image_data = (OUT / 'face-orm.png').read_bytes()
+        raw.extend(b'\0' * (-len(raw) % 4))
+        doc['bufferViews'].append({'buffer': 0, 'byteOffset': len(raw), 'byteLength': len(image_data)})
+        raw.extend(image_data)
+        doc['images'].append({'bufferView': len(doc['bufferViews']) - 1, 'mimeType': 'image/png', 'name': 'Face ORM with skin metalness'})
+        doc['textures'].append({'source': len(doc['images']) - 1})
+        doc['materials'][face_material]['pbrMetallicRoughness']['metallicRoughnessTexture']['index'] = len(doc['textures']) - 1
     fitted = doc['materials'][body_material]
     for name, slot in [('body-neck-albedo.png', fitted['pbrMetallicRoughness']['baseColorTexture']),
                        ('body-neck-orm.png', fitted['pbrMetallicRoughness']['metallicRoughnessTexture'])]:
@@ -615,6 +636,7 @@ def main():
               'source_triangles': len(source_faces), 'head_triangles': len(head_faces),
               'retained_body_triangles': len(kept_faces), 'neck_boundary_vertices': seam_count,
               'body_neck_fit_maximum_mm': body_displacement, **({'seam_weight_eased_vertices': eased} if eased else {}), 'body_neck_recolored_pixels': recolored,
+              **({'metallic_maximum': FACES[FACE]['metallic']} if 'metallic' in FACES[FACE] else {}),
               'rig_id': 'human_female_01_local_v1',
               'irises': {**({'sources': str((IRIS / 'sources.json').relative_to(ROOT)),
                              'method': 'Retouched frontal iris images painted onto the front of each eyeball; other texels unchanged'}
