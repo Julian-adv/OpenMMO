@@ -1,0 +1,94 @@
+{
+  "date": "2026-11-20",
+  "base": {
+    "path": "assets/modular_human_female_01/rig_v1/female-base.glb",
+    "sha256": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5"
+  },
+  "top": {
+    "path": "assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb",
+    "sha256": "7301f073f7593c4c6bd1c3de014f61cf1d85785517742b3e0ddf40a2ea3d7db7"
+  },
+  "triangles": 4279,
+  "bones": 65,
+  "exact_bind_compatibility": true,
+  "normalized_weights": true,
+  "unchanged_rest_shape": true,
+  "no_opposite_arm_influence": true,
+  "thorax_rigidity_checked_edges": 4198,
+  "clips": [
+    {
+      "name": "idle1",
+      "maximum_plate_edge_length_change": 7.361388076887465e-8,
+      "samples": 121,
+      "maximum_motion": 0.22161202418728537,
+      "maximum_thorax_edge_length_change": 0.000002028017973443319,
+      "maximum_edge_length_ratio": 2.821917657335388
+    },
+    {
+      "name": "idle_armed",
+      "maximum_plate_edge_length_change": 7.361388076887465e-8,
+      "samples": 121,
+      "maximum_motion": 0.22161202418728537,
+      "maximum_thorax_edge_length_change": 0.000002028017973443319,
+      "maximum_edge_length_ratio": 2.821917657335388
+    },
+    {
+      "name": "walk",
+      "maximum_plate_edge_length_change": 4.996281280922332e-7,
+      "samples": 121,
+      "maximum_motion": 0.31847209721800174,
+      "maximum_thorax_edge_length_change": 0.0000034719839036023714,
+      "maximum_edge_length_ratio": 2.9139307665344933
+    },
+    {
+      "name": "run",
+      "maximum_plate_edge_length_change": 6.933441401013596e-7,
+      "samples": 121,
+      "maximum_motion": 0.5083450940786063,
+      "maximum_thorax_edge_length_change": 0.0000037853039724922155,
+      "maximum_edge_length_ratio": 3.8800753407966355
+    },
+    {
+      "name": "jump",
+      "maximum_plate_edge_length_change": 0.0000017641775380550229,
+      "samples": 121,
+      "maximum_motion": 1.0475103566890136,
+      "maximum_thorax_edge_length_change": 0.000005998414952079756,
+      "maximum_edge_length_ratio": 4.2750012132070685
+    },
+    {
+      "name": "combat_idle",
+      "maximum_plate_edge_length_change": 2.226034767627283e-7,
+      "samples": 121,
+      "maximum_motion": 0.5614816513234951,
+      "maximum_thorax_edge_length_change": 0.0000016008287107016628,
+      "maximum_edge_length_ratio": 1.9162899696047637
+    },
+    {
+      "name": "slash1",
+      "maximum_plate_edge_length_change": 9.966463305755013e-7,
+      "samples": 121,
+      "maximum_motion": 1.230531952145448,
+      "maximum_thorax_edge_length_change": 0.0000046085009369756236,
+      "maximum_edge_length_ratio": 4.34609036022981
+    },
+    {
+      "name": "dying",
+      "maximum_plate_edge_length_change": 0.0000015308117135015564,
+      "samples": 121,
+      "maximum_motion": 2.1773182374425173,
+      "maximum_thorax_edge_length_change": 0.0000035500091386531096,
+      "maximum_edge_length_ratio": 5.200718952691926
+    },
+    {
+      "name": "sit_idle",
+      "maximum_plate_edge_length_change": 3.1990283921867757e-7,
+      "samples": 121,
+      "maximum_motion": 0.6205082933545101,
+      "maximum_thorax_edge_length_change": 0.0000025671887304845598,
+      "maximum_edge_length_ratio": 2.9075598069472273
+    }
+  ],
+  "rigid_plate_edges_checked": 7154,
+  "scope": "Runtime binding and sampled edge lengths of the cuirass and both pauldrons."
+}

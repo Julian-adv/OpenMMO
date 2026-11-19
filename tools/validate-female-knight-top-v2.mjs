@@ -4,8 +4,8 @@ import * as THREE from '../client/node_modules/three/build/three.module.js'
 import { headlessThree, clipSampler, hash } from './lib/headless-three.mjs'
 
 const basePath = 'assets/modular_human_female_01/rig_v1/female-base.glb'
-const version = process.argv[2] ?? 'v3'
-assert.ok(['v3'].includes(version))
+const version = process.argv[2] ?? 'v4'
+assert.ok(['v3', 'v4'].includes(version))
 const topPath = `assets/items/female_knight_top/tripo_v1/fitted_${version}/top_female_knight.glb`
 const { server, load } = await headlessThree()
 try {
@@ -52,19 +52,26 @@ try {
       if (joint === spine1) first += weights.getComponent(i, k)
       if (joint === spine2) second += weights.getComponent(i, k)
     }
+    if (version === 'v4') return Math.abs(first - 1) < 1e-6
     return Math.abs(first - .9) < 1e-5 && Math.abs(second - .1) < 1e-5
   }
-  const edges = [], allEdges = []
+  const plateBones = new Set(['LeftArm', 'RightArm', 'Spine1'])
+  const plateBone = i => weights.getX(i) === 1 && plateBones.has(bones[joints.getX(i)].name)
+    ? joints.getX(i) : -1
+  const plateEdges = [], edges = [], allEdges = []
   for (let i = 0; i < index.count; i += 3)
     for (let k = 0; k < 3; k++) {
       const a = index.getX(i + k), b = index.getX(i + (k + 1) % 3)
       const length = rest[a].distanceTo(rest[b])
+      if (version === 'v4' && length > .0018 && plateBone(a) >= 0 && plateBone(a) === plateBone(b))
+        plateEdges.push([a, b, length])
       if (length > .0054) allEdges.push([a, b, length])
       if (length > .0018 && core(a) && core(b)) edges.push([a, b, length])
     }
   assert.ok(edges.length > 100)
   const clips = []
   for (const clip of animations) {
+    let plateStretch = 0
     let maximumMotion = 0, maximumThoraxStretch = 0, maximumEdgeRatio = 0
     const posed = []
     for (const _ of sample(clip)) {
@@ -76,17 +83,24 @@ try {
       }
       for (const [a, b, length] of allEdges)
         maximumEdgeRatio = Math.max(maximumEdgeRatio, posed[a].distanceTo(posed[b]) / length)
+      for (const [a, b, length] of plateEdges)
+        plateStretch = Math.max(plateStretch, Math.abs(posed[a].distanceTo(posed[b]) / length - 1))
       for (const [a, b, length] of edges)
         maximumThoraxStretch = Math.max(maximumThoraxStretch, Math.abs(posed[a].distanceTo(posed[b]) / length - 1))
     }
     assert.ok(maximumEdgeRatio < 6, `${clip.name}: garment edge stretched ${maximumEdgeRatio} times`)
     assert.ok(maximumThoraxStretch < .02, `${clip.name}: rigid thorax distorted by ${maximumThoraxStretch}`)
-    clips.push({ name: clip.name, samples: 121, maximum_motion: maximumMotion, maximum_thorax_edge_length_change: maximumThoraxStretch, maximum_edge_length_ratio: maximumEdgeRatio })
+    if (version === 'v4') {
+      assert.ok(plateEdges.length > 6000)
+      assert.ok(plateStretch < .0001, `${clip.name}: plate edge distortion ${plateStretch}`)
+    }
+    clips.push({ name: clip.name, ...(version === 'v4' && { maximum_plate_edge_length_change: plateStretch }), samples: 121, maximum_motion: maximumMotion, maximum_thorax_edge_length_change: maximumThoraxStretch, maximum_edge_length_ratio: maximumEdgeRatio })
   }
-  const report = { date: '2026-10-12', base: { path: basePath, sha256: hash(basePath) }, top: { path: topPath, sha256: hash(topPath) },
+  const report = { date: version === 'v4' ? '2026-11-20' : '2026-10-12', base: { path: basePath, sha256: hash(basePath) }, top: { path: topPath, sha256: hash(topPath) },
     triangles: top.geometry.index.count / 3, bones: bones.length, exact_bind_compatibility: true, normalized_weights: true,
     unchanged_rest_shape: true, no_opposite_arm_influence: true, thorax_rigidity_checked_edges: edges.length, clips,
-    scope: `Runtime binding through bindModularPart, rest shape and finite deformation. Body clearance in modular-female-knight-top-fitting-${version}.json.` }
+    ...(version === 'v4' && { rigid_plate_edges_checked: plateEdges.length }),
+    scope: version === 'v4' ? 'Runtime binding and sampled edge lengths of the cuirass and both pauldrons.' : `Runtime binding through bindModularPart, rest shape and finite deformation. Body clearance in modular-female-knight-top-fitting-${version}.json.` }
   writeFileSync(new URL(`../doc/assets/modular-female-knight-top-animation-${version}.json`, import.meta.url), JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify({ ...report, clips: clips.map(c => c.name) }))
 } finally {

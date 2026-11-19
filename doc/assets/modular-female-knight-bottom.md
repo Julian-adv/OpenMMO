@@ -1,10 +1,28 @@
 # 여성 기사 하의
 
-[여성 기사 상의](modular-female-knight-top.md)에 맞춘 골반·허벅지 판금 하의다.
-여성 기사 캐릭터의 하의 슬롯으로 쓰이며, `tools/prepare-female-knight.mjs`가 게임용 GLB로 변환한다
-([여성 기사 런타임](female-knight-runtime.md)). 채택본은 **fitted_v42**다.
+2026-11-20. 사용자가 제공한 원화를 기준으로 하의 메시와 재질을 새로 제작했다. 채택본은 **reference_v1/fitted_v1**이다.
 
-## 최종 파일
+허벅지 바깥을 감싸는 판을 좌우 다섯 장씩 겹쳤다. 위쪽 두 단의 사선 이음매, 아래에서 꺾이는 모서리, 판 끝의 리벳을 원화에 맞췄다. 허리 앞에서 교차하는 가죽띠와 부츠 고리까지 내려오는 끈, 둥근 덮개 아래로 가늘어지는 중앙 보호판을 각각 모델링했다. 뒤쪽 보호판과 고정끈의 배치는 앞모습을 기준으로 설계했다.
+
+허리띠와 옆판의 바깥선을 [사용자가 표시한 곡선](../../assets/items/female_knight_bottom/reference_v1/waist-curve-guide.png)에 맞췄다. 위쪽 두 판은 골반에 고정하고, 아래 세 판은 대기 자세에서 윗판 안쪽으로 포개지도록 허벅지 관절을 기준으로 회전시켰다.
+
+앞뒤 중앙 가림판은 윗단을 기준으로 세로로 16% 늘렸다. 앞판 끝은 24.5mm, 뒷판 끝은 22.0mm 내려왔다. 안감은 통째로 18mm 위에 달아 정면과 후면에서 판 뒤에 가려지게 했다.
+
+- [편집용 Blender](../../assets/items/female_knight_bottom/reference_v1/fitted_v1/female-knight-bottom-fitted.blend) · [착용 GLB](../../assets/items/female_knight_bottom/reference_v1/fitted_v1/bottom_female_knight.glb) · [몸체 가림](../../assets/items/female_knight_bottom/reference_v1/fitted_v1/body-occlusion.json)
+- 금속판은 장마다 골반 또는 같은 쪽 허벅지 뼈 하나를 따른다. 걷기·달리기·점프·앉고 일어서기·베기 등 11개 동작의 671개 시점에서 판 가장자리 길이 변화를 검사했다. [게임용 모델 검사 결과](../../assets/items/female_knight_bottom/reference_v1/fitted_v1/runtime-validation.json)
+- 게임용 하의는 8,987삼각형, 재질 1개, 521,920바이트다. 기본 여성 몸체·단발·판금 5부위·시작 철검·횃불 조합은 숨김 포함 66,750삼각형, 착용 시 표시 49,835삼각형이다. 얼굴에 4,604삼각형을 사용한다.
+- [사용자가 제공한 원화](../../assets/items/female_knight_bottom/reference_v1/user-reference.png)의 원저작자와 라이선스는 미확인이다. 새 하의의 메시, UV, 색·금속성·거칠기 텍스처는 로컬에서 제작했다. 추가 생성 비용은 0이다. 몸체와 골격, 가림 인덱스는 기존 여성 기사의 자산을 사용한다.
+
+## 재현
+
+```bash
+.venv/bin/python tools/build-female-knight-tassets.py
+blender -b --python-exit-code 1 -P tools/blender-scripts/pack_female_knight_plate.py -- bottom
+node tools/prepare-female-knight.mjs --part bottom
+node tools/validate-female-knight-bottom.mjs
+```
+
+## 이전 피팅 v42 [미사용]
 
 - [착용 GLB](../../assets/items/female_knight_bottom/tripo_v1/fitted_v42/bottom_female_knight.glb):
   12,118삼각형·4 primitives·65본, 리그 `human_female_01_local_v1`.
@@ -18,9 +36,7 @@
   검사 도구는 삭제됐다.
 - 가림은 몸체 하의 속옷 1,110삼각형만 숨기고 피부는 남긴다. 상의 가림과 합집합으로 적용한다.
 
-## 재현
-
-재생성 도구는 남아 있지 않다. 위 v42 `.blend`·GLB가 편집 원본이다.
+v42의 재생성 도구는 남아 있지 않다. 위 v42 `.blend`·GLB가 당시 편집 원본이다.
 
 ## 런타임 메시 압축 — 2026-10-25
 
@@ -92,4 +108,4 @@ Chrome/Three.js의 정면·뒷면·달리기·앉기 렌더 4쌍도 픽셀 차�
 
 - 끈은 가중치 변형이며 천 시뮬레이션이 아니다. 앉기와 큰 관절 회전에서 끈이 몸에 묻히거나 접힐 수 있다.
 - 모든 동작의 무관통은 검증하지 않았다.
-- `.blend`는 미터 전환 전 제작 단위(몸체 높이 1)로 남아 있다. 단위 전환은 [여성 기사 런타임](female-knight-runtime.md#원본-미터-단위-전환--2026-10-17)을 참고한다.
+- v42 `.blend`는 미터 전환 전 제작 단위(몸체 높이 1)로 남아 있다. 단위 전환은 [여성 기사 런타임](female-knight-runtime.md#원본-미터-단위-전환--2026-10-17)을 참고한다.

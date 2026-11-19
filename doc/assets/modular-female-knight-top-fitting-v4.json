@@ -1,0 +1,13 @@
+{
+  "archived_tripo_sha256": "47133630d619bf5b333b083ebfa977ca8a67c01e41ebd520f5cb1092e97a9905",
+  "uniform_scales": {
+    "cuirass": 0.5985459508107523,
+    "left_pauldron": 0.5757926005804871,
+    "right_pauldron": 0.5768107123260827
+  },
+  "steel_triangles": 2130,
+  "total_triangles": 4279,
+  "edge_length_check": "Compared with the archived Tripo edges after one similarity transform per panel.",
+  "maximum_relative_error": 2.9831525342638443e-05,
+  "previous_fit_relative_error_p95": 0.11886766141947314
+}

@@ -46,8 +46,8 @@ function bakeSkirtRobe(doc) {
 const sources = {
   base: 'assets/modular_human_female_01/rig_v1/female-base.glb',
   hair: 'assets/modular_human_female_01/hair/tripo_knight_bob_v1/fitted_v1/hair_female_knight_bob.glb',
-  top: 'assets/items/female_knight_top/tripo_v1/fitted_v3/top_female_knight.glb',
-  bottom: 'assets/items/female_knight_bottom/tripo_v1/fitted_v42/bottom_female_knight.glb',
+  top: 'assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb',
+  bottom: 'assets/items/female_knight_bottom/reference_v1/fitted_v1/bottom_female_knight.glb',
   boots: 'assets/items/female_knight_boots/fitted_v5/boots_female_knight.glb',
   gloves: 'assets/items/female_knight_gloves/tripo_v1/fitted_v3/gloves_female_knight.glb',
   helmet: 'assets/items/female_knight_helmet/tripo_v1/fitted_v1/helmet_female_knight.glb',

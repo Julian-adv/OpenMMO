@@ -378,6 +378,7 @@ export async function showFemaleBase(
         <option value="face">얼굴 확대</option>
         <option value="upper">상의 확대</option>
         <option value="lower">하의 확대</option>
+        <option value="lower-quarter">하의 사선 확대</option>
         <option value="lower-back">하의 후면 확대</option>
         <option value="full">전신 정면</option>
         <option value="side">전신 측면</option>
@@ -2325,7 +2326,8 @@ export async function showFemaleBase(
       }
       underwearColor(
         !!model.getObjectByName('bottom_female_rogue')?.visible,
-        !!model.getObjectByName('bottom_female_caveman')?.visible
+        !!model.getObjectByName('bottom_female_caveman')?.visible,
+        !!model.getObjectByName('bottom_female_knight')?.visible
       )
     }
     const update = async () => {
@@ -2616,6 +2618,7 @@ export async function showFemaleBase(
     face: { target: [0, 1.6488, 0], position: [0, 1.6668, 0.648] },
     upper: { target: [0, 1.368, 0], position: [0, 1.404, 1.44] },
     lower: { target: [0, 0.936, 0], position: [0, 0.99, 1.44] },
+    'lower-quarter': { target: [0, 0.995, 0], position: [0.46, 1.08, 0.98] },
     'lower-back': { target: [0, 0.936, 0], position: [0, 0.99, -1.44] },
     full: { target: [0, 0.9, 0], position: [0, 0.99, 3.42] },
     side: { target: [0, 0.9, 0], position: [3.42, 0.99, 0] },

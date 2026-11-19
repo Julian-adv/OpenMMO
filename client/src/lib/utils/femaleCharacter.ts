@@ -783,7 +783,8 @@ export function applyFemaleArmor(
   state.mask.setEquippedAll(shown)
   state.underwearColor(
     equipped.bottom === 'rogue',
-    equipped.bottom === 'caveman'
+    equipped.bottom === 'caveman',
+    equipped.bottom === 'plate'
   )
   const bootsChanged = state.equipped?.boots !== equipped.boots
   state.equipped = equipped
