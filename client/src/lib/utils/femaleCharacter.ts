@@ -126,11 +126,9 @@ export const FEMALE_PARTS = styles
       .map((slot) => partName(style, slot))
   )
   .concat('rogue_garters')
-/**
- * Boots parts whose baked variants follow the bare value. Every heel shares the plate boots' variant
- * (user decision 2026-11-05: the lifts looked alike; the valkyrie's 36° fit is shown at 30°).
- */
+// All equipped boots share the 30° foot rotation.
 export const FEMALE_BOOTS_PARTS = ['boots']
+export const SHARED_HEEL_GROUND = 'shared_heel'
 // Baked tracks carry [bare, ...boots] values; this property picks one per character.
 export const FEMALE_BOOTS_PROPERTY = 'femaleBoots'
 // glTF allows one channel per node and path, so boots values ship as companion animations.
@@ -331,10 +329,11 @@ function pairFemaleClips(
   const byName = new Map(clips.map((clip) => [clip.name, clip]))
   const companions = new Set(
     clips.flatMap((clip) =>
-      FEMALE_BOOTS_PARTS.map((boots) => femaleBootsClipName(clip.name, boots))
+      [...FEMALE_BOOTS_PARTS, SHARED_HEEL_GROUND].map((boots) =>
+        femaleBootsClipName(clip.name, boots)
+      )
     )
   )
-  const width = FEMALE_BOOTS_PARTS.length + 1
   return clips
     .filter((clip) => !companions.has(clip.name))
     .map((clip) => {
@@ -350,6 +349,17 @@ function pairFemaleClips(
         const sources = variants.map((variant) =>
           variant.tracks.find((track) => track.name === name)
         )
+        if (name === 'Hips.position') {
+          const shared = byName.get(
+            femaleBootsClipName(clip.name, SHARED_HEEL_GROUND)
+          )
+          sources.push(
+            shared
+              ? shared.tracks.find((track) => track.name === name)
+              : sources[0]
+          )
+        }
+        const width = sources.length + 1
         if (
           !bare ||
           sources.some((track) => track?.times.length !== bare.times.length)
@@ -436,14 +446,15 @@ function installBootsSwitch(scene: THREE.Object3D, state: FemaleState) {
     })
   const hips = scene.getObjectByName('Hips')!
   targets.push([hips, hips.position, 3])
-  const width = FEMALE_BOOTS_PARTS.length + 1
   const refreshes = targets.map(([node, target, size]) => {
+    const width = size === 3 ? 3 : 2
     const values = new Float32Array(size * width)
     let ready = false
     const select = () => {
       if (!ready) return
       const boots = state.equipped?.boots
-      const variant = boots ? 1 : 0
+      const variant =
+        boots && size === 3 && boots !== 'plate' ? 2 : Number(!!boots)
       target.fromArray(values, variant * size)
       if (target instanceof THREE.Quaternion) target.normalize()
     }

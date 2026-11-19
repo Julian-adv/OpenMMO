@@ -2,6 +2,7 @@ import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { robeBaseSkeleton } from '../effects/robe-rig'
 import { setPeltPhysicsEnabled } from '../effects/pelt-rig'
+import { kneeGuardSkeleton } from './kneeGuardSkeleton'
 import { trimModularClothing } from './modularClothing'
 
 interface SwordTransform {
@@ -832,34 +833,42 @@ export function bindModularPart(
   if (!skeleton || sourceMeshes.length === 0) {
     throw new Error('몸체 또는 파츠에 스킨 골격이 없습니다.')
   }
+  const targets = new Map<THREE.Skeleton, THREE.Skeleton>()
   for (const mesh of [...bodyMeshes, ...sourceMeshes]) {
     const candidate = robeBaseSkeleton(mesh)
+    if (targets.has(candidate)) continue
     if (
-      candidate.bones.length !== skeleton.bones.length ||
-      candidate.bones.some(
+      candidate.bones.length < skeleton.bones.length ||
+      skeleton.bones.some(
         (bone, i) =>
-          bone.name !== skeleton.bones[i].name ||
-          bone.parent?.name !== skeleton.bones[i].parent?.name ||
+          bone.name !== candidate.bones[i].name ||
+          bone.parent?.name !== candidate.bones[i].parent?.name ||
           !matrixMatches(candidate.boneInverses[i], skeleton.boneInverses[i])
       )
     ) {
       throw new Error('파츠의 본 순서·계층·기준 행렬이 몸체와 다릅니다.')
     }
+    const target =
+      candidate.bones.length === skeleton.bones.length
+        ? skeleton
+        : kneeGuardSkeleton(skeleton, candidate)
+    if (!target) throw new Error('파츠의 추가 관절이 몸체와 다릅니다.')
+    targets.set(candidate, target)
   }
   const part = clone(source)
   part.updateMatrixWorld(true)
   const meshes = skinnedParts(part)
-  const discarded = new Set([
-    ...meshes.map((mesh) => mesh.skeleton),
-    ...bodyMeshes
-      .map(robeBaseSkeleton)
-      .filter((candidate) => candidate !== skeleton),
-  ])
-  for (const mesh of bodyMeshes)
-    if (mesh.skeleton === robeBaseSkeleton(mesh))
-      mesh.bind(skeleton, mesh.bindMatrix.clone())
+  const discarded = new Set(meshes.map((mesh) => mesh.skeleton))
+  for (const mesh of bodyMeshes) {
+    const base = robeBaseSkeleton(mesh)
+    const target = targets.get(base)!
+    if (base !== target && mesh.skeleton === base) {
+      mesh.bind(target, mesh.bindMatrix.clone())
+      discarded.add(base)
+    }
+  }
   const inverseRoot = part.matrixWorld.clone().invert()
-  for (const mesh of meshes) {
+  for (const [i, mesh] of meshes.entries()) {
     mesh.matrix.multiplyMatrices(inverseRoot, mesh.matrixWorld)
     mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale)
     for (const key of ['pelt_physics', 'robe_physics']) {
@@ -871,7 +880,10 @@ export function bindModularPart(
       }
     }
     body.add(mesh)
-    mesh.bind(skeleton, mesh.bindMatrix.clone())
+    mesh.bind(
+      targets.get(robeBaseSkeleton(sourceMeshes[i]))!,
+      mesh.bindMatrix.clone()
+    )
     mesh.castShadow = mesh.receiveShadow = true
   }
   for (const unused of discarded) unused.dispose()

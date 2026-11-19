@@ -9,6 +9,7 @@ from scipy.spatial.transform import Rotation, Slerp
 
 from lib.glb import read_glb, write_glb
 from lib.glb_accessors import accessor, add_accessor
+from outfits.knight_boot_profile import cuff, leg, rim_offset
 from outfits.knight_plate_surfaces import SurfaceMesh, atlas, STEEL, GUNMETAL, BRASS, LEATHER, LINING
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,9 +53,8 @@ def rigid(joint):
     return lambda u, v: ([joint, 0, 0, 0], [1, 0, 0, 0])
 
 
-def thigh_bind_transforms():
+def thigh_bind_transforms(base, data):
     # Return each rigid thigh plate from the fitting stance to its bind pose.
-    base, data = read_glb(ROOT / "assets/modular_human_female_01/rig_v1/female-base.glb")
     clip = next(clip for clip in base["animations"] if clip["name"] == "idle1")
     nodes = base["nodes"]
     by_name = {node["name"]: i for i, node in enumerate(nodes)}
@@ -76,9 +76,18 @@ def thigh_bind_transforms():
     return transforms
 
 
-def build(mesh, bones):
+def add_leather_underwear(mesh, base, data, mask, bones):
+    primitive = base["meshes"][mask["mesh_index"]]["primitives"][mask["primitive_index"]]
+    faces = accessor(base, data, primitive["indices"]).reshape(-1, 3)[mask["hide_triangle_indices"]]
+    vertices, indices = np.unique(faces.ravel(), return_inverse=True)
+    attrs = {key: accessor(base, data, primitive["attributes"][key])[vertices] for key in mesh.attrs}
+    joints = np.array([bones.index(base["nodes"][node]["name"]) for node in base["skins"][0]["joints"]])
+    mesh.append(attrs["POSITION"], attrs["NORMAL"], attrs["TEXCOORD_0"], indices.reshape(-1, 3), LEATHER,
+                joints[attrs["JOINTS_0"]], attrs["WEIGHTS_0"])
+
+
+def build(mesh, bones, thigh_bind):
     hips = bones.index("Hips")
-    thigh_bind = thigh_bind_transforms()
     front_rails = {}
 
     def weighted(side, y):
@@ -88,14 +97,13 @@ def build(mesh, bones):
         return [hips, leg, 0, 0], np.stack([1 - t, t, 0 * t, 0 * t], axis=-1)
 
     def suspension(side, back):
-        top, end = (1.146, 0.748) if back else (1.128, 0.843)
+        top, end = (1.146, 0.805) if back else (1.128, 0.843)
 
-        def strap(u, v):
+        def harness_strap(u, v):
             y = top + (end - top) * v + 0.007 * (2 * u - 1) ** 2 * (v**12 - 0.6 * (1 - v) ** 14)
             x = (0.068 + 0.085 * v if back else 0.064 + 0.038 * v) + (u - 0.5) * (0.020 - 0.003 * v)
             if back:
                 z = rear(y) - 0.019
-                z = np.where(y < 0.946, np.interp(y, [0.74, 0.87, 0.946], [-0.112, -0.137, -0.182]), z)
             else:
                 z = np.interp(
                     y, [0.84, 0.895, 0.96, 1.02, 1.080, 1.14], [0.104, 0.109, 0.115, 0.122, 0.140, 0.123]
@@ -103,34 +111,100 @@ def build(mesh, bones):
             z += (-1 if back else 1) * 0.0009 * (1 - (2 * u - 1) ** 2)
             return xyz(side * x, y, z)
 
-        skin = lambda u, v: weighted(side, top + (end - top) * v)
+        thigh_name = ("Left" if side > 0 else "Right") + "UpLeg"
+        thigh = bones.index(thigh_name)
+        rotation, pivot = thigh_bind[thigh_name]
+
+        def skin(u, v):
+            return weighted(side, top + (end - top) * v)
+
         stations = np.array([0, 0.04, 0.13, 0.24, 0.90, 0.955, 0.98, 1])
         if not back:
             # The front lip follows the outside edge of the suspender in the fitting stance.
-            rail = strap(0.78, stations)
-            rotation, pivot = thigh_bind[("Left" if side > 0 else "Right") + "UpLeg"]
+            rail = harness_strap(0.78, stations)
             weight = skin(0.78, stations)[1][:, 1, None]
             posed = rail + weight * ((rail - pivot) @ rotation + pivot - rail)
             front_rails[side] = PchipInterpolator(posed[::-1, 1], side * posed[::-1, 0])
 
-        anchor = mesh.sheet(
-            strap,
-            lin(0, 1, 5),
-            stations,
-            [0, 0, -1 if back else 1],
-            LEATHER,
-            skin,
-            0.0018,
-        )
-        for v in [0.048, 0.13, 0.215, 0.93]:
-            mesh.stud(anchor, 0.5, v, 0.0018)
+        def rear_plate(u, y):
+            angle = np.pi - 0.18 - (u - 0.5) * 0.018 / (outer(y) - inner(y))
+            layer = np.interp(y, [0.94, 1.0, 1.045, 1.08, 1.11], [0, 1, 2, 3, 4])
+            return shell(side, angle, y, 0.0034 + 0.0011 * layer)
+
+        def rear_strap(u, v, upper_piece):
+            y = top + (end - top) * v
+            plate = rear_plate(u, np.clip(y, 0.918, 1.126))
+            if upper_piece:
+                plate[..., 2] -= 0.0015
+                return blend_hip(plate, harness_strap(u, v), (y - 1.113) / (top - 1.113))
+            plate = (plate - pivot) @ rotation.T + pivot
+
+            angle = np.pi - 0.31 - (u - 0.5) * 0.19
+            lip = cuff(angle)
+            tip_height = lip - 0.016 + 0.007 * (2 * u - 1)**2
+            tip = leg(side, angle, tip_height, rim_offset(angle, 0.5) + 0.001)
+            edge = (rear_plate(u, 0.918) - pivot) @ rotation.T + pivot
+            t = np.clip((0.918 - y) / (0.918 - end), 0, 1)
+            span = edge + (tip - edge) * np.asarray(t)[..., None]
+            cuff_point = leg(side, angle, np.minimum(lip, span[..., 1]), rim_offset(angle, 0.5) + 0.001)
+            cuff_point[..., 1] = span[..., 1]
+            span = blend_hip(span, cuff_point, (v - 0.90) / 0.055)
+            return np.where(np.asarray(y < 0.918)[..., None], span, plate)
+
+        def front_strap(u, v):
+            p = harness_strap(u, v)
+            angle = 0.12 + (u - 0.5) * 0.19
+            tip_height = cuff(angle) - 0.024 + 0.007 * (2 * u - 1)**2
+            offset = rim_offset(angle, 0.5) + 0.001
+            blend = np.clip((v - 0.53) / 0.39, 0, 1)
+            blend = blend * blend * (3 - 2 * blend)
+            y = p[..., 1] + (tip_height - harness_strap(u, 1)[..., 1]) * v * blend
+            target = leg(side, angle, y, offset)
+            return p + (target - p) * np.asarray(blend)[..., None]
+
+        if back:
+            def upper_strap(u, v):
+                return rear_strap(u, v, True)
+
+            def lower_strap(u, v):
+                return rear_strap(u, v, False)
+
+            lower = mesh.sheet(
+                lower_strap, lin(0, 1, 5),
+                [0.202, 0.24, 0.28, 0.31, 0.39, 0.47, 0.54, 0.60, 0.64, 0.67, 0.73, 0.82, 0.90, 0.94, 0.955, 0.98, 1],
+                [0, 0, -1], LEATHER, rigid(thigh), 0.0018,
+            )
+            upper = mesh.sheet(
+                upper_strap, lin(0, 1, 5),
+                [0, 0.035, 0.07, 0.10, 0.13, 0.18, 0.215, 0.24, 0.272],
+                [0, 0, -1], LEATHER, rigid(hips), 0.0018,
+            )
+            # A flexible tongue joins the sliding ends when the thigh swings outward.
+            def tongue(u, v):
+                a = upper_strap(u, 0.248)
+                b = lower_strap(u, 0.206)
+                return a + (b - a) * np.asarray(v)[..., None]
+
+            def tongue_skin(u, v):
+                return [hips, thigh, 0, 0], np.stack([1 - v, v, 0 * v, 0 * v], axis=-1).reshape(-1, 4)
+
+            mesh.sheet(tongue, lin(0, 1, 4), [0, 1], [0, 0, -1], LEATHER, tongue_skin, 0.001)
+        else:
+            upper_strap = lower_strap = front_strap
+            upper = lower = mesh.sheet(
+                front_strap, lin(0, 1, 5), np.sort(np.r_[stations, 0.57, 0.73, 0.83]),
+                [0, 0, 1], LEATHER, skin, 0.0018,
+            )
+        for v in [0.048, 0.13, 0.215]:
+            mesh.stud(upper, 0.5, v, 0.0018)
+        mesh.stud(lower, 0.5, 0.973, 0.0031)
 
         # The brass chape follows the rounded end of the leather at the boot.
         def chape(u, v):
             theta = -0.12 + (np.pi + 0.24) * u
             x = 0.5 + (0.51 + 0.065 * v) * np.cos(theta)
             y = 0.945 + (0.048 + 0.006 * v) * np.sin(theta)
-            p = strap(x, y)
+            p = lower_strap(x, y)
             p[..., 2] += (-1 if back else 1) * 0.0018
             return p
 
@@ -140,11 +214,11 @@ def build(mesh, bones):
             [0, 1],
             [0, 0, -1 if back else 1],
             BRASS,
-            rigid(bones.index(("Left" if side > 0 else "Right") + "UpLeg")),
+            rigid(thigh),
             0.001,
         )
         # Thin brass keeper folded across the long strap.
-        for v0 in [0.24, 0.91]:
+        for v0, strap, joint in [(0.24, upper_strap, hips), (0.94 if back else 0.91, lower_strap, thigh)]:
 
             def keeper(u, v):
                 p = strap(-0.085 + 1.17 * u, v0 + 0.015 * v)
@@ -157,7 +231,7 @@ def build(mesh, bones):
                 [0, 1],
                 [0, 0, -1 if back else 1],
                 BRASS,
-                lambda u, v: skin(u, v0 + 0.015 * v),
+                rigid(joint) if back else lambda u, v: skin(u, v0 + 0.015 * v),
                 0.001,
             )
 
@@ -354,7 +428,10 @@ def main():
     doc, binary = read_glb(OLD / "bottom_female_knight.glb")
     names = [doc["nodes"][j]["name"] for j in doc["skins"][0]["joints"]]
     mesh = SurfaceMesh()
-    retained, panels = build(mesh, names)
+    mask = json.loads((OLD / "body-occlusion.json").read_text())
+    base, data = read_glb(ROOT / mask["body"])
+    add_leather_underwear(mesh, base, data, mask, names)
+    retained, panels = build(mesh, names, thigh_bind_transforms(base, data))
     bind = accessor(doc, binary, doc["skins"][0]["inverseBindMatrices"])
     data = bytearray()
     doc.update(bufferViews=[], accessors=[])
@@ -396,7 +473,8 @@ def main():
     doc["nodes"][0]["extras"]["fitting_version"] = 44
     OUT.mkdir(exist_ok=True, parents=True)
     write_glb(OUT / "bottom_female_knight.glb", doc, data)
-    (OUT / "body-occlusion.json").write_bytes((OLD / "body-occlusion.json").read_bytes())
+    mask["scope"] = "Replace the base underwear with its saddle leather counterpart while the tassets are worn."
+    (OUT / "body-occlusion.json").write_text(json.dumps(mask, indent=2) + "\n")
     (OUT / "fitting.json").write_text(
         json.dumps(dict(harness_triangles=retained, panels=panels), indent=2) + "\n"
     )

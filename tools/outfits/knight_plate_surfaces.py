@@ -13,16 +13,17 @@ def unit(a):
     return a / np.maximum(np.linalg.norm(a, axis=-1, keepdims=True), 1e-12)
 
 
-def atlas():
+def atlas(extra_finishes=()):
     rng = np.random.default_rng(44)
     base, orm = [], []
-    for color, rough, metal in [
+    for color, rough, metal, *grain_scale in [
         ([153, 151, 144], 94, 249),
         ([114, 109, 99], 143, 238),
         ([102, 96, 85], 111, 239),
         ([161, 135, 93], 108, 238),
         ([72, 45, 32], 161, 8),
         ([48, 37, 32], 205, 0),
+        *extra_finishes,
     ]:
         grain = rng.normal(size=(128, 1024))
         brushed = gaussian_filter(grain, (0.65, 7))
@@ -35,6 +36,8 @@ def atlas():
             noise += wear + 1.8 * gaussian_filter(grain, (0.4, 18)) / brushed.std()
         else:
             noise += 4 * np.tanh(grain * 1.3) - 7 * edge
+        if grain_scale:
+            noise *= grain_scale[0]
         base.append(np.clip(color + noise[:, :, None], 0, 255))
         orm.append(
             np.stack(
@@ -51,7 +54,8 @@ def atlas():
 
 
 class SurfaceMesh:
-    def __init__(self):
+    def __init__(self, material_count=6):
+        self.material_count = material_count
         self.attrs = {key: [] for key in ["POSITION", "NORMAL", "TEXCOORD_0", "JOINTS_0", "WEIGHTS_0"]}
         self.faces = []
         self.vertices = 0
@@ -60,7 +64,7 @@ class SurfaceMesh:
     def append(self, points, normals, uv, faces, material, joints, weights):
         points = np.asarray(points).reshape(-1, 3)
         uv = np.asarray(uv).reshape(-1, 2) * [0.97, 0.90] + [0.015, 0.05]
-        uv[:, 1] = (material + uv[:, 1]) / 6
+        uv[:, 1] = (material + uv[:, 1]) / self.material_count
         data = dict(
             POSITION=points,
             NORMAL=unit(np.asarray(normals).reshape(-1, 3)),
@@ -97,6 +101,13 @@ class SurfaceMesh:
         uv = np.stack([U, V], -1).reshape(-1, 2)
         joint, weight = skin(U, V)
         self.append(pts, normals, uv, faces, material, joint, weight)
+        def anchor(a, b):
+            point, normal = frame(np.asarray(a), np.asarray(b))
+            j, w = skin(np.asarray(a), np.asarray(b))
+            return point, normal * orientation, j, w
+
+        if thickness == 0:
+            return anchor
         # A narrow bevel separates the overlapping lames.
         border = np.r_[ids[0], ids[1:, -1], ids[-1, -2::-1], ids[-2:0:-1, 0]]
         if orientation < 0:
@@ -119,11 +130,6 @@ class SurfaceMesh:
             np.tile(j, (2, 1)),
             np.tile(w, (2, 1)),
         )
-
-        def anchor(a, b):
-            point, normal = frame(np.asarray(a), np.asarray(b))
-            j, w = skin(np.asarray(a), np.asarray(b))
-            return point, normal * orientation, j, w
 
         return anchor
 

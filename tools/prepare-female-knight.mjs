@@ -48,7 +48,7 @@ const sources = {
   hair: 'assets/modular_human_female_01/hair/tripo_knight_bob_v1/fitted_v1/hair_female_knight_bob.glb',
   top: 'assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb',
   bottom: 'assets/items/female_knight_bottom/reference_v1/fitted_v1/bottom_female_knight.glb',
-  boots: 'assets/items/female_knight_boots/fitted_v5/boots_female_knight.glb',
+  boots: 'assets/items/female_knight_boots/reference_v2/fitted_v1/boots_female_knight.glb',
   gloves: 'assets/items/female_knight_gloves/tripo_v1/fitted_v3/gloves_female_knight.glb',
   helmet: 'assets/items/female_knight_helmet/tripo_v1/fitted_v1/helmet_female_knight.glb',
   barbarian_hair: 'assets/items/female_barbarian_helmet/tripo_v2/fitted_v1/hair_bob_barbarian_helmet.glb',
@@ -241,6 +241,10 @@ async function bakeBootsAndGrip(module, load) {
   const { bakeFemaleClips } = await module('/src/lib/utils/female-clip-bake.ts')
   const partNames = [...new Set([...female.FEMALE_PARTS, ...female.FEMALE_BOOTS_PARTS])]
   const [base, ...parts] = await Promise.all(['base', ...partNames].map(name => load(`${output}/${name}.glb`)))
+  const sharedGround = 'assets/items/female_knight_boots/fitted_v5/boots_female_knight.glb'
+  record(sharedGround)
+  parts.push(await load(sharedGround))
+  partNames.push(female.SHARED_HEEL_GROUND)
   const scene = female.assembleFemaleCharacter(base, parts, partNames)
   // The baked idle1 matches the source idle_armed, so base.glb ships only idle1.
   const grip = Object.fromEntries((await load(sources.base)).animations.find(clip => clip.name === 'idle_armed').tracks

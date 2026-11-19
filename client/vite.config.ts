@@ -155,12 +155,16 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/helm_of_brilliance/tripo_v2/fitted_v3/female/body-occlusion.json',
       import.meta.url
     ),
-    female_knight_boots: new URL(
+    female_shared_heel_boots: new URL(
       '../assets/items/female_knight_boots/fitted_v5/boots_female_knight.glb',
       import.meta.url
     ),
+    female_knight_boots: new URL(
+      '../assets/items/female_knight_boots/reference_v2/fitted_v1/boots_female_knight.glb',
+      import.meta.url
+    ),
     'female-knight-boots-occlusion.json': new URL(
-      '../assets/items/female_knight_boots/fitted_v5/body-occlusion.json',
+      '../assets/items/female_knight_boots/reference_v2/fitted_v1/body-occlusion.json',
       import.meta.url
     ),
     'female-valkyrie-boots-occlusion.json': new URL(

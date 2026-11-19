@@ -10,7 +10,7 @@
 
 - [착용 GLB](../../assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb) · [Blender 편집본](../../assets/items/female_knight_top/tripo_v1/fitted_v4/female-knight-top-fitted.blend) · [몸체 가림](../../assets/items/female_knight_top/tripo_v1/fitted_v4/body-occlusion.json)
 - 금속 2,130면의 모서리 길이를 균일 배율 적용 후 원본과 비교했다. 저장된 메시의 최대 상대 오차는 0.003%다. 65본을 결합한 뒤 대기·걷기·달리기·점프·공격·앉기 등을 포함한 9동작 1,089자세에서 단단한 판의 길이 변화를 검사했다. [피팅 측정](modular-female-knight-top-fitting-v4.json) · [동작 측정](modular-female-knight-top-animation-v4.json)
-- 게임용 상의는 4,279삼각형, 메시 1개·재질 1개다. 파일 크기는 1,059,808에서 997,792바이트로 줄었다. 기본 여성 몸체·단발·판금 5부위·시작 철검·횃불을 합하면 숨김 포함 66,750삼각형, 착용 시 표시 49,835삼각형이다. 얼굴 영역은 기존 4,604삼각형이고 이 조합은 망토를 착용하지 않는다.
+- 게임용 상의는 4,279삼각형, 메시 1개·재질 1개다. 파일 크기는 1,059,808에서 997,792바이트로 줄었다. 기본 여성 몸체·단발·판금 5부위·시작 철검·횃불을 합하면 숨김 포함 71,182삼각형, 착용 시 표시 54,281삼각형이다. 얼굴 영역은 기존 4,604삼각형이고 이 조합은 망토를 착용하지 않는다.
 - 기존 Tripo 생성물의 로컬 편집이다. 2026-10-12 제작 출처와 이용 조건을 따르며 추가 생성 비용은 없다.
 
 ## 재현
