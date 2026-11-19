@@ -33,6 +33,7 @@ export function femaleUnderwearColor(base: GLTF) {
   source.setAttribute('rogueUnderwear', new THREE.BufferAttribute(marks, 1))
   const tint = { value: 0 }
   const skinTint = { value: 0 }
+  const plateTint = { value: 0 }
   const skinColor = {
     value: new THREE.Color().setRGB(
       194 / 255,
@@ -50,13 +51,14 @@ export function femaleUnderwearColor(base: GLTF) {
       shader.uniforms.rogueUnderwearTint = tint
       shader.uniforms.cavemanUnderwearTint = skinTint
       shader.uniforms.cavemanSkinColor = skinColor
+      shader.uniforms.plateTint = plateTint
       shader.vertexShader =
-        `attribute float rogueUnderwear;\nvarying float rogueUnderwearHeight;\nvarying float rogueUnderwearMark;\n${shader.vertexShader}`.replace(
+        `attribute float rogueUnderwear;\nvarying float rogueUnderwearHeight;\nvarying float rogueUnderwearMark;\nvarying float platePelvis;\n${shader.vertexShader}`.replace(
           '#include <begin_vertex>',
-          '#include <begin_vertex>\nrogueUnderwearHeight = position.y;\nrogueUnderwearMark = rogueUnderwear;'
+          '#include <begin_vertex>\nrogueUnderwearHeight = position.y;\nrogueUnderwearMark = rogueUnderwear;\nplatePelvis = smoothstep(.865,.898,position.y) * (1.0-smoothstep(1.108,1.145,position.y)) * (1.0-smoothstep(.150,.185,abs(position.x)));'
         )
       shader.fragmentShader =
-        `uniform float rogueUnderwearTint;\nuniform float cavemanUnderwearTint;\nuniform vec3 cavemanSkinColor;\nvarying float rogueUnderwearHeight;\nvarying float rogueUnderwearMark;\n${shader.fragmentShader}`
+        `uniform float rogueUnderwearTint;\nuniform float cavemanUnderwearTint;\nuniform vec3 cavemanSkinColor;\nvarying float rogueUnderwearHeight;\nvarying float rogueUnderwearMark;\nvarying float platePelvis;\nuniform float plateTint;\n${shader.fragmentShader}`
           .replace(
             '#include <map_fragment>',
             `#include <map_fragment>
@@ -74,6 +76,13 @@ export function femaleUnderwearColor(base: GLTF) {
             * smoothstep(0.24, 0.42, palest)
             * smoothstep(0.52, 0.72, palest / max(brightest, 0.001));
           diffuseColor.rgb = mix(diffuseColor.rgb, cavemanSkinColor, cavemanPrint);
+          float bareHip = plateTint * platePelvis;
+          #ifdef USE_MAP
+          if (bareHip > 0.0) {
+            vec3 thighColor = texture2D(map, vec2(0.497, 0.867)).rgb;
+            diffuseColor.rgb = mix(diffuseColor.rgb, thighColor, bareHip);
+          }
+          #endif
           float underwearFinish = max(underwearPrint, rogueUnderwearTint
             * smoothstep(1.06, 1.075, rogueUnderwearHeight)
             * (1.0 - smoothstep(1.125, 1.14, rogueUnderwearHeight)));
@@ -81,16 +90,22 @@ export function femaleUnderwearColor(base: GLTF) {
         `
           )
           .replace(
+            '#include <normal_fragment_maps>',
+            `vec3 geometricNormal = normal;
+             #include <normal_fragment_maps>
+             normal = normalize(mix(normal, geometricNormal, bareHip));`
+          )
+          .replace(
             '#include <roughnessmap_fragment>',
             `#include <roughnessmap_fragment>
           roughnessFactor = mix(roughnessFactor, max(roughnessFactor, 0.85), underwearFinish);
-          roughnessFactor = mix(roughnessFactor, 0.65, cavemanPrint);
+          roughnessFactor = mix(roughnessFactor, 0.65, max(cavemanPrint, bareHip));
         `
           )
           .replace(
             '#include <metalnessmap_fragment>',
             `#include <metalnessmap_fragment>
-          metalnessFactor *= 1.0 - max(underwearFinish, cavemanPrint);
+          metalnessFactor *= 1.0 - max(underwearFinish, max(cavemanPrint, bareHip));
         `
           )
           .replace(
@@ -102,7 +117,8 @@ export function femaleUnderwearColor(base: GLTF) {
     }
     material.needsUpdate = true
   }
-  return (black: boolean, skin = false) => {
+  return (black: boolean, skin = false, plate = false) => {
+    plateTint.value = plate ? 1 : 0
     tint.value = black ? 1 : 0
     skinTint.value = skin && !black ? 1 : 0
   }

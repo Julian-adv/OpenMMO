@@ -155,12 +155,16 @@ function modularCharacterPreview(): Plugin {
       '../assets/items/helm_of_brilliance/tripo_v2/fitted_v3/female/body-occlusion.json',
       import.meta.url
     ),
-    female_knight_boots: new URL(
+    female_shared_heel_boots: new URL(
       '../assets/items/female_knight_boots/fitted_v5/boots_female_knight.glb',
       import.meta.url
     ),
+    female_knight_boots: new URL(
+      '../assets/items/female_knight_boots/reference_v2/fitted_v1/boots_female_knight.glb',
+      import.meta.url
+    ),
     'female-knight-boots-occlusion.json': new URL(
-      '../assets/items/female_knight_boots/fitted_v5/body-occlusion.json',
+      '../assets/items/female_knight_boots/reference_v2/fitted_v1/body-occlusion.json',
       import.meta.url
     ),
     'female-valkyrie-boots-occlusion.json': new URL(
@@ -168,7 +172,7 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     female_knight_bottom: new URL(
-      '../assets/items/female_knight_bottom/tripo_v1/fitted_v42/bottom_female_knight.glb',
+      '../assets/items/female_knight_bottom/reference_v1/fitted_v1/bottom_female_knight.glb',
       import.meta.url
     ),
     female_valkyrie_bottom: new URL(
@@ -180,11 +184,11 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     'female-knight-bottom-occlusion.json': new URL(
-      '../assets/items/female_knight_bottom/tripo_v1/fitted_v42/body-occlusion.json',
+      '../assets/items/female_knight_bottom/reference_v1/fitted_v1/body-occlusion.json',
       import.meta.url
     ),
     female_knight_top: new URL(
-      '../assets/items/female_knight_top/tripo_v1/fitted_v3/top_female_knight.glb',
+      '../assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb',
       import.meta.url
     ),
     female_valkyrie_top: new URL(
@@ -391,7 +395,7 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     'female-knight-top-occlusion.json': new URL(
-      '../assets/items/female_knight_top/tripo_v1/fitted_v3/body-occlusion.json',
+      '../assets/items/female_knight_top/tripo_v1/fitted_v4/body-occlusion.json',
       import.meta.url
     ),
     female_base: new URL(

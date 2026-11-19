@@ -443,6 +443,33 @@ describe('female modular starter outfits', () => {
     }
   )
   it.skipIf(!hasAssets)(
+    'keeps each knee guard halfway through its own knee bend',
+    async () => {
+      const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+      const { modelRoot } = createCharacterModelRoot(source.scene)
+      await applyCharacterArmor(modelRoot, armor)
+      const boot = skinnedParts(modelRoot).find(
+        (mesh) => mesh.userData.female_part === 'boots'
+      )!
+      for (const side of ['Left', 'Right']) {
+        const shin = modelRoot.getObjectByName(side + 'Leg')!
+        const guard = boot.skeleton.getBoneByName(side + 'KneeGuard')!
+        expect(guard.parent).toBe(shin.parent)
+        expect(guard).not.toBe(source.scene.getObjectByName(guard.name))
+        const rest = shin.quaternion.clone()
+        shin.rotateX(Math.PI / 2)
+        modelRoot.updateMatrixWorld(true)
+        expect(guard.position.distanceTo(shin.position)).toBeLessThan(1e-6)
+        expect(guard.quaternion.angleTo(rest)).toBeCloseTo(Math.PI / 4)
+        expect(guard.quaternion.angleTo(shin.quaternion)).toBeCloseTo(
+          Math.PI / 4
+        )
+        shin.quaternion.copy(rest)
+      }
+      disposeCharacterSkeletons(modelRoot)
+    }
+  )
+  it.skipIf(!hasAssets)(
     'equips all five parts, restores hair and sleeves, and isolates character masks',
     async () => {
       const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
@@ -452,7 +479,7 @@ describe('female modular starter outfits', () => {
       await applyCharacterArmor(first, armor)
       expect(count(first, 'helmet')).toBe(2166)
       expect(count(first, 'hair')).toBe(0)
-      expect(count(first)).toBe(54025)
+      expect(count(first)).toBe(55340)
       expect(count(second)).toBe(original)
       const covered = count(first, 'top')
       await applyCharacterArmor(first, { ...armor, head: null, hands: null })
@@ -937,9 +964,10 @@ describe('female modular starter outfits', () => {
             expect(a.distanceTo(b)).toBeCloseTo(length, 5)
             expect(hips.quaternion.length()).toBeCloseTo(1, 5)
           }
-          const width = (FEMALE_BOOTS_PARTS.length + 1) * 3
+          const width = lift.getValueSize()
+          expect(width).toBe(9)
           for (let i = 0; i < lift.values.length; i += width)
-            for (let v = 1; v <= FEMALE_BOOTS_PARTS.length; v++) {
+            for (let v = 1; v < width / 3; v++) {
               const boots = lift.values[i + v * 3 + 1] - lift.values[i + 1]
               expect(boots).toBeGreaterThanOrEqual(-1e-6)
               expect(boots).toBeLessThan(0.2)
@@ -1054,7 +1082,7 @@ describe('female modular starter outfits', () => {
           mixer.setTime(time)
           modelRoot.updateMatrixWorld(true)
           const gap = lowest(soles(part)) - floor
-          // Heels sharing the plate boots' lift may float a little but never sink.
+          // Other heels use the original shared ground track.
           if (part === 'boots') expect(Math.abs(gap)).toBeLessThan(0.01)
           else {
             expect(gap).toBeGreaterThan(-0.01)

@@ -1,6 +1,7 @@
 import json
 import math
 import sys
+from tempfile import TemporaryDirectory
 from pathlib import Path
 
 import bpy
@@ -9,7 +10,8 @@ import numpy as np
 from mathutils import Quaternion, Vector
 
 ROOT = Path(__file__).resolve().parents[2]
-OUTPUT = ROOT / 'assets/items/female_knight_boots/fitted_v5'
+args = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
+OUTPUT = ROOT / (args[0] if args else 'assets/items/female_knight_boots/reference_v2/fitted_v1')
 sys.path.insert(0, str(ROOT / 'tools'))
 from lib.glb import read_glb, write_glb
 from lib.glb_accessors import add_accessor
@@ -32,11 +34,11 @@ for animation in body_doc['animations']:
         animation['samplers'].append({'input': times, 'output': output, 'interpolation': 'LINEAR'})
         animation['channels'].append({'sampler': sampler, 'target': {'node': node_ids[name], 'path': path}})
 body_doc['buffers'][0]['byteLength'] = len(body_raw)
-write_glb(OUTPUT / 'body-high-heels-review.glb', body_doc, body_raw)
-REVIEW = OUTPUT / 'review'
-REVIEW.mkdir(exist_ok=True)
 bpy.ops.wm.read_factory_settings(use_empty=True)
-bpy.ops.import_scene.gltf(filepath=str(OUTPUT / 'body-high-heels-review.glb'), bone_heuristic='TEMPERANCE')
+with TemporaryDirectory() as temp:
+    posed_body = Path(temp) / 'body.glb'
+    write_glb(posed_body, body_doc, body_raw)
+    bpy.ops.import_scene.gltf(filepath=str(posed_body), bone_heuristic='TEMPERANCE')
 rig = next(obj for obj in bpy.data.objects if obj.type == 'ARMATURE')
 body = bpy.data.objects['female_body']
 before = set(bpy.data.objects)
@@ -53,6 +55,21 @@ for obj in imported:
 for obj in imported:
     if obj.type != 'MESH':
         bpy.data.objects.remove(obj, do_unlink=True)
+if any(obj.vertex_groups.get('LeftKneeGuard') for obj in rig.children if obj.type == 'MESH'):
+    bpy.context.view_layer.objects.active = rig
+    bpy.ops.object.mode_set(mode='EDIT')
+    for side in ('Left', 'Right'):
+        shin = rig.data.edit_bones[side + 'Leg']
+        guard = rig.data.edit_bones.new(side + 'KneeGuard')
+        guard.parent = shin.parent
+        guard.head, guard.tail, guard.roll = shin.head.copy(), shin.tail.copy(), shin.roll
+    bpy.ops.object.mode_set(mode='OBJECT')
+    for side in ('Left', 'Right'):
+        constraint = rig.pose.bones[side + 'KneeGuard'].constraints.new('COPY_ROTATION')
+        constraint.target = rig
+        constraint.subtarget = side + 'Leg'
+        constraint.target_space = constraint.owner_space = 'LOCAL'
+        constraint.influence = 0.5
 for track in rig.animation_data.nla_tracks:
     track.mute = True
 rig.animation_data.action = None
@@ -66,7 +83,7 @@ for side in ['Left', 'Right']:
     for bone, degrees in [(foot, 30), (toe, -30)]:
         local_axis = bone.matrix_local.to_quaternion().inverted() @ axis
         rig.pose.bones[bone.name].rotation_quaternion = Quaternion(local_axis, math.radians(degrees))
-lift = json.loads((OUTPUT / 'fitting.json').read_text())['posed_floor_offset']
+lift = json.loads((OUTPUT / 'runtime-validation.json').read_text())['heel_posture']['root_lift']
 hips = rig.pose.bones['Hips']
 hips.location = rig.data.bones['Hips'].matrix_local.to_quaternion().inverted() @ Vector((0, 0, lift))
 bpy.context.view_layer.update()
@@ -80,15 +97,41 @@ mask = json.loads((OUTPUT / 'body-occlusion.json').read_text())
 bm = bmesh.new()
 bm.from_mesh(body.data)
 bm.faces.ensure_lookup_table()
+boundaries = [(plane, [bm.faces[i] for i in plane['triangle_indices']]) for plane in mask.get('clip_planes', [])]
 bmesh.ops.delete(bm, geom=[bm.faces[i] for i in mask['hide_triangle_indices']], context='FACES')
+for plane, faces in boundaries:
+    x, y, z = plane['point']
+    nx, ny, nz = plane['normal']
+    geom = faces + list({edge for face in faces for edge in face.edges}) + list({v for face in faces for v in face.verts})
+    bmesh.ops.bisect_plane(bm, geom=geom, plane_co=(x, -z, y), plane_no=(nx, -nz, ny), dist=1e-7, clear_inner=True)
+    bmesh.ops.triangulate(bm, faces=[face for face in bm.faces if len(face.verts) > 3])
 bm.to_mesh(body.data)
 bm.free()
 for action in bpy.data.actions:
     action.use_fake_user = True
-rig.show_in_front = True
+rig.show_in_front = False
+bpy.ops.object.select_all(action='DESELECT')
+for obj in rig.children:
+    if not obj.name.startswith('boots_female_knight'):
+        continue
+    obj.select_set(True)
+    bpy.context.view_layer.objects.active = obj
+for screen in bpy.data.screens:
+    for area in screen.areas:
+        if area.type == 'VIEW_3D':
+            view = area.spaces.active
+            view.overlay.show_overlays = False
+            view.shading.type = 'MATERIAL'
+            view.region_3d.view_location = (0, 0, .48)
+            view.region_3d.view_rotation = Vector((.9, 1.4, .1)).to_track_quat('Z', 'Y')
+            view.region_3d.view_distance = 1.65
 bpy.ops.file.pack_all()
 bpy.context.preferences.filepaths.save_version = 0
 bpy.ops.wm.save_as_mainfile(filepath=str(OUTPUT / 'female-knight-boots-fitted.blend'))
+if '--pack-only' in args:
+    sys.exit(0)
+REVIEW = OUTPUT / 'review'
+REVIEW.mkdir(exist_ok=True)
 scene = bpy.context.scene
 scene.render.engine = 'CYCLES'
 scene.cycles.samples = 16

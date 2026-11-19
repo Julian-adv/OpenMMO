@@ -1,27 +1,25 @@
-# 여성 기사 상의
+# 여성 기사 판금 상의
 
-짧은 흉갑·등판, 목 보호대, 견갑·상완 판금, 검은 천 소매와 가죽 고정끈으로 된 여성 기사 상의다. 복부는 노출하고 소매는 팔꿈치 아래 팔뚝에서 끝난다.
-채택본은 `tripo_v1/fitted_v3`이며 여성 기준 몸체 65본 리그에 연결했다. **4,279삼각형**, 4K 컬러·노멀·ORM이다.
-흉갑 중심은 `Spine1 0.9 + Spine2 0.1`, 견갑은 같은 쪽 `Shoulder`, 소매는 팔·팔뚝 본을 따른다.
+2026-11-20. 기존 Tripo 원본에서 짧은 흉갑과 양쪽 어깨·상완 판금을 다시 피팅했다.
 
-![여성 기사 상의 착용](../images/characters/modular_human_female_01/female-knight-top-v3.png)
+## 채택한 피팅
 
-## 최종 파일
+원본의 금속성 텍스처와 메시 연결 관계로 흉갑·등판·목깃, 왼쪽 어깨·상완, 오른쪽 어깨·상완을 구분했다. 각 부위에 균일 배율 하나와 회전·이동 하나를 적용했다. 목깃 앞단 중앙은 18mm 낮췄고, 양옆으로 갈수록 낮추는 폭을 줄여 얕은 V자로 연결했다. 흉갑은 Spine1, 양쪽 견갑은 같은 쪽 Arm 본을 따른다. 가죽·천 이음새에서만 변환을 섞었다. 금속 거칠기를 높이고 노멀 맵 강도를 0.5로 줄여 은색 판금에 부드러운 반사가 맺히게 했다. 원본 UV와 삼각형 순서를 유지해 몸체·장갑 가림을 그대로 적용한다.
 
-- [GLB](../../assets/items/female_knight_top/tripo_v1/fitted_v3/top_female_knight.glb),
-  [Blender 편집본](../../assets/items/female_knight_top/tripo_v1/fitted_v3/female-knight-top-fitted.blend)(기준 리그·착용 몸체·9개 액션 포함)
-- [몸체 가림](../../assets/items/female_knight_top/tripo_v1/fitted_v3/body-occlusion.json): 기본 상의·리본 2,488면과 덮이는 피부 2,384면을 숨기고, 벗거나 로딩에 실패하면 복원한다.
-- [소매 보정 기록](../../assets/items/female_knight_top/tripo_v1/fitted_v3/sleeve-adjustment.json),
-  [소매 보정 데이터](../../assets/items/female_knight_top/tripo_v1/fitted_v3/sleeve-adjustment.npz),
-  [해시](../../assets/items/female_knight_top/tripo_v1/fitted_v3/local-artifacts.json)
-- 검사: [피팅](modular-female-knight-top-fitting-v3.json), [본 결합·동작](modular-female-knight-top-animation-v3.json), [브라우저](modular-female-knight-top-preview-v3.json)
+소매 끝까지 원본에서 통째로 맞춘 첫 시안은 팔 피부가 입구를 최대 21.3mm 통과했다. 기존 v3 천 소맷단과 가중치를 다시 사용했다. 맨팔과 만나는 양쪽 입구 정점 20개를 9동작에서 각각 17번 측정했으며, 최소 여유는 14.3mm였다. 이 측정은 소매 입구에 한정한다.
+
+- [착용 GLB](../../assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb) · [Blender 편집본](../../assets/items/female_knight_top/tripo_v1/fitted_v4/female-knight-top-fitted.blend) · [몸체 가림](../../assets/items/female_knight_top/tripo_v1/fitted_v4/body-occlusion.json)
+- 금속 2,130면의 모서리 길이를 균일 배율 적용 후 원본과 비교했다. 목깃 앞단의 영향을 받은 123면을 따로 기록했다. 목깃 수정 영역 밖 모서리의 최대 상대 오차는 0.003%다. 65본을 결합한 뒤 대기·걷기·달리기·점프·공격·앉기 등을 포함한 9동작 1,089자세에서 단단한 판의 길이 변화를 검사했다. [피팅 측정](modular-female-knight-top-fitting-v4.json) · [동작 측정](modular-female-knight-top-animation-v4.json)
+- 게임용 상의는 4,279삼각형, 메시 1개·재질 1개다. 파일 크기는 1,059,808에서 997,792바이트로 줄었다. 기본 여성 몸체·단발·판금 5부위·시작 철검·횃불을 합하면 숨김 포함 71,182삼각형, 착용 시 표시 54,281삼각형이다. 얼굴 영역은 기존 4,604삼각형이고 이 조합은 망토를 착용하지 않는다.
+- 기존 Tripo 생성물의 로컬 편집이다. 2026-10-12 제작 출처와 이용 조건을 따르며 추가 생성 비용은 없다.
 
 ## 재현
 
-재생성 스크립트는 없으며 채택한 `.blend`와 GLB가 편집 원본이다. 본 결합·동작 검사는 다음으로 다시 실행한다.
-
 ```bash
-node tools/validate-female-knight-top-v2.mjs
+.venv/bin/python tools/refit-female-knight-top.py
+blender -b --python-exit-code 1 -P tools/blender-scripts/pack_female_knight_plate.py -- top
+node tools/prepare-female-knight.mjs --part top
+node tools/validate-female-knight-top-v2.mjs v4
 ```
 
 ## 출처·라이선스
@@ -44,7 +42,7 @@ node tools/validate-female-knight-top-v2.mjs
   [메시 진단](../../assets/items/female_knight_top/tripo_v1/review.json)·[스크립트](../../assets/items/female_knight_top/tripo_v1/review_source.py).
 - 피팅·리깅은 로컬 작업이며 추가 비용은 없다.
 
-## 제한
 
-- 가림 전 피부·의상 안쪽 접촉이 남는다. 소매 입구 정점만 피부 비관통을 검사했다.
-- 다른 장갑·투구 혼합과 출시용 장비 등록은 미검증이다. 높은 목 보호대와 투구에는 별도 옷깃 형상이 필요할 수 있다.
+## 이전 피팅 [미사용]
+
+2026-10-12의 v3는 몸통과 팔을 국소 변형한 버전이다. v4는 여기서 여성 리그, 검증된 천 소맷단과 착용 위치를 참조한다. [v3 편집본](../../assets/items/female_knight_top/tripo_v1/fitted_v3/female-knight-top-fitted.blend) · [착용 화면](../images/characters/modular_human_female_01/female-knight-top-v3.png) · [소매 보정](modular-female-knight-top-fitting-v3.json) · [동작 검사](modular-female-knight-top-animation-v3.json) · [브라우저 검사](modular-female-knight-top-preview-v3.json)

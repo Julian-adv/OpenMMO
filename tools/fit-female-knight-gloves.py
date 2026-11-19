@@ -12,8 +12,9 @@ from scipy.sparse import coo_matrix, diags
 from scipy.sparse.csgraph import connected_components, dijkstra
 from scipy.sparse.linalg import spsolve
 
-from lib.glb import read_glb, write_glb, view_bytes
+from lib.glb import read_glb, write_glb
 from lib.glb_accessors import accessor, add_accessor
+from outfits.knight_steel import match_gauntlet_steel
 from outfits.rogue_layers import compact_weights
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -242,7 +243,6 @@ def main():
     assert digest(BODY) == '3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5'
     base, base_raw, names, bones, body = setup_body()
     doc, source_raw = read_glb(SOURCE)
-    source_images = [view_bytes(doc, source_raw, im['bufferView']) for im in doc['images']]
     primitive = doc['meshes'][0]['primitives'][0]
     points = accessor(doc, source_raw, primitive['attributes']['POSITION']).astype(float)
     uv = accessor(doc, source_raw, primitive['attributes']['TEXCOORD_0'])
@@ -273,8 +273,8 @@ def main():
         arrays.update({f'{side}_positions':mapped, f'{side}_joints':joints, f'{side}_weights':weights, f'{side}_labels':labels})
         records[side] = {'triangles':len(triangles), 'lining_triangles': doc['accessors'][lining['indices']]['count'] // 3, 'vertices':len(mapped), 'alignment':alignment}
     attach_rig(doc, raw, base, base_raw, sides)
+    match_gauntlet_steel(doc, raw)
     raw = io.compact(doc, raw)
-    assert source_images == [view_bytes(doc, raw, im['bufferView']) for im in doc['images']]
     target = OUT / ('gloves_female_knight.glb' if args.pair else 'glove_right.glb')
     write_glb(target, doc, raw)
     np.savez(OUT / 'fit-data.npz', source=points, faces=faces, bone_names=names, **arrays)
@@ -308,7 +308,7 @@ def main():
     report = {'date':'2026-10-14', 'source_sha256':digest(SOURCE), 'body_sha256':digest(BODY), 'output_sha256':digest(target),
               'status':'fitting candidate; pending visual and animation review', 'sides':records,
               'method':'Geodesic digit regions and source sections map to canonical finger bones; ARAP palm transition and measured rest clearance. Harmonic weights join palm to finger chains, with the forearm plate rigid. Mirrored design adapts to actual left-hand rest bones.',
-              'unchanged_texture_bytes':True, 'body_hidden_triangles':int(hide.sum()),
+              'steel_finish':'fitted_v4 cuirass', 'body_hidden_triangles':int(hide.sum()),
               'removed_internal_lining_triangles':int(internal_lining.sum()), 'top_hidden_triangles':len(sleeve_mask['hide_triangle_indices'])}
     (OUT / 'fitting.json').write_text(json.dumps(report, indent=2)+'\n')
     print(json.dumps({'output':str(target), 'sides':sides, 'triangles':sum(record['triangles'] + record['lining_triangles'] for record in records.values())}))

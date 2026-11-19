@@ -5,7 +5,7 @@ import { headlessThree, clipSampler, hash } from './lib/headless-three.mjs'
 import { ensureFemalePreview } from './lib/ensure-female-preview.mjs'
 await ensureFemalePreview('animations')
 
-const directory = process.argv[2] ?? 'assets/items/female_knight_boots/fitted_v5'
+const directory = process.argv[2] ?? 'assets/items/female_knight_boots/reference_v2/fitted_v1'
 const basePath = 'assets/modular_human_female_01/rig_v1/female-base.glb'
 const partPath = `${directory}/boots_female_knight.glb`
 const { server, load } = await headlessThree()
@@ -31,6 +31,12 @@ try {
   assert.ok(body)
   const skeleton = body.skeleton
   base.scene.updateMatrixWorld(true)
+  const guardJoints = ['Left', 'Right'].flatMap(side => {
+    const shin = skeleton.getBoneByName(side + 'Leg')
+    const guard = boots[0].skeleton.getBoneByName(side + 'KneeGuard')
+    return guard ? [{ guard, shin, rest: shin.quaternion.clone() }] : []
+  })
+  if (directory.includes('/reference_v2/')) assert.equal(guardJoints.length, 2)
   const parts = boots.map(mesh => {
     for (let i = 0; i < 65; i++) {
       assert.equal(mesh.skeleton.bones[i], skeleton.bones[i])
@@ -48,9 +54,9 @@ try {
         sum += w
         if (!w) continue
         assert.ok(w >= 0 && w <= 1)
-        const name = skeleton.bones[skinIndex.getComponent(i, k)].name
+        const name = mesh.skeleton.bones[skinIndex.getComponent(i, k)].name
         assert.ok(name.startsWith(point.x < 0 ? 'Right' : 'Left'), name)
-        assert.ok(/(UpLeg|Leg|Foot|ToeBase)$/.test(name), name)
+        assert.ok(/(UpLeg|Leg|Foot|ToeBase|KneeGuard)$/.test(name), name)
       }
       assert.ok(Math.abs(sum - 1) < 1e-6)
     }
@@ -73,7 +79,19 @@ try {
   const coverage = JSON.parse(readFileSync(`${directory}/body-occlusion.json`))
   mask.register('boots', coverage)
   mask.setEquipped('boots', true)
-  assert.equal(body.geometry.index.count, originalGeometry.index.count - coverage.hide_triangle_indices.length * 3)
+  let splitTriangles = 0
+  for (const { point, normal, triangle_indices } of coverage.clip_planes ?? []) {
+    const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(...normal), new THREE.Vector3(...point))
+    for (const triangle of triangle_indices) {
+      const kept = [0, 1, 2].filter(k => {
+        const id = originalGeometry.index.getX(3 * triangle + k)
+        return plane.distanceToPoint(new THREE.Vector3().fromBufferAttribute(originalGeometry.attributes.position, id)) >= 0
+      }).length
+      assert.ok(kept === 1 || kept === 2)
+      splitTriangles += kept - 1
+    }
+  }
+  assert.equal(body.geometry.index.count, originalGeometry.index.count + (splitTriangles - coverage.hide_triangle_indices.length) * 3)
   mask.setEquipped('boots', false)
   assert.equal(body.geometry, originalGeometry)
   const ground = femaleBootGround(base.scene, body, boots, asset.scene.userData.heel_pose)
@@ -90,9 +108,11 @@ try {
   const forefootSeams = parts.map(({ mesh }) => {
     const vertices = new Map()
     const pairs = []
-    for (let i = 0; i < mesh.geometry.attributes.position.count; i++) {
-      const point = mesh.getVertexPosition(i, new THREE.Vector3())
-      if (point.y >= .099 || point.z <= .117) continue
+    const points = Array.from({ length: mesh.geometry.attributes.position.count }, (_, i) => mesh.getVertexPosition(i, new THREE.Vector3()))
+    const shoe = new THREE.Box3().setFromPoints(points.filter(point => point.y < .099))
+    const toe = THREE.MathUtils.lerp(shoe.min.z, shoe.max.z, .88)
+    for (const [i, point] of points.entries()) {
+      if (point.y >= .099 || point.z <= toe) continue
       const key = point.toArray().map(value => Math.round(value * 1e6)).join(',')
       const other = vertices.get(key)
       if (other === undefined) vertices.set(key, i)
@@ -126,7 +146,8 @@ try {
       mesh, index, point: mesh.getVertexPosition(index, new THREE.Vector3()),
     })).filter(({ point }) => Math.sign(point.x) === side && point.y < -.054468))
     const rear = support.reduce((a, b) => a.point.z < b.point.z ? a : b)
-    const front = support.filter(({ point }) => point.z > .072)
+    const toe = Math.max(...support.map(({ point }) => point.z))
+    const front = support.filter(({ point }) => point.z > THREE.MathUtils.lerp(rear.point.z, toe, .78))
     const left = front.reduce((a, b) => a.point.x < b.point.x ? a : b)
     const right = front.reduce((a, b) => a.point.x > b.point.x ? a : b)
     assert.ok(left.point.distanceTo(right.point) > .036)
@@ -149,6 +170,12 @@ try {
     let maxRigidStretch = 0, maxFlexibleStretch = 0, maxMotion = 0, minY = Infinity, maxLift = 0, maxForefootSeamGap = 0, maxTransverseSlope = 0, maxSoleTilt = 0
     for (const { time } of sample(clip)) {
       const heelLift = ground.apply(clip.name === 'sit_idle' ? femaleSeatOffset : undefined, clip.name)
+      for (const { guard, shin, rest } of guardJoints) {
+        assert.equal(guard.parent, shin.parent)
+        assert.ok(guard.position.distanceTo(shin.position) < 1e-6)
+        const error = guard.quaternion.angleTo(rest.clone().slerp(shin.quaternion, .5).normalize())
+        assert.ok(error < 1e-5, `${clip.name} ${time}s ${guard.name} midpoint error ${error}`)
+      }
       const lift = clip.name === 'sit_idle' ? femaleSeatOffset : heelLift
       lifts.push({ time, lift,
         hips: base.scene.getObjectByName('Hips').position.toArray(),
@@ -204,8 +231,9 @@ try {
     animationOffsets.push({ name: clip.name, lifts })
   }
   mask.dispose()
-  const report = { date: '2026-10-13', source: { path: partPath, sha256: hash(partPath) },
+  const report = { date: new Date().toISOString().slice(0, 10), source: { path: partPath, sha256: hash(partPath) },
     body: { path: basePath, sha256: hash(basePath) }, exact_65_bone_bind_compatibility: true,
+    midpoint_knee_guards: guardJoints.length,
     four_normalized_influences: true, no_opposite_leg_weights: true, skin_mask_restores: true,
     forefoot_seam_pairs: forefootSeamCount,
     sole_transverse_pairs: transversePairCount,

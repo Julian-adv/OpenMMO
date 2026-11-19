@@ -16,6 +16,7 @@ import {
   neckStripMask,
   femaleFacePartPath,
   markFemaleBase,
+  SHARED_HEEL_GROUND,
   type FemaleFace,
 } from '../lib/utils/femaleCharacter'
 import { fitFemaleHair } from '../lib/utils/femaleHairFit'
@@ -378,6 +379,7 @@ export async function showFemaleBase(
         <option value="face">얼굴 확대</option>
         <option value="upper">상의 확대</option>
         <option value="lower">하의 확대</option>
+        <option value="lower-quarter">하의 사선 확대</option>
         <option value="lower-back">하의 후면 확대</option>
         <option value="full">전신 정면</option>
         <option value="side">전신 측면</option>
@@ -771,9 +773,6 @@ export async function showFemaleBase(
   }))
   const mixer = new THREE.AnimationMixer(model)
   let bootGround: ReturnType<typeof femaleBootGround> | undefined
-  // The game lifts every heel by the plate boots' baked track, so the preview does too.
-  let plateGround: ReturnType<typeof femaleBootGround> | undefined
-  let loadPlateBoots = async () => {}
   const soleGap = document.getElementById('sole-gap')!
   const soleVertex = new THREE.Vector3()
   let gapMotion = ''
@@ -841,7 +840,6 @@ export async function showFemaleBase(
   // Both before the mixer writes: a ground left applied put last frame's legs back over the animation.
   const restoreGround = () => {
     bootGround?.restore()
-    plateGround?.restore()
   }
   const updateAnimation = (delta: number) => {
     restoreGround()
@@ -1124,7 +1122,7 @@ export async function showFemaleBase(
   const updateGround = () => {
     restoreGround()
     model.position.y = chair.visible ? femaleSeatOffset : 0
-    const ground = plateGround ?? bootGround
+    const ground = bootGround
     if (bootsEquipped && ground) {
       const lift = ground.apply(
         chair.visible ? femaleSeatOffset : undefined,
@@ -2082,13 +2080,14 @@ export async function showFemaleBase(
       loaded.set(outfit, entry)
       if (!entry.pending) {
         let source: THREE.Object3D | undefined
+        const sharedHeel = slot === 'boots' && outfit === SHARED_HEEL_GROUND
         const sleeves = slot === 'top' && outfit === 'knight'
         const valkyrie = slot === 'boots' && outfit === 'valkyrie'
         const bracer = slot === 'gloves' && outfit === 'valkyrie'
         const bakedBracer = bracer && !bracerEditing
         entry.pending = (async () => {
           let mask: unknown
-          if (!bracer || bakedBracer) {
+          if (!sharedHeel && (!bracer || bakedBracer)) {
             const response = await fetch(
               `/__modular-character/female-${outfit}-${slot}-occlusion.json`
             )
@@ -2125,7 +2124,7 @@ export async function showFemaleBase(
             if (disposed()) return
             fitMasks.set(part, mask as { hide_triangle_indices: number[] })
             outfitMask.register(part, brushedMask(part))
-          } else if (!bracer) outfitMask.register(part, mask)
+          } else if (!bracer && !sharedHeel) outfitMask.register(part, mask)
           if (bracer) bracerStaticMask = bakedBracer ? mask : undefined
           const meshes = (entry.meshes = bindModularPart(model, source))
           const skeleton = meshes[0].skeleton
@@ -2247,7 +2246,7 @@ export async function showFemaleBase(
             sleeveMaskRegistered = true
             outfitMask.setEquipped('glove-sleeves', knightGlovesEquipped)
           }
-          if (slot === 'boots') {
+          if (slot === 'boots' && (outfit === 'knight' || sharedHeel)) {
             let body: THREE.SkinnedMesh | undefined
             model.traverse((node) => {
               const association = base.parser.associations.get(node)
@@ -2267,6 +2266,7 @@ export async function showFemaleBase(
             )
           }
           for (const mesh of meshes) {
+            if (sharedHeel) mesh.name = SHARED_HEEL_GROUND + '_' + mesh.name
             mesh.visible = false
             if (slot === 'gloves' || slot === 'helmet')
               mesh.frustumCulled = false
@@ -2289,15 +2289,14 @@ export async function showFemaleBase(
       }
       return entry.pending
     }
-    if (slot === 'boots')
-      loadPlateBoots = async () => {
-        await load('knight')
-        plateGround = loaded.get('knight')?.ground
-      }
+    const groundPart = (outfit: string) =>
+      slot === 'boots' && outfit !== 'none' && outfit !== 'knight'
+        ? SHARED_HEEL_GROUND
+        : outfit
     const show = (outfit: string) => {
       if (slot === 'boots') {
         bootGround?.restore()
-        bootGround = loaded.get(outfit)?.ground
+        bootGround = loaded.get(groundPart(outfit))?.ground
       }
       if (slot === 'gloves') {
         bracerMaskEnabled = outfit === 'valkyrie' && bracerHideSkin.checked
@@ -2315,7 +2314,7 @@ export async function showFemaleBase(
         }
       }
       for (const [name, entry] of loaded) {
-        if (!entry.meshes) continue
+        if (!entry.meshes || name === SHARED_HEEL_GROUND) continue
         if (!(slot === 'gloves' && name === 'valkyrie'))
           outfitMask.setEquipped(
             maskName(name),
@@ -2325,7 +2324,8 @@ export async function showFemaleBase(
       }
       underwearColor(
         !!model.getObjectByName('bottom_female_rogue')?.visible,
-        !!model.getObjectByName('bottom_female_caveman')?.visible
+        !!model.getObjectByName('bottom_female_caveman')?.visible,
+        !!model.getObjectByName('bottom_female_knight')?.visible
       )
     }
     const update = async () => {
@@ -2336,6 +2336,8 @@ export async function showFemaleBase(
           status.textContent = '갑옷을 불러오는 중…'
           await load(requested)
         }
+        if (groundPart(requested) === SHARED_HEEL_GROUND)
+          await load(SHARED_HEEL_GROUND)
         if (slot === 'helmet') {
           do {
             for (const mesh of await loadHair(hairSelect.value, requested))
@@ -2616,6 +2618,7 @@ export async function showFemaleBase(
     face: { target: [0, 1.6488, 0], position: [0, 1.6668, 0.648] },
     upper: { target: [0, 1.368, 0], position: [0, 1.404, 1.44] },
     lower: { target: [0, 0.936, 0], position: [0, 0.99, 1.44] },
+    'lower-quarter': { target: [0, 0.995, 0], position: [0.46, 1.08, 0.98] },
     'lower-back': { target: [0, 0.936, 0], position: [0, 0.99, -1.44] },
     full: { target: [0, 0.9, 0], position: [0, 0.99, 3.42] },
     side: { target: [0, 0.9, 0], position: [3.42, 0.99, 0] },
@@ -2724,7 +2727,6 @@ export async function showFemaleBase(
     time.value = String(THREE.MathUtils.clamp(requestedTime, 0, 1))
     time.dispatchEvent(new Event('input'))
   }
-  void loadPlateBoots()
   let previousTime = performance.now()
   renderer.setAnimationLoop((now) => {
     const delta = Math.min((now - previousTime) / 1000, 0.05)

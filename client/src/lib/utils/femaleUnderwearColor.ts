@@ -7,15 +7,18 @@ import {
   attribute,
   materialColor,
   materialMetalness,
+  materialNormal,
   materialRoughness,
   max,
   min,
   mix,
+  normalView,
   positionGeometry,
   smoothstep,
   step,
   texture,
   uniform,
+  vec2,
   vec3,
   vec4,
 } from 'three/tsl'
@@ -53,6 +56,7 @@ export function femaleUnderwearColor(mesh: THREE.SkinnedMesh) {
   )
   const enabled = uniform(0)
   const skinTint = uniform(0)
+  const plateTint = uniform(0)
   const skinColor = uniform(
     // The body's skin after tools/match-female-body-skin.py (was 194, 151, 125).
     new THREE.Color().setRGB(
@@ -89,24 +93,37 @@ export function femaleUnderwearColor(mesh: THREE.SkinnedMesh) {
       .mul(step(positionGeometry.y, 1.13))
       .mul(smoothstep(0.24, 0.42, palest))
       .mul(smoothstep(0.52, 0.72, palest.div(max(brightest, 0.001))))
+    const bareHip = plateTint
+      .mul(smoothstep(0.865, 0.898, positionGeometry.y))
+      .mul(smoothstep(1.108, 1.145, positionGeometry.y).oneMinus())
+      .mul(smoothstep(0.15, 0.185, positionGeometry.x.abs()).oneMinus())
+    const thighColor = source.map
+      ? texture(source.map, vec2(0.497, 0.867)).rgb
+      : skinColor
+    material.normalNode = mix(materialNormal, normalView, bareHip).normalize()
     material.colorNode = vec4(
-      mix(materialColor.rgb.mul(darken), skinColor, skinPrint),
+      mix(
+        mix(materialColor.rgb.mul(darken), skinColor, skinPrint),
+        thighColor,
+        bareHip
+      ),
       base.a
     )
     material.roughnessNode = mix(
       mix(materialRoughness, max(materialRoughness, 0.85), finish),
       0.65,
-      skinPrint
+      max(skinPrint, bareHip)
     )
     material.metalnessNode = materialMetalness.mul(
-      max(finish, skinPrint).oneMinus()
+      max(finish, max(skinPrint, bareHip)).oneMinus()
     )
     materials.push(material)
     return material
   })
   mesh.material = Array.isArray(originalMaterial) ? tinted : tinted[0]
   return Object.assign(
-    (black: boolean, skin = false) => {
+    (black: boolean, skin = false, plate = false) => {
+      plateTint.value = plate ? 1 : 0
       enabled.value = black ? 1 : 0
       skinTint.value = skin && !black ? 1 : 0
     },
