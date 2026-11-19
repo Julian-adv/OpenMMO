@@ -120,4 +120,3 @@ OpenAI Codex built-in ImageGen(`codex exec`), **ChatGPT Pro 20x**. OpenAI 생성
 
 - 기존 의상을 다시 피팅해 스크립트 변경 뒤에도 결과가 같은지 확인하지 않았다.
 - 수면 자세, 거래 창 초상화와의 차이(헤어)는 확인하지 않았다.
-- HF 업로드와 `assets.lock` 갱신 전이다.

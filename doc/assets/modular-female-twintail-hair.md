@@ -51,4 +51,3 @@ node tools/prepare-female-knight.mjs --part twintail_hair
 
 - 투구 헤어 마스크와 chic·custom 얼굴 보정은 하지 않았다.
 - 동작 검토(`review_female_long_hair.py`)는 돌리지 않았다. 미리보기의 대기·달리기에서만 봤다.
-- HF 업로드와 `assets.lock` 갱신 전이다.
