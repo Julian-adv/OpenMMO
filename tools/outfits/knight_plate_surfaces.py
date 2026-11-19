@@ -6,6 +6,8 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage import gaussian_filter
 
+from outfits.knight_steel import cuirass_swatch
+
 STEEL, GUNMETAL, EDGE, BRASS, LEATHER, LINING = range(6)
 
 
@@ -16,16 +18,27 @@ def unit(a):
 def atlas(extra_finishes=()):
     rng = np.random.default_rng(44)
     base, orm = [], []
-    for color, rough, metal, *grain_scale in [
-        ([153, 151, 144], 94, 249),
-        ([114, 109, 99], 143, 238),
-        ([102, 96, 85], 111, 239),
+    steel_color, steel_orm = cuirass_swatch()
+
+    def strip(tile):
+        mirrored = np.concatenate([tile, tile[:, ::-1]], axis=1)
+        return np.tile(mirrored, (1, 4, 1))
+
+    finishes = [
+        None, None, None,
         ([161, 135, 93], 108, 238),
         ([72, 45, 32], 161, 8),
         ([48, 37, 32], 205, 0),
         *extra_finishes,
-    ]:
+    ]
+    for slot, finish in enumerate(finishes):
         grain = rng.normal(size=(128, 1024))
+        if finish is None:
+            shade = {GUNMETAL: 0.97, EDGE: 0.94}.get(slot, 1.0)
+            base.append(strip(steel_color) * shade)
+            orm.append(strip(steel_orm))
+            continue
+        color, rough, metal, *grain_scale = finish
         brushed = gaussian_filter(grain, (0.65, 7))
         broad = gaussian_filter(grain, (8, 20))
         noise = 1.6 * grain + 1.3 * brushed / brushed.std() + 1.8 * broad / broad.std()

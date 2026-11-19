@@ -10,8 +10,8 @@
 
 - [편집용 Blender](../../assets/items/female_knight_bottom/reference_v1/fitted_v1/female-knight-bottom-fitted.blend) · [착용 GLB](../../assets/items/female_knight_bottom/reference_v1/fitted_v1/bottom_female_knight.glb) · [몸체 가림](../../assets/items/female_knight_bottom/reference_v1/fitted_v1/body-occlusion.json)
 - 금속판은 장마다 골반 또는 같은 쪽 허벅지 뼈 하나를 따른다. 걷기·달리기·점프·앉고 일어서기·베기 등 11개 동작의 671개 시점에서 판 가장자리 길이 변화를 검사했다. [게임용 모델 검사 결과](../../assets/items/female_knight_bottom/reference_v1/fitted_v1/runtime-validation.json)
-- 게임용 하의는 10,653삼각형, 재질 1개, 571,336바이트다. 기본 여성 몸체·단발·판금 5부위·시작 철검·횃불 조합은 숨김 포함 71,182삼각형, 착용 시 표시 54,281삼각형이다. 얼굴에 4,604삼각형을 사용한다.
-- [사용자가 제공한 원화](../../assets/items/female_knight_bottom/reference_v1/user-reference.png)의 원저작자와 라이선스는 미확인이다. 새 하의의 메시, UV, 색·금속성·거칠기 텍스처는 로컬에서 제작했다. 추가 생성 비용은 0이다. 몸체와 골격, 가림 인덱스는 기존 여성 기사의 자산을 사용한다.
+- 게임용 하의는 10,653삼각형, 재질 1개, 468,496바이트다. 기본 여성 몸체·단발·판금 5부위·시작 철검·횃불 조합은 숨김 포함 71,182삼각형, 착용 시 표시 54,281삼각형이다. 얼굴에 4,604삼각형을 사용한다.
+- [사용자가 제공한 원화](../../assets/items/female_knight_bottom/reference_v1/user-reference.png)의 원저작자와 라이선스는 미확인이다. 메시와 UV는 로컬에서 제작했다. 은색 판금은 흉갑 앞면에서 채취한 색·거칠기·금속성 텍스처를 사용한다. 추가 생성 비용은 0이다. 몸체와 골격, 가림 인덱스는 기존 여성 기사의 자산을 사용한다.
 
 ## 재현
 
