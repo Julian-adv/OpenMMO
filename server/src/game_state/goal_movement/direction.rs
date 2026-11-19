@@ -139,6 +139,8 @@ impl GameState {
         }) else {
             return;
         };
+        // PlayerMoved reaches only current viewers; whoever arrives later is shown the stored snapshot.
+        self.interest_lock().refresh_player(&player);
         self.publish_nearby(
             &player.position,
             player.floor_level,

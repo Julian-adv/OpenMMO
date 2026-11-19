@@ -737,3 +737,15 @@ async fn phoenix_talisman_is_kept_when_used_alive() {
         .iter()
         .any(|msg| matches!(msg, ServerMessage::SystemMessage { .. })));
 }
+
+#[tokio::test]
+async fn a_turn_in_place_is_what_a_later_arrival_sees() {
+    let game = make_test_game_state("late_facing");
+    let turner = pid("turner");
+    game.add_player(make_player("turner", 0.0, 0.0)).await;
+    game.face_player(turner, 1.25).await;
+    let snapshot = join_snapshot(&game, make_player("late_facing_viewer", 2.0, 0.0)).await;
+    assert!(snapshot.iter().any(|message| matches!(message,
+        ServerMessage::PlayerAppeared { player } if player.id == turner && player.rotation == 1.25
+    )));
+}

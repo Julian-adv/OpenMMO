@@ -22,9 +22,11 @@ from lib.glb import read_glb, write_glb
 from lib.glb_accessors import accessor, add_accessor
 from outfits.mesh_components import welded_islands
 
-OUTPUT = ROOT / 'assets/items/female_maid_outfit/garters/fitted_v1'
+# `-- --outfit pink_maid` builds the white straps for that outfit's stockings.
+OUTFIT = sys.argv[sys.argv.index('--outfit') + 1] if '--outfit' in sys.argv else 'maid'
+OUTPUT = ROOT / f'assets/items/female_{OUTFIT}_outfit/garters/fitted_v1'
 BODY = ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'
-BOOTS = ROOT / 'assets/items/female_maid_outfit/boots/fitted_v1/boots_female_maid.glb'
+BOOTS = ROOT / f'assets/items/female_{OUTFIT}_outfit/boots/fitted_v1/boots_female_{OUTFIT}.glb'
 ROWS = 13
 WIDTH = .012
 THICKNESS = .0018
@@ -35,7 +37,10 @@ OVERLAP = .02
 LIFT = .003
 # The clasp on the lace band: width, height, depth (m).
 CLASP = (.017, .02, .004)
-BLACK = [.012, .012, .012, 1]
+COLOUR = {'maid': ('black', [.012, .012, .012, 1]), 'pink_maid': ('white', [.9, .9, .9, 1])}[OUTFIT]
+# The white straps end in gold clasps.
+GOLD_CLASPS = OUTFIT == 'pink_maid'
+GOLD = [.83, .62, .22, 1]
 
 
 def load(path):
@@ -70,7 +75,7 @@ _, _, labels = welded_islands(bp, bf)
 skin = labels == np.bincount(labels).argmax()
 boots_doc, boots_raw, xp, xf, _ = load(BOOTS)
 
-points, faces, weights, anchors = [], [], [], []
+points, faces, weights, anchors, clasps = [], [], [], [], []
 for side, x_sign in (('left', 1), ('right', -1)):
     leg = skin & (bp[:, 0] * x_sign > .02) & (bp[:, 1] > .6) & (bp[:, 1] < 1.02)
     leg_faces = bf[leg[bf].all(1)]
@@ -118,16 +123,19 @@ for side, x_sign in (('left', 1), ('right', -1)):
         strap = np.array(strap + [[0, 2, 3], [0, 3, 1], [last, last + 1, last + 3], [last, last + 3, last + 2]])
         points.append((rows[:, None] + offsets).reshape(-1, 3))
         faces.append((strap[:, ::-1] if z_sign > 0 else strap) + start)
+        clasps.append(np.zeros(len(strap), bool))
         weights.append(np.repeat(dense, 4, axis=0))
         # The clasp sits on the lace band and moves as one piece with the strap's end.
         clasp, clasp_faces = box(rows[-1] + [0, CLASP[1] / 2 - .004, z_sign * THICKNESS], CLASP)
         faces.append(clasp_faces + start + ROWS * 4)
+        clasps.append(np.ones(len(clasp_faces), bool))
         points.append(clasp)
         weights.append(np.tile(dense[-1], (len(clasp), 1)))
         anchors.append({'name': f'{side}_{facing}', 'top': rows[0].round(4).tolist(), 'bottom': rows[-1].round(4).tolist(),
                         'stocking_rim_m': float(rim)})
 
 points, faces, weights = np.concatenate(points), np.concatenate(faces), np.concatenate(weights)
+clasps = np.concatenate(clasps) & GOLD_CLASPS
 # Outward normals: every piece is convex across its section, so faces are wound away from their own centre line.
 corners = points[faces]
 normal = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
@@ -147,21 +155,26 @@ for key in ('images', 'textures', 'samplers'):
     doc.pop(key, None)
 doc['skins'][0]['inverseBindMatrices'] = add_accessor(
     doc, binary, accessor(boots_doc, boots_raw, boots_doc['skins'][0]['inverseBindMatrices']), 'MAT4')
-doc['materials'] = [{'name': 'maid_garter_black_satin',
-                     'pbrMetallicRoughness': {'baseColorFactor': BLACK, 'metallicFactor': 0, 'roughnessFactor': .45}}]
-doc['meshes'] = [{'name': 'garters_female_maid', 'primitives': [{
-    'attributes': {'POSITION': add_accessor(doc, binary, points, 'VEC3'),
-                   'NORMAL': add_accessor(doc, binary, vertex_normals, 'VEC3'),
-                   'JOINTS_0': add_accessor(doc, binary, joints, 'VEC4', 5123),
-                   'WEIGHTS_0': add_accessor(doc, binary, top, 'VEC4')},
-    'indices': add_accessor(doc, binary, faces.reshape(-1, 1), 'SCALAR', 5123), 'material': 0}]}]
+doc['materials'] = [{'name': f'maid_garter_{COLOUR[0]}_satin',
+                     'pbrMetallicRoughness': {'baseColorFactor': COLOUR[1], 'metallicFactor': 0, 'roughnessFactor': .45}},
+                    {'name': 'maid_garter_gold_clasp',
+                     'pbrMetallicRoughness': {'baseColorFactor': GOLD, 'metallicFactor': 1, 'roughnessFactor': .3}}
+                    ][:1 + GOLD_CLASPS]
+attributes = {'POSITION': add_accessor(doc, binary, points, 'VEC3'),
+              'NORMAL': add_accessor(doc, binary, vertex_normals, 'VEC3'),
+              'JOINTS_0': add_accessor(doc, binary, joints, 'VEC4', 5123),
+              'WEIGHTS_0': add_accessor(doc, binary, top, 'VEC4')}
+doc['meshes'] = [{'name': f'garters_female_{OUTFIT}', 'primitives': [
+    {'attributes': attributes, 'indices': add_accessor(doc, binary, faces[group].reshape(-1, 1), 'SCALAR', 5123),
+     'material': material}
+    for material, group in enumerate((~clasps, clasps)) if group.any()]}]
 node = next(node for node in doc['nodes'] if 'mesh' in node)
-node.update(name='garters_female_maid', mesh=0,
-            extras={'rig_id': 'human_female_01_local_v1', 'part_id': 'garters_female_maid'})
+node.update(name=f'garters_female_{OUTFIT}', mesh=0,
+            extras={'rig_id': 'human_female_01_local_v1', 'part_id': f'garters_female_{OUTFIT}'})
 doc['scenes'][0]['extras'] = {'rig_id': 'human_female_01_local_v1'}
 doc['buffers'][0]['byteLength'] = len(binary)
 OUTPUT.mkdir(parents=True, exist_ok=True)
-target = OUTPUT / 'garters_female_maid.glb'
+target = OUTPUT / f'garters_female_{OUTFIT}.glb'
 write_glb(target, doc, binary)
 report = {'date': date.today().isoformat(), 'strap_count': 4, 'width_m': WIDTH, 'thickness_m': THICKNESS,
           'top_height_m': TOP, 'triangles': len(faces), 'vertices': len(points),

@@ -4,7 +4,7 @@ karl,Karl,guard,torch;dagger,120,5000,30000,,guard_spear;guard_helmet;guard_top;
 signe,Signe,bard,,,,,mandolin;worn_mandolin,worn_torch;tip_hat,시그네,,,,,,,,,,,,,,,,,
 wick,Wick,merchant,,,,,,,위크;윅,,,,,,,,,,,,,,,,,
 miriel,Miriel,maid,,,,,,maid_helmet;maid_top;maid_pants;maid_gloves;maid_boots,미리엘,,,,,,,,,,,,,twintail,,female,,
-cocoly,Cocoly,maid,,,,,,,코콜리,,,,,,,,,,,,,,,,,
+cocoly,Cocoly,maid,,,,,,maid_helmet;pink_maid_top;pink_maid_pants;pink_maid_gloves;pink_maid_boots,코콜리,,,,,,,,,,,,,ponytail,#e3c27a,female,,
 steward,Aldwin,merchant,,,,,,,알드윈,,,,,,,,,,,,,,,,,
 estate_architect,Rowan,merchant,,,,,,,로완,,,,,,,,,,,,,,,,,
 grida,Grida,merchant,,,,,,,그리다,,,,,,,,,,,,,,,,,

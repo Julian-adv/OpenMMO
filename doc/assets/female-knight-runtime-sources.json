@@ -1,7 +1,7 @@
 {
   "date": "2026-11-03",
   "inputs": {
-    "tools/prepare-female-knight.mjs": "7235521dd7077f7a7dd89ed0e3a1a78a9bcfb2f754c6129666187878bb4db3d4",
+    "tools/prepare-female-knight.mjs": "78bbc41e47274ee821f13c0eb703d54875e927f46bdc270e7c8fd81366508056",
     "client/src/lib/utils/female-clip-bake.ts": "5e2c816fc485c3d0049802d82315d8e07e7326d65a23391842f18d95b8d35e12",
     "client/src/lib/utils/female-boot-ground.ts": "0cd0b888f399c689ce821ec416660ca2805b12fa3f4c8d780cdc4ad28b61dc80",
     "assets/modular_human_female_01/rig_v1/female-base.glb": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
@@ -156,7 +156,16 @@
     "assets/items/female_maid_outfit/helmet/fitted_v1/body-occlusion.json": "b406e46e3121cf7f10cc54510c79fc61a5bd97bcd1fd6f36067e98136f8f7fc6",
     "assets/items/female_maid_outfit/boots/fitted_v1/body-occlusion.json": "21c05272667d330098007d7931cf83a29a85face5317771bd841a78dc5cb65c9",
     "assets/modular_human_female_01/hair/tripo_twintail_v1/fitted_v1/hair_female_twintail.glb": "78e6c70a19267bbe44bd792a78ae9b728c77592f3fc5388ada40445c89512f48",
-    "assets/items/female_maid_outfit/garters/fitted_v1/garters_female_maid.glb": "8cf41a27e88541f4f778b4842bf0ef3e8e0de14980b5c9200183b0148f83a851"
+    "assets/items/female_maid_outfit/garters/fitted_v1/garters_female_maid.glb": "842bfbc863db37152483922f90332ed281a06706bba02e32a4951dbc79151c4f",
+    "assets/items/female_pink_maid_outfit/top/fitted_v1/top_female_pink_maid.glb": "d1d0e9da7445029178b6f4579dcc2e811c7f63b58c996bbbe5ceff25dc6ddaea",
+    "assets/items/female_pink_maid_outfit/top/fitted_v1/body-occlusion.json": "d009f4743d8ec2648174c7869744276a5df8405747513bf1acb2dfe516412a1b",
+    "assets/items/female_pink_maid_outfit/bottom/fitted_v1/bottom_female_pink_maid.glb": "583c72f2ac89e362bcc7b80be163e2d4f447600a50fb3fcb0fb97966de117828",
+    "assets/items/female_pink_maid_outfit/boots/fitted_v1/boots_female_pink_maid.glb": "1f4b90947ee8e863bc1f9e09a835bc5daf42c9393f869ab924031c6d4800ae2c",
+    "assets/items/female_pink_maid_outfit/gloves/fitted_v1/gloves_female_pink_maid.glb": "c7e7a9c12b9d08513349275c7f1903c2d8c5035d9bf47cb1d5756be08ebac4f6",
+    "assets/items/female_pink_maid_outfit/bottom/fitted_v1/body-occlusion.json": "43f67ab02befb54ab73fe86d8e31fdd3e065b6656529c4551b65bbbaabf345ff",
+    "assets/items/female_pink_maid_outfit/boots/fitted_v1/body-occlusion.json": "d3d18f1200d023afa023ac720e929b6c002236ac84c2c782ff735da3a96ccaf1",
+    "assets/items/female_pink_maid_outfit/gloves/fitted_v1/body-occlusion.json": "125ae4924ed3423f889b1948edeb9bdb024ba9e2b8cfea694a8b68708f26d473",
+    "assets/items/female_pink_maid_outfit/garters/fitted_v1/garters_female_pink_maid.glb": "54c1199f6bde0ec18307d2588815964fa9b5583df1579cc19096201ec1844d3a"
   },
   "outputs": {
     "client/public/models/characters/modular_female/base.glb": "4ffaa3622719890b9ed447ab32676dccdadde041fa6986e4a7577ce2876ecfbb",
@@ -239,7 +248,12 @@
     "client/public/models/characters/modular_female/maid_helmet.glb": "09d332808cfb2da3ea9f7f9f342b8f7e1fc034fe0dca9efe76b091d4ff4ed0a6",
     "client/public/models/characters/modular_female/maid_boots.glb": "005ec19f7c1a96d9a07e2511938ee4f1a60d4e41c9adc8dc3645a190591cb24e",
     "client/public/models/characters/modular_female/twintail_hair.glb": "e93b7f9ef50fa9975d39ab68d3ad43b0c52b9760ffce9b5d9b6462a1f8665647",
-    "client/public/models/characters/modular_female/maid_garters.glb": "34db58fb15d6a0336d515c85b3a2635171df6bce0cb6e086d2e99e1c0135ca03"
+    "client/public/models/characters/modular_female/maid_garters.glb": "34db58fb15d6a0336d515c85b3a2635171df6bce0cb6e086d2e99e1c0135ca03",
+    "client/public/models/characters/modular_female/pink_maid_top.glb": "76af8e2bb9ec12196246075320dbeaf921b0977110943ae88ee22a49d5d30771",
+    "client/public/models/characters/modular_female/pink_maid_bottom.glb": "b153b33fadadfc34294275a58e811315f17ec7a3c0da908248ba817088d33eb0",
+    "client/public/models/characters/modular_female/pink_maid_boots.glb": "c5a1f53404eb748d2890e2f9a31b4ae3813dabcc9a77fe3390507b40883d25e2",
+    "client/public/models/characters/modular_female/pink_maid_gloves.glb": "68c2a170151b47fde7476f12657c5c3ea0498dfe45e5a280ea566562980a04c7",
+    "client/public/models/characters/modular_female/pink_maid_garters.glb": "35f3cce3ba5cad3533d727e47f1b69cf9e00949f57e3ea2fbd160acc080d5852"
   },
   "underwear_weight_patch": {
     "date": "2026-10-15",

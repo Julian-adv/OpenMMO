@@ -10,8 +10,9 @@ const outfits = {
   shopkeeper: ['top', 'bottom', 'boots'],
   guard: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
   maid: ['top', 'bottom', 'gloves', 'boots', 'helmet'],
+  pink_maid: ['top', 'bottom', 'gloves', 'boots'],
 }
-const route = /^\/__female-preview\/([a-z]+)-fit\.json$/
+const route = /^\/__female-preview\/([a-z_]+)-fit\.json$/
 // Paired parts save { left, right }; left is the character's left (+x).
 const paired = ['gloves', 'boots']
 // Keep in sync with PART_FIT_RANGES in client/src/previews/female-part-fit.ts.

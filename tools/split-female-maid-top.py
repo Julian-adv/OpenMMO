@@ -7,6 +7,7 @@ This one was drawn alone from the hips up: head, neck, arms and belly are bare m
 """
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -18,7 +19,8 @@ from outfits.mannequin import Source
 
 ROOT = Path(__file__).resolve().parents[1]
 BODY = ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'
-DIRECTORY = ROOT / 'assets/items/female_maid_outfit/tripo_top_v2'
+# Another outfit's piece generated the same way is split by naming its folder.
+DIRECTORY = ROOT / (sys.argv[1] if len(sys.argv) > 1 else 'assets/items/female_maid_outfit/tripo_top_v2')
 SOURCE = DIRECTORY / 'model_url.glb'
 # Red minus blue under which a texel is mannequin, and the triangles a blue piece needs to be more than shading.
 MANNEQUIN_BLUE = -15

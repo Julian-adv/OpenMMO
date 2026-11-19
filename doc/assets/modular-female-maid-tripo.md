@@ -116,7 +116,7 @@ OpenAI Codex built-in ImageGen(`codex exec`), **ChatGPT Pro 20x**. OpenAI 생성
 - 아이템 `maid_helmet`, `maid_top`, `maid_pants`, `maid_gloves`, `maid_boots`: 가격·판매처 없음. 아이콘과 바닥 모델은 `export_outfit_items.py --outfit maid --texture-size 512`.
 - 남성 몸체에는 여성 전용 옷으로 처리돼 기본 옷이 보인다(`FEMALE_ONLY_MODEL`).
 - `data-src/npcs.csv`의 Miriel: 위 다섯 아이템 착용, 헤어 [`twintail`](modular-female-twintail-hair.md), 여성, 옷 한 벌 값 50,000.
-- `modelPaths.ts`에서 maid 클래스가 여성 공통 몸체를 쓴다. Cocoly는 `pink_maid.glb` 지정이 남아 있다.
+- `modelPaths.ts`에서 maid 클래스가 여성 공통 몸체를 쓴다. Cocoly는 [분홍 메이드복](modular-female-pink-maid-tripo.md)을 입는다.
 
 ## 남은 일
 

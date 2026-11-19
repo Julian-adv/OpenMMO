@@ -56,7 +56,7 @@ const ARMOR_STYLES = {
 } as const
 
 /** Female-only clothes show the default outfit on the male body. */
-const FEMALE_ONLY_MODEL = /^armor\/(ceremony|shopkeeper|maid)_/
+const FEMALE_ONLY_MODEL = /^armor\/(ceremony|shopkeeper|maid|pink_maid)_/
 
 const MATERIAL_STYLES = { metal: 'plate', leather: 'rogue' } as const
 const HELMET_MATERIAL_STYLES = { metal: 'plate', leather: 'plate' } as const

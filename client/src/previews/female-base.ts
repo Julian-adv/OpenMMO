@@ -160,6 +160,7 @@ export async function showFemaleBase(
         <option value="ceremony">예복 보디스 (피팅 검수 중)</option>
         <option value="guard">경비대 사슬 갑옷</option>
         <option value="maid">메이드 상의 (피팅 검수 중)</option>
+        <option value="pink_maid">분홍 메이드 상의 (피팅 검수 중)</option>
         <option value="shopkeeper">잡화점 블라우스와 코르셋 (피팅 검수 중)</option>
         <option value="rogue">로그 가죽 코르셋</option>
       </select>
@@ -176,6 +177,7 @@ export async function showFemaleBase(
         <option value="ceremony">예복 종 모양 치마 (피팅 검수 중)</option>
         <option value="guard">경비대 가죽 띠 치마</option>
         <option value="maid">메이드 앞치마 치마 (피팅 검수 중)</option>
+        <option value="pink_maid">분홍 메이드 앞치마 치마 (피팅 검수 중)</option>
         <option value="shopkeeper">잡화점 앞치마 치마 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
@@ -190,6 +192,7 @@ export async function showFemaleBase(
         <option value="ceremony">예복 스타킹과 구두 (피팅 검수 중)</option>
         <option value="guard">경비대 허벅지 장화</option>
         <option value="maid">메이드 스타킹과 구두 (피팅 검수 중)</option>
+        <option value="pink_maid">메이드 흰 스타킹과 구두 (피팅 검수 중)</option>
         <option value="shopkeeper">잡화점 앵클부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
@@ -210,6 +213,7 @@ export async function showFemaleBase(
         <option value="ceremony">예복 긴 장갑 (피팅 검수 중)</option>
         <option value="guard">경비대 가죽 장갑</option>
         <option value="maid">메이드 긴 장갑 (피팅 검수 중)</option>
+        <option value="pink_maid">메이드 흰 긴 장갑 (피팅 검수 중)</option>
         <option value="rogue">로그 검은 가죽 반장갑</option>
       </select>
       <div id="outfit-fit" hidden>
@@ -1007,6 +1011,11 @@ export async function showFemaleBase(
       url: '/__modular-character/parts/female_maid_garters.glb',
       worn: ['bottom_female_maid', 'boots_female_maid'],
     },
+    {
+      url: '/__modular-character/parts/female_pink_maid_garters.glb',
+      // The boots have a second material for the red sole, so three.js names their meshes _1 and _2.
+      worn: ['bottom_female_pink_maid', 'boots_female_pink_maid_1'],
+    },
   ].map((set) => ({
     ...set,
     meshes: [] as THREE.SkinnedMesh[],
@@ -1363,6 +1372,7 @@ export async function showFemaleBase(
     ceremony: '예복',
     guard: '경비대',
     maid: '메이드',
+    pink_maid: '분홍 메이드',
     shopkeeper: '잡화점',
   }
   const fitSlotNames: Record<string, string> = {
@@ -1444,6 +1454,7 @@ export async function showFemaleBase(
   const sleeveEndParts = new Map<string, SleeveShape>([
     ['top-ranger', TUBE_SLEEVE],
     ['top-maid', { start: 0.03, radius: 0.12, fade: 0.03 }],
+    ['top-pink_maid', { start: 0.03, radius: 0.12, fade: 0.03 }],
   ])
   const sleeveEnds = new Map<string, Record<PartSide, SleeveEnd>>()
   const sleeveEndsOf = (part: string) => {

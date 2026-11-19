@@ -32,6 +32,8 @@ LEGS = ('LeftLeg', 'LeftFoot', 'LeftToe', 'RightLeg', 'RightFoot', 'RightToe')
 FEET = ('LeftFoot', 'LeftToe', 'RightFoot', 'RightToe')
 CEREMONY_V2 = dict(source='tripo_multiview_v2/segmented.glb',
                    sha256='c1f2f134b29268b6671362923eb4114d6965fedff6495dd130b969a4691d9b90', scale=1)
+# Leg skin of the female base, sRGB.
+LEG_SKIN = (.767, .594, .494)
 OUTFITS = {
     'priest': dict(
         source='tripo_segmented_v1/segmented.glb',
@@ -222,11 +224,42 @@ OUTFITS = {
                           lower_shoe=-.0102, extend_heel={'gap': .0127}, level_tops=True,
                           clip_hem=dict(keep='above', within=.4, per_side=True, shift=-.003),
                           # Leg skin (sRGB) blended into the black knit: opaque black read as leggings.
-                          sheer=dict(skin=(.767, .594, .494), amount=.3, band=.078),
+                          repaint=dict(mode='sheer', skin=LEG_SKIN, amount=.3, band=.078),
                           taper=dict(opening=.03, ankle=.07, ankle_fade=.05, clearance=.002, reach=.13)),
             'helmet': dict(nodes=['helmet'], version='fitted_v1'),
         }),
 }
+# Cocoly's pink maid outfit wears the maid's gloves and stockings in white.
+MAID = OUTFITS['maid']
+OUTFITS['pink_maid'] = dict(MAID, source='../female_maid_outfit/' + MAID['source'], parts={
+    'gloves': dict(MAID['parts']['gloves'], repaint=dict(mode='white_cloth', white=(1, .985, .97), margin=8)),
+    # White stockings and black pumps generated alone on the bare mannequin: painting the maid's stockings white
+    # showed the ragged edge of its shoes' gloss.
+    'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=LEGS, rigid_post=.075,
+                  clip_hem=dict(keep='above', within=.4, per_side=True, shift=-.003),
+                  # The sole stood 2.3 cm over the plate boots' sole, whose lift every heel shares.
+                  lower_shoe=.023,
+                  repaint=dict(mode='clean_knit', rough=.2, margin=4),
+                  # The generated red stopped halfway down the heels' inner faces.
+                  sole_colour=(.74, .05, .06),
+                  # Generated 9 mm ahead of the leg all the way down: moved back as one piece.
+                  model=dict(source='tripo_boots_v1/segmented.glb', sha256='0a1cd062e336270aa135f12463aec9eb694d8661b7996299119d7071a96e9b07', scale=1, offset_y=.009)),
+    # White puff-sleeved blouse under a pink pinafore bodice, generated alone on a bust. Its cuff frill is white
+    # like the sleeve, so the arm is cut by the frill's place at the sleeve's end, not its colour.
+    'top': dict(nodes=['top'], version='fitted_v1', hide_underwear=(1.15, 1.7),
+                clip_hem=dict(keep='below', within=.25), clip_sleeve=dict(frill=-.012, ruffle=.035),
+                align_sleeves='rigid', sleeve_pivot='shoulder', sleeve_end=dict(start=.03, radius=.12, fade=.03),
+                # The corset came wider than the body's waist.
+                taper_waist=dict(top=1.29, within=.2, clearance=.003),
+                model=dict(source='tripo_top_v1/segmented.glb',
+                           sha256='326c93118da8241086ee52e2d7f8fb5b2594f4f85460623d94b83610eb2b2727', scale=1)),
+    # Pink bell skirt over a lace petticoat with the apron and back bow, generated alone on the bare mannequin.
+    # Its pink panels came as pieces of 260 to 1250 faces, so a skirt layer is counted from 250.
+    'bottom': dict(MAID['parts']['bottom'],
+                   drop_lining=dict(MAID['parts']['bottom']['drop_lining'], layer=250),
+                   model=dict(source='tripo_skirt_v1/segmented.glb',
+                              sha256='bfc2f9e585606d62ccdd9d46372ad76b41be9d199d029f00a7fbcc1c7d123f38', scale=1)),
+})
 COVER_RAY = .06
 # Sleeve alignment fades in over this distance from the shoulder joint, leaving the shoulder pads in place.
 SLEEVE_BLEND = (.03, .09)
@@ -763,6 +796,43 @@ def level_tops(points):
     return record
 
 
+def plane_section(vertices, triangles, origin, axis):
+    """Points where a surface crosses a plane: vertex slabs missed rings on the sparse body."""
+    depth = (vertices - origin) @ axis
+    cut = []
+    for i, k in ((0, 1), (1, 2), (2, 0)):
+        da, db = depth[triangles[:, i]], depth[triangles[:, k]]
+        crossing = (da * db < 0)
+        t = (da[crossing] / (da[crossing] - db[crossing]))[:, None]
+        cut.append(vertices[triangles[crossing, i]] * (1 - t) + vertices[triangles[crossing, k]] * t)
+    return np.vstack(cut)
+
+
+def taper_waist(points, faces, spec):
+    """Scale a bodice's waist across the spine so its bottom edge is as wide as the base body.
+
+    Measured at the bottom edge only and run linearly up to `top`, under the bust, where nothing moves.
+    """
+    torso = np.abs(points[:, 0]) < spec['within']
+    bottom = points[torso, 2].min() + .01
+    up = np.array([0., 0, 1])
+
+    def extent(vertices, triangles):
+        cut = plane_section(vertices, triangles, np.array([0, 0, bottom]), up)[:, :2]
+        cut = cut[np.abs(cut[:, 0]) < spec['within']]
+        return np.ptp(cut, axis=0), (cut.min(0) + cut.max(0)) / 2
+
+    cloth_size, cloth_centre = extent(points, faces)
+    skin_size, skin_centre = extent(rest_points, bf)
+    factor = (skin_size.sum() + 4 * spec['clearance']) / cloth_size.sum()
+    t = np.clip((spec['top'] - points[torso, 2]) / (spec['top'] - bottom), 0, 1)[:, None]
+    points[torso, :2] = (cloth_centre + (points[torso, :2] - cloth_centre) * (1 + (factor - 1) * t)
+                         + (skin_centre - cloth_centre) * t)
+    return {'bottom_m': float(bottom), 'top_m': spec['top'], 'factor': float(factor),
+            'cloth_size_m': cloth_size.round(4).tolist(), 'skin_size_m': skin_size.round(4).tolist(),
+            'shift_mm': ((skin_centre - cloth_centre) * 1000).round(1).tolist()}
+
+
 def taper_stockings(points, faces, spec):
     """Scale each stocking across the leg so its opening and its ankle are as wide as the base leg.
 
@@ -786,15 +856,7 @@ def taper_stockings(points, faces, spec):
             origin = a + along * axis
 
             def section(vertices, triangles):
-                """Where the surface crosses the station plane: vertex slabs missed rings on the sparse thigh."""
-                depth = (vertices - origin) @ axis
-                cut = []
-                for i, k in ((0, 1), (1, 2), (2, 0)):
-                    da, db = depth[triangles[:, i]], depth[triangles[:, k]]
-                    crossing = (da * db < 0)
-                    t = (da[crossing] / (da[crossing] - db[crossing]))[:, None]
-                    cut.append(vertices[triangles[crossing, i]] * (1 - t) + vertices[triangles[crossing, k]] * t)
-                cut = np.vstack(cut)
+                cut = plane_section(vertices, triangles, origin, axis)
                 cut = cut[(cut[:, 0] * sign > 0) & (np.linalg.norm(cut - origin, axis=1) < spec['reach'])]
                 assert len(cut) > 8, f'{side} stocking station {station:.3f} has too few points'
                 coords = (cut - origin) @ frame.T
@@ -814,11 +876,14 @@ def taper_stockings(points, faces, spec):
     return record
 
 
-def sheer_stockings(spec):
-    """Blend skin colour into the matte knit of this part's texture so the leg seems to show through.
+def repaint(spec):
+    """Recolour this part's texels in the base colour texture; other parts share the atlas untouched.
 
-    The glossy shoe (low roughness) keeps its colour, and so does the lace and welt band, `band` metres down
-    from each stocking's top edge. Picking the band by its tone left the knit's baked shadows black too.
+    `sheer`: skin colour blended into the matte knit so the leg seems to show through. The glossy shoe (low
+    roughness) keeps its colour, and so does the lace and welt band, `band` metres down from each stocking's
+    top edge. Picking the band by its tone left the knit's baked shadows black too.
+    `clean_knit`: white knit stained by the shoe's black is made white again.
+    `white_cloth`: dark cloth turns white, its highlights and folds kept as shading.
     """
     def image_of(socket):
         shader = next(n for n in mesh.materials[0].node_tree.nodes if n.type == 'BSDF_PRINCIPLED')
@@ -837,33 +902,57 @@ def sheer_stockings(spec):
     assert rough.shape == colour.shape[:2]
     height, width = rough.shape
     position = np.array([v.co for v in mesh.vertices])
-    below = np.zeros(len(position))
-    for sign in (1, -1):
-        leg = position[:, 0] * sign > 0
-        centre, normal = fit_plane(closed_rim(position[leg], 1))
-        below[leg] = (centre - position[leg]) @ (normal * np.sign(normal[2]))
-    depth = np.full((height, width), -1, np.float32)
     uv = mesh.uv_layers.active.data
+    below = np.zeros(len(position))
+    if 'band' in spec:
+        for sign in (1, -1):
+            leg = position[:, 0] * sign > 0
+            centre, normal = fit_plane(closed_rim(position[leg], 1))
+            below[leg] = (centre - position[leg]) @ (normal * np.sign(normal[2]))
+    if spec['mode'] == 'clean_knit':
+        below = np.array([v.normal.z for v in mesh.vertices])
+    depth = np.full((height, width), -1, np.float32)
+    used = np.zeros((height, width), bool)
+    # A light colour needs a wider rim than 1.5 px: the game's 1024 px texture mixed the black past the islands'
+    # edges into grey seams.
+    margin = spec.get('margin', 1.5)
     for polygon in mesh.polygons:
         corners = np.array([uv[i].uv for i in polygon.loop_indices]) * (width, height)
-        low = np.maximum(np.floor(corners.min(0) - 2).astype(int), 0)
-        high = np.minimum(np.ceil(corners.max(0) + 2).astype(int), (width - 1, height - 1))
+        low = np.maximum(np.floor(corners.min(0) - margin - .5).astype(int), 0)
+        high = np.minimum(np.ceil(corners.max(0) + margin + .5).astype(int), (width - 1, height - 1))
         x, y = np.meshgrid(np.arange(low[0], high[0] + 1) + .5, np.arange(low[1], high[1] + 1) + .5)
         a, b, c = corners
         area = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
         if abs(area) < 1e-9:
             continue
-        # Barycentric weights; texels up to 1.5 px outside an island's edge are taken too.
+        # Barycentric weights; texels up to `margin` px outside an island's edge are taken too.
         inside = np.ones(x.shape, bool)
         value = np.zeros(x.shape)
         for (p, q), opposite in zip(((b, c), (c, a), (a, b)), polygon.vertices):
             edge = ((q[0] - p[0]) * (y - p[1]) - (q[1] - p[1]) * (x - p[0])) / area
-            inside &= edge * abs(area) / np.hypot(*(q - p)) > -1.5
+            inside &= edge * abs(area) / np.hypot(*(q - p)) > -margin
             value += edge * below[opposite]
-        window = depth[low[1]:high[1] + 1, low[0]:high[0] + 1]
-        window[inside] = value[inside]
-    weight = spec['amount'] * smoothstep((rough - .4) / .2) * smoothstep((depth - spec['band']) / .004)
-    colour[:, :, :3] += (np.array(spec['skin'], np.float32) - colour[:, :, :3]) * weight[:, :, None]
+        depth[low[1]:high[1] + 1, low[0]:high[0] + 1][inside] = value[inside]
+        used[low[1]:high[1] + 1, low[0]:high[0] + 1] |= inside
+    rgb = colour[:, :, :3]
+    tone = rgb.mean(2)
+    knit = smoothstep((rough - .4) / .2)
+    under_band = smoothstep((depth - spec.get('band', 0)) / .004)
+    if spec['mode'] == 'sheer':
+        weight = spec['amount'] * knit * under_band
+        target = np.array(spec['skin'], np.float32)
+    elif spec['mode'] == 'clean_knit':
+        # The shoe's black ran over its edge onto the matte knit: knit texels (rougher than `rough`) take the
+        # knit's own white.
+        white = np.median(rgb[used & (tone > .7)], axis=0)
+        target = np.maximum(rgb, white)
+        # The red sole is as matte as the knit and stays: by its colour, and in shadow by facing down.
+        weight = (used * smoothstep((rough - spec['rough']) / .03) * (rgb[:, :, 0] < 1.3 * rgb[:, :, 2] + .02)
+                  * (depth > -.3))
+    else:
+        target = np.maximum(rgb, np.clip(.78 + .9 * tone, 0, .97)[:, :, None] * np.array(spec['white'], np.float32))
+        weight = used.astype(np.float32)
+    rgb += (target - rgb) * weight[:, :, None]
     colour_image.pixels.foreach_set(colour.ravel())
     colour_image.update()
     colour_image.pack()
@@ -1144,6 +1233,7 @@ arms = {sign: (bones[side + 'ForeArm'] @ TO_GLTF.T, bones[side + 'Hand'] @ TO_GL
         for side, sign in (('Left', 1), ('Right', -1))}
 heel_extension = {}
 levelled_tops = {}
+waist_taper = {}
 stocking_taper = {}
 glove_align = {}
 sleeve_shift = {}
@@ -1177,6 +1267,8 @@ else:
     # One-tube sleeves are aligned before the saved fits, which then move them as the preview showed.
     if RIGID_SLEEVES:
         sleeve_shift = align_sleeves_rigid(points)
+    if 'taper_waist' in SPEC:
+        waist_taper = taper_waist(points, faces, SPEC['taper_waist'])
     if SPEC.get('align_ends'):
         glove_align = align_glove_ends(points)
     points, preview_fits = bake(PREVIEW_FIT, PART, points, paired, keep_pending=keep_pending, arms=arms)
@@ -1383,7 +1475,7 @@ if 'clip_sleeve' in SPEC:
     # `frill`: a white frill hangs from the cuff band and flares off the arm, so the plane is fitted to the frill
     # and set that far into the band from where they meet (negative: into the frill).
     frill = SPEC['clip_sleeve'].get('frill')
-    if frill is not None:
+    if frill is not None and 'ruffle' not in SPEC['clip_sleeve']:
         pixels = [base_colour_pixels(m) for m in mesh.materials]
         uv = mesh.uv_layers.active.data
         white = np.zeros(len(points), bool)
@@ -1403,8 +1495,11 @@ if 'clip_sleeve' in SPEC:
             upper /= np.linalg.norm(upper)
             offset = points - bones[side + 'Arm']
             reach = offset @ upper
-            ring = points[white & (points[:, 0] * sign > bones[side + 'Arm'][0] * sign) & (reach > .06)
-                          & (np.linalg.norm(offset - reach[:, None] * upper, axis=1) < .12)]
+            sleeve = ((points[:, 0] * sign > bones[side + 'Arm'][0] * sign) & (reach > .06)
+                      & (np.linalg.norm(offset - reach[:, None] * upper, axis=1) < .12))
+            # `ruffle`: the frill is this much of the sleeve's end, where its colour does not set it apart.
+            ruffle = SPEC['clip_sleeve'].get('ruffle')
+            ring = points[sleeve & (reach > reach[sleeve].max() - ruffle if ruffle else white)]
             assert len(ring) > 30, f'{side} sleeve frill has {len(ring)} vertices'
             centre, axis = fit_plane(ring)
             axis *= np.sign(axis @ upper)
@@ -1609,7 +1704,7 @@ hidden[brush.get('show', [])] = False
 bpy.ops.object.select_all(action='DESELECT')
 mesh_obj.select_set(True)
 bpy.context.view_layer.objects.active = mesh_obj
-sheer_texels = sheer_stockings(SPEC['sheer']) if 'sheer' in SPEC else 0
+repainted_texels = repaint(SPEC['repaint']) if 'repaint' in SPEC else 0
 intermediate = OUTPUT / 'geometry.glb'
 bpy.ops.export_scene.gltf(filepath=str(intermediate), export_format='GLB', use_selection=True,
                           export_animations=False, export_skins=False, export_attributes=True, export_tangents=False)
@@ -1691,7 +1786,7 @@ report = {'date': date.today().isoformat(), 'outfit': OUTFIT, 'part': PART, 'sou
           **({'heel_pose_degrees': HEEL_DEGREES, 'leg_hidden_below_rim_m': rim_heights,
               **({} if CONFIG['on_heels'] else {'foot_stretch_m': foot_shift, 'ankle_band_m': ANKLE_BAND})} if heel else {}),
           'triangles': len(faces), 'vertices': len(points), **({'dropped_skin_faces': dropped_skin} if dropped_skin else {}),
-          **({'dropped_lining_faces': dropped_lining} if dropped_lining else {}), **({'levelled_tops': levelled_tops} if levelled_tops else {}), **({'sheer_texels': sheer_texels} if sheer_texels else {}), 'skin_distance_mm': percentiles(depths),
+          **({'dropped_lining_faces': dropped_lining} if dropped_lining else {}), **({'levelled_tops': levelled_tops} if levelled_tops else {}), **({'repainted_texels': repainted_texels} if repainted_texels else {}), 'skin_distance_mm': percentiles(depths),
           'pushout': False, 'poke_depth_m': POKE_DEPTH,
           'hidden_body_triangles': int(hidden.sum()), 'restored_visible_triangles': restored, 'motion_poke_triangles': motion_pokes,
           'brush_triangles': {'hide': len(brush.get('hide', [])), 'show': len(brush.get('show', []))},
@@ -1699,6 +1794,7 @@ report = {'date': date.today().isoformat(), 'outfit': OUTFIT, 'part': PART, 'sou
           **({'skin_hidden_past_cuff': cuff_planes} if cuff_planes else {}),
           **({'sleeve_axis_shift': sleeve_shift} if sleeve_shift else {}),
           **({'glove_align': glove_align} if glove_align else {}), **({'stocking_taper': stocking_taper} if stocking_taper else {}),
+          **({'waist_taper': waist_taper} if waist_taper else {}),
           **({'sleeve_end_offsets_cm': sleeve_ends} if RIGID_SLEEVES else {}),
           **({'sleeve_cut': sleeve_cut} if sleeve_cut else {}),
           **({'hem_cut': hem_cut} if hem_cut else {}),

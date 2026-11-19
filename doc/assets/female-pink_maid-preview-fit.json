@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "parts": {
+    "bottom": {
+      "saved_at": "2026-11-19T07:28:10.414Z",
+      "brush": {
+        "hide": [],
+        "show": []
+      },
+      "baked": [
+        {
+          "move-x": 0.3,
+          "move-y": 0,
+          "move-z": -0.2,
+          "scale": 102.5,
+          "scale-x": 100,
+          "scale-y": 100,
+          "scale-z": 100,
+          "rotate-x": 0,
+          "rotate-y": 0,
+          "rotate-z": 0,
+          "baked_at": "2026-11-19T07:28:28.138396+00:00"
+        }
+      ]
+    }
+  }
+}

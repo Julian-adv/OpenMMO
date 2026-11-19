@@ -4,6 +4,7 @@
 """
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -15,13 +16,14 @@ from outfits.mannequin import Source
 
 ROOT = Path(__file__).resolve().parents[1]
 BODY = ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'
-DIRECTORY = ROOT / 'assets/items/female_guard_outfit/tripo_skirt_v1'
+# Another outfit's piece generated the same way is split by naming its folder.
+DIRECTORY = ROOT / (sys.argv[1] if len(sys.argv) > 1 else 'assets/items/female_guard_outfit/tripo_skirt_v1')
 SOURCE = DIRECTORY / 'model_url.glb'
 # Red minus blue under which a texel is mannequin, and the triangles a blue piece needs to be more than shading.
 MANNEQUIN_BLUE = -15
 MANNEQUIN_PIECE = 200
-# Loose pieces above this are the mannequin's mouth.
-HEAD = 1.6
+# Loose pieces above this are the mannequin's mouth; a second argument lowers it to drop the swimwear's back tie too.
+HEAD = float(sys.argv[2]) if len(sys.argv) > 2 else 1.6
 
 source = Source(SOURCE)
 faces = source.faces
@@ -51,8 +53,22 @@ fit['heel_lift_m'] = lift
 keep = faces[~blue]
 labels = source.components(keep)
 components = [{'triangles': int((labels == label).sum())} for label in np.unique(labels)]
-parts = {'skirt': np.vstack([keep[labels == label] for label in np.unique(labels)
-                             if (labels == label).sum() >= 20 and source.extent(keep[labels == label])[0][1] < HEAD])}
+pieces = [keep[labels == label] for label in np.unique(labels)
+          if (labels == label).sum() >= 20 and source.extent(keep[labels == label])[0][1] < HEAD]
+# A third argument `boots` names the pieces by leg instead: stockings and shoes generated the same way.
+if sys.argv[3:4] == ['boots']:
+    sides = [sum(source.extent(piece)).__getitem__(0) > 0 for piece in pieces]
+    parts = {name: np.vstack([piece for piece, left in zip(pieces, sides) if left == (name == 'left_boots')])
+             for name in ('left_boots', 'right_boots')}
+    # A fourth argument cuts the stocking tops level at that height (m): a lace band lost to the mannequin's
+    # colour left them ragged.
+    if len(sys.argv) > 4:
+        top = float(sys.argv[4])
+        for name, triangles in parts.items():
+            triangles = source.clip(triangles, top)
+            parts[name] = triangles[source.points[triangles].mean(1)[:, 1] < top]
+else:
+    parts = {'skirt': np.vstack(pieces)}
 
 output = DIRECTORY / 'segmented.glb'
 source.write(output, parts)

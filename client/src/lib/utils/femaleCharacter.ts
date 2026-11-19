@@ -38,6 +38,7 @@ type Style =
   | 'shopkeeper'
   | 'guard'
   | 'maid'
+  | 'pink_maid'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
@@ -51,10 +52,11 @@ const prefixes: Record<Style, string> = {
   shopkeeper: 'shopkeeper_',
   guard: 'guard_',
   maid: 'maid_',
+  pink_maid: 'pink_maid_',
 }
 const styles = Object.keys(prefixes) as Style[]
 type Helmet =
-  | Exclude<Style, 'rogue' | 'caveman' | 'ranger' | 'shopkeeper'>
+  | Exclude<Style, 'rogue' | 'caveman' | 'ranger' | 'shopkeeper' | 'pink_maid'>
   | 'brilliance'
 const LAZY_HELMET = 'brilliance_helmet'
 export type FemaleHair = Extract<
@@ -102,6 +104,7 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   shopkeeper: ['top', 'bottom', 'boots'],
   guard: slots,
   maid: slots,
+  pink_maid: slots.filter((slot) => slot !== 'helmet'),
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
@@ -482,6 +485,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/shopkeeper_')) return 'shopkeeper'
   if (model.startsWith('armor/guard_')) return 'guard'
   if (model.startsWith('armor/maid_')) return 'maid'
+  if (model.startsWith('armor/pink_maid_')) return 'pink_maid'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -496,7 +500,8 @@ const femaleHelmet = (itemId: string | null | undefined): Helmet | null => {
   return style === 'rogue' ||
     style === 'caveman' ||
     style === 'ranger' ||
-    style === 'shopkeeper'
+    style === 'shopkeeper' ||
+    style === 'pink_maid'
     ? 'barbarian'
     : style
 }
@@ -545,10 +550,13 @@ function registerLazyPart(
 export const neckSlot = (name: string) => `${name}:neck`
 
 const FEMALE_TABARD = 'guard_tabard'
-// Straps between the maid skirt and stockings, loaded when both are worn.
-const MAID_GARTERS = 'maid_garters'
-const wearsMaidGarters = (outfit: Outfit) =>
-  outfit.bottom === 'maid' && outfit.boots === 'maid'
+// Straps between a maid skirt and maid stockings, loaded when both are worn; their colour follows the stockings.
+const MAID_GARTERS = { maid: 'maid_garters', pink_maid: 'pink_maid_garters' }
+const maidGarters = (outfit: Outfit) =>
+  (outfit.bottom === 'maid' || outfit.bottom === 'pink_maid') &&
+  (outfit.boots === 'maid' || outfit.boots === 'pink_maid')
+    ? MAID_GARTERS[outfit.boots]
+    : null
 
 /** The guard tabard's meshes on a female body, bound on first use; null on
  *  any other body. They start hidden. */
@@ -644,8 +652,8 @@ export async function applyFemaleArmorAsync(
   })
   const hairName = hairPart(scene, hair)
   if (!scene.userData.female_parts[hairName]) missing.push(hairName)
-  if (wearsMaidGarters(outfit) && !scene.userData.female_parts[MAID_GARTERS])
-    missing.push(MAID_GARTERS)
+  const garters = maidGarters(outfit)
+  if (garters && !scene.userData.female_parts[garters]) missing.push(garters)
   if (missing.length) {
     await Promise.all(
       missing.map((name) =>
@@ -761,8 +769,8 @@ export function applyFemaleArmor(
   }
   for (const mesh of part('rogue_garters'))
     mesh.visible = equipped.bottom === 'rogue' && equipped.boots === 'rogue'
-  for (const mesh of part(MAID_GARTERS))
-    mesh.visible = wearsMaidGarters(equipped)
+  for (const name of Object.values(MAID_GARTERS))
+    for (const mesh of part(name)) mesh.visible = name === maidGarters(equipped)
   if (scene.userData.female_face_part) {
     shown[scene.userData.female_face_name] = true
     for (const name of Object.keys(shown))

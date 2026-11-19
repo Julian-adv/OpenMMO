@@ -233,6 +233,7 @@ function modularCharacterPreview(): Plugin {
           ['shopkeeper', ['top', 'bottom', 'boots']],
           ['guard', ['top', 'bottom', 'gloves', 'boots', 'helmet']],
           ['maid', ['top', 'bottom', 'gloves', 'boots', 'helmet']],
+          ['pink_maid', ['top', 'bottom', 'gloves', 'boots']],
         ] as const
       ).flatMap(([outfit, slots]) =>
         slots.flatMap((slot) => [
@@ -275,6 +276,10 @@ function modularCharacterPreview(): Plugin {
     ),
     female_maid_garters: new URL(
       '../assets/items/female_maid_outfit/garters/fitted_v1/garters_female_maid.glb',
+      import.meta.url
+    ),
+    female_pink_maid_garters: new URL(
+      '../assets/items/female_pink_maid_outfit/garters/fitted_v1/garters_female_pink_maid.glb',
       import.meta.url
     ),
     female_rogue_gloves: new URL(

@@ -14,7 +14,7 @@ import { loadHelmetHairBrush } from './lib/helmet-hair-brush.mjs'
 
 const output = 'client/public/models/characters/modular_female'
 // Parts the client loads on first equip: packed separately with 1024 px colour textures.
-const separatePart = name => /^(caveman|priest|ranger|bard|ceremony|shopkeeper|guard|maid)_/.test(name)
+const separatePart = name => /^(caveman|priest|ranger|bard|ceremony|shopkeeper|guard|maid|pink_maid)_/.test(name)
 // Fur panels share the waist rig and colliders.
 function bakeSkirtRobe(doc) {
   const panels = doc.getRoot().listNodes().filter(node => node.getExtras().pelt_physics)
@@ -79,6 +79,9 @@ const sources = {
   ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves', 'helmet'].map(slot =>
     [`maid_${slot}`, `assets/items/female_maid_outfit/${slot}/fitted_v1/${slot}_female_maid.glb`])),
   maid_garters: 'assets/items/female_maid_outfit/garters/fitted_v1/garters_female_maid.glb',
+  pink_maid_garters: 'assets/items/female_pink_maid_outfit/garters/fitted_v1/garters_female_pink_maid.glb',
+  ...Object.fromEntries(['top', 'bottom', 'boots', 'gloves'].map(slot =>
+    [`pink_maid_${slot}`, `assets/items/female_pink_maid_outfit/${slot}/fitted_v1/${slot}_female_pink_maid.glb`])),
   guard_tabard: 'assets/items/female_guard_outfit/tabard/fitted_v1/tabard_female_guard.glb',
   ...Object.fromEntries(['top', 'bottom', 'boots'].map(slot =>
     [`shopkeeper_${slot}`, `assets/items/female_shopkeeper_outfit/${slot}/fitted_v1/${slot}_female_shopkeeper.glb`])),
@@ -177,7 +180,7 @@ for (const [name, source] of Object.entries(sources)) {
   const doc = await io.read(source)
   const scene = doc.getRoot().listScenes()[0]
   const metadata = { ...scene.getExtras(), female_part: name }
-  if (!/^(base|((barbarian|valkyrie|long_bangs|long_wavy|twintail)_)?hair|valkyrie_wings|rogue_garters|maid_garters|guard_tabard)$/.test(name)) {
+  if (!/^(base|((barbarian|valkyrie|long_bangs|long_wavy|twintail)_)?hair|valkyrie_wings|rogue_garters|maid_garters|pink_maid_garters|guard_tabard)$/.test(name)) {
     const path = name === 'valkyrie_top' ? source.replace('fitted_v11/top_female_valkyrie.glb', 'fitted_v8/body-occlusion.json') : source.replace(/[^/]+$/, 'body-occlusion.json')
     record(path)
     metadata.body_mask = JSON.parse(readFileSync(path))

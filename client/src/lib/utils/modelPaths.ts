@@ -23,7 +23,6 @@ export const FEMALE_BARD_CHARACTER_MODEL_PATH =
   '/models/characters/female_bard.glb'
 export const NIGHT_MERCHANT_CHARACTER_MODEL_PATH =
   '/models/characters/night_merchant.glb'
-export const PINK_MAID_CHARACTER_MODEL_PATH = '/models/characters/pink_maid.glb'
 export const STEWARD_CHARACTER_MODEL_PATH = '/models/characters/steward.glb'
 export const ESTATE_ARCHITECT_CHARACTER_MODEL_PATH =
   '/models/characters/estate_architect.glb'
@@ -93,7 +92,6 @@ const CLASS_GENDER_MODELS: Partial<
 /** Named NPC models override their class model. */
 const NPC_MODEL_OVERRIDES: Record<string, string> = {
   Wick: NIGHT_MERCHANT_CHARACTER_MODEL_PATH,
-  Cocoly: PINK_MAID_CHARACTER_MODEL_PATH,
   Aldwin: STEWARD_CHARACTER_MODEL_PATH,
   Rowan: ESTATE_ARCHITECT_CHARACTER_MODEL_PATH,
   Grida: GRIDA_CHARACTER_MODEL_PATH,
