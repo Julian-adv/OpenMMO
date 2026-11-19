@@ -60,6 +60,26 @@ def fit_regions(points, faces, uv, metal_map, left, upper_arm):
     return field[inverse], labels[inverse], faces[steel][counts[islands[metal[:, 0]]] >= 5]
 
 
+def lower_front_rim(position, normal):
+    def drop(p):
+        x, y, z = p.T
+        across = np.clip((x + 0.0008) / 0.067, -1, 1)
+        arch = (1 + np.cos(np.pi * across)) * 0.5
+        front = np.clip((z + 0.008) / 0.038, 0, 1)
+        height = np.clip((y - 1.547) / 0.036, 0, 1)
+        return 0.018 * arch * front * front * (3 - 2 * front) * height
+
+    depth = drop(position)
+    active = depth > 0
+    p = position[active]
+    axes = np.eye(3) * 0.00001
+    slope = np.stack([(drop(p + axis) - drop(p - axis)) / 0.00002 for axis in axes], axis=1)
+    n = normal[active]
+    normal[active] = unit(n + slope * (n[:, 1] / (1 - slope[:, 1]))[:, None])
+    position[:, 1] -= depth
+    return active
+
+
 def main():
     source, raw = read_glb(ITEM / 'source/model_url.glb')
     fitted, previous = read_glb(ITEM / 'fitted_v3/top_female_knight.glb')
@@ -117,6 +137,7 @@ def main():
         if 'min' in attr:
             attr.update(min=data.min(0).tolist(), max=data.max(0).tolist())
 
+    collar = lower_front_rim(position, normal)
     replace(b['POSITION'], position)
     replace(b['NORMAL'], normal)
     replace(b['JOINTS_0'], selected)
@@ -149,14 +170,17 @@ def main():
         return abs(distances / expected - 1)
 
     error = edge_error(position.astype('<f4'))
-    assert error.max() < .0001
+    unchanged = ~collar[edges].any(axis=1)
+    assert error[unchanged].max() < .0001
     report = {
         'archived_tripo_sha256': hashlib.sha256((ITEM / 'source/model_url.glb').read_bytes()).hexdigest(),
         'uniform_scales': dict(zip(['cuirass', 'left_pauldron', 'right_pauldron'], scales)),
         'steel_triangles': len(steel),
         'total_triangles': len(faces),
         'edge_length_check': 'Compared with the archived Tripo edges after one similarity transform per panel.',
-        'maximum_relative_error': float(error.max()),
+        'maximum_relative_error_outside_collar': float(error[unchanged].max()),
+        'front_collar_drop_mm': 18,
+        'reshaped_steel_triangles': int(collar[steel].any(axis=1).sum()),
         'previous_fit_relative_error_p95': float(np.percentile(edge_error(target), 95)),
     }
     (ROOT / 'doc/assets/modular-female-knight-top-fitting-v4.json').write_text(json.dumps(report, indent=2) + '\n')

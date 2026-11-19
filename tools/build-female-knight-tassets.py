@@ -86,7 +86,52 @@ def add_leather_underwear(mesh, base, data, mask, bones):
                 joints[attrs["JOINTS_0"]], attrs["WEIGHTS_0"])
 
 
+def fit_waist(mesh, start, bones, thigh_bind, front_guard):
+    def ramp(t):
+        t = np.clip(t, 0, 1)
+        return t * t * (3 - 2 * t)
+
+    def taper(p):
+        x, y, z = p.T
+        front = 0.22 * ramp((y - 1.025) / 0.081)
+        back = 0.27 * ramp((y - 1.069) / 0.084)
+        depth = z - 0.010
+        factor = np.where(depth > 0, front, back)
+        return xyz(x, y, z - depth * factor * (1 - ramp((abs(x) - 0.035) / 0.086)))
+
+    # Fit the belt and its attachments together in the fitting stance.
+    transforms = np.tile(np.eye(4), (len(bones), 1, 1))
+    for name, (rotation, pivot) in thigh_bind.items():
+        transform = transforms[bones.index(name)]
+        transform[:3, :3] = rotation.T
+        transform[:3, 3] = pivot - rotation.T @ pivot
+    for i in range(start, len(mesh.attrs["POSITION"])):
+        p = mesh.attrs["POSITION"][i]
+        if i in front_guard:
+            # A single shear preserves the curved face of the front guard.
+            p[:, 2] -= 0.122 * (p[:, 1] - 0.900)
+            normal = mesh.attrs["NORMAL"][i]
+            normal[:, 1] += 0.122 * normal[:, 2]
+            normal /= np.linalg.norm(normal, axis=1, keepdims=True)
+            continue
+        if p[:, 1].max() < 1.0:
+            continue
+        joints = mesh.attrs["JOINTS_0"][i].astype(int)
+        weights = mesh.attrs["WEIGHTS_0"][i]
+        pose = np.einsum("nk,nkij->nij", weights, transforms[joints])
+        linear = pose[:, :3, :3]
+        posed = (linear @ p[..., None])[..., 0] + pose[:, :3, 3]
+        # Preserve the surface lighting under the same smooth change of depth.
+        axes = np.eye(3) * 0.00005
+        jacobian = np.stack([(taper(posed + axis) - taper(posed - axis)) / 0.0001 for axis in axes], axis=1)
+        posed_normal = np.linalg.solve(linear.transpose(0, 2, 1), mesh.attrs["NORMAL"][i][..., None])
+        normal = (linear.transpose(0, 2, 1) @ np.linalg.solve(jacobian, posed_normal))[..., 0]
+        mesh.attrs["NORMAL"][i] = normal / np.linalg.norm(normal, axis=1, keepdims=True)
+        mesh.attrs["POSITION"][i] = p + np.linalg.solve(linear, (taper(posed) - posed)[..., None])[..., 0]
+
+
 def build(mesh, bones, thigh_bind):
+    harness_start = len(mesh.attrs["POSITION"])
     hips = bones.index("Hips")
     front_rails = {}
 
@@ -126,6 +171,26 @@ def build(mesh, bones, thigh_bind):
             posed = rail + weight * ((rail - pivot) @ rotation + pivot - rail)
             front_rails[side] = PchipInterpolator(posed[::-1, 1], side * posed[::-1, 0])
 
+        def belt_attachment(u):
+            if back:
+                arc = 0.315 - (u - 0.5) * 0.060
+                along = arc if side > 0 else 1 - arc
+                band = back_belt
+                center = 0.315 if side > 0 else 0.685
+            else:
+                along = 0.51 + (u - 0.5) * 0.084
+
+                def band(a, b):
+                    return cross_belt(side, a, b)
+
+                center = 0.51
+            top_y = band(center, 0.65)[..., 1] - 0.002 * (2 * u - 1)**2
+            lower, upper = band(along, 0), band(along, 1)
+            across = (top_y - lower[..., 1]) / (upper[..., 1] - lower[..., 1])
+            p = band(along, across)
+            p[..., 2] += -0.003 if back else 0.003
+            return p
+
         def rear_plate(u, y):
             angle = np.pi - 0.18 - (u - 0.5) * 0.018 / (outer(y) - inner(y))
             layer = np.interp(y, [0.94, 1.0, 1.045, 1.08, 1.11], [0, 1, 2, 3, 4])
@@ -136,7 +201,8 @@ def build(mesh, bones, thigh_bind):
             plate = rear_plate(u, np.clip(y, 0.918, 1.126))
             if upper_piece:
                 plate[..., 2] -= 0.0015
-                return blend_hip(plate, harness_strap(u, v), (y - 1.113) / (top - 1.113))
+                anchor = belt_attachment(u)
+                return blend_hip(plate, anchor, (y - 1.113) / (top - 1.113))
             plate = (plate - pivot) @ rotation.T + pivot
 
             angle = np.pi - 0.31 - (u - 0.5) * 0.19
@@ -153,6 +219,7 @@ def build(mesh, bones, thigh_bind):
 
         def front_strap(u, v):
             p = harness_strap(u, v)
+            p += (belt_attachment(u) - harness_strap(u, 0)) * np.clip(1 - v / 0.28, 0, 1)[..., None]
             angle = 0.12 + (u - 0.5) * 0.19
             tip_height = cuff(angle) - 0.024 + 0.007 * (2 * u - 1)**2
             offset = rim_offset(angle, 0.5) + 0.001
@@ -250,19 +317,30 @@ def build(mesh, bones, thigh_bind):
         t = np.clip(t, 0, 1)
         return center + (hip - center) * (t * t * (3 - 2 * t))[..., None]
 
+    def back_belt(u, v):
+        theta = np.pi * u
+        arc = np.minimum(theta, np.pi - theta)
+        y = 1.164 - 0.025 * np.sin(theta) + 0.021 * (v - 0.5)
+        radius_x = np.interp(y, [1.12, 1.14, 1.16, 1.18], [0.139, 0.126, 0.113, 0.101])
+        radius_z = np.interp(y, [1.12, 1.14, 1.16, 1.18], [0.119, 0.100, 0.082, 0.076])
+        center = xyz(radius_x * np.cos(theta), y, 0.012 - radius_z * np.sin(theta))
+        hip = waist_surface(np.where(theta < np.pi / 2, 1, -1), np.pi / 2 + arc, v)
+        return blend_hip(hip, center, arc / 0.72)
+
+    def cross_belt(side, u, v):
+        t = -0.432 + (np.pi / 2 + 0.432) * u
+        y = 1.095 + 0.069 * np.sin(t) + 0.021 * (v - 0.5)
+        radius = outer(y) + 0.0025
+        z = 0.014 + (0.119 + 0.003 * side) * np.cos(t)
+        z += 0.006 * np.exp(-(t / 0.40)**4)
+        z += 0.013 * np.exp(-((t - 0.87) / 0.28)**2) * (1 - v)
+        center = xyz(side * np.sin(t) * radius, y, z)
+        hip = waist_surface(side, t, v)
+        return blend_hip(hip, center, (np.pi / 2 - t) / 0.75)
+
     for side in [-1, 1]:
-
-        def cross_belt(u, v):
-            t = -0.432 + (np.pi / 2 + 0.432) * u
-            x = np.sin(t)
-            y = 1.095 + 0.061 * x + 0.021 * (v - 0.5)
-            radius = outer(y) + 0.0025
-            z = 0.014 + (0.119 + 0.003 * side) * np.cos(t) + 0.017 * np.sin(t) ** 2 * np.cos(t)
-            angle = (t - 0.48) * (np.pi / 2) / (np.pi / 2 - 0.48)
-            return blend_hip(xyz(side * x * radius, y, z), waist_surface(side, angle, v), (t - 0.30) / 0.43)
-
         band = mesh.sheet(
-            cross_belt, lin(0, 1, 25), lin(0, 1, 4), [side * 0.4, 0, 1], LEATHER, rigid(hips), 0.002
+            lambda u, v: cross_belt(side, u, v), lin(0, 1, 25), lin(0, 1, 4), [side * 0.4, 0, 1], LEATHER, rigid(hips), 0.002
         )
         for u in [0.055, 0.215, 0.51, 0.79]:
             mesh.stud(band, u, 0.5, 0.0021)
@@ -271,18 +349,10 @@ def build(mesh, bones, thigh_bind):
         suspension(side, False)
         suspension(side, True)
 
-    def back_belt(u, v):
-        theta = np.pi * u
-        y = 1.156 - 0.017 * np.sin(theta) + 0.022 * (v - 0.5)
-        center = xyz((outer(y) + 0.0025) * np.cos(theta), y, 0.014 - 0.105 * np.sin(theta))
-        arc = np.minimum(theta, np.pi - theta)
-        hip = waist_surface(np.where(theta < np.pi / 2, 1, -1), np.pi / 2 + arc * 1.4, v)
-        return blend_hip(center, hip, (1.25 - arc) / 0.45)
-
     mesh.sheet(back_belt, lin(0, 1, 27), lin(0, 1, 4), [0, 0, -1], LEATHER, rigid(hips), 0.002)
 
     def belt_boss(u, v):
-        return np.array([0, 1.095, 0.137]), np.array([0, 0, 1]), *rigid(hips)(u, v)
+        return cross_belt(1, 0.432 / (np.pi / 2 + 0.432), 0.5) + [0, 0, 0.001], np.array([0, 0, 1]), *rigid(hips)(u, v)
 
     mesh.stud(belt_boss, 0, 0, 0.0037)
 
@@ -327,6 +397,7 @@ def build(mesh, bones, thigh_bind):
     )
     for back in [False, True]:
         start = mesh.triangles
+        guard_start = len(mesh.attrs["POSITION"])
         for cap in [False, True]:
 
             def guard(u, v):
@@ -347,7 +418,12 @@ def build(mesh, bones, thigh_bind):
                     z -= 0.011 * (1 - a * a) + (0.016 if cap else 0)
                 else:
                     z = chin(y) - 0.010 * a * a + 0.008 + 0.004 * (1 - a * a)
-                    if not cap:
+                    if cap:
+                        pitch = np.deg2rad(4.5)
+                        dy, dz = y - 1.038, z - 0.125
+                        y = 1.038 + dy * np.cos(pitch) - dz * np.sin(pitch)
+                        z = 0.125 + dy * np.sin(pitch) + dz * np.cos(pitch)
+                    else:
                         z = chin(y) - 0.007 * a * a + 0.0023 * (1 - np.sqrt(a * a + 0.03))
                         z += 0.0018 * np.exp(-(((np.abs(a) - 0.85) / 0.10) ** 2))
                 if not cap:
@@ -372,6 +448,8 @@ def build(mesh, bones, thigh_bind):
                 mesh.stud(anchor, u, v, 0.0030 if cap else 0.0026)
             if not cap:
                 mesh.stud(anchor, 0.50, 0.966, 0.00255)
+        if not back:
+            front_guard = range(guard_start, len(mesh.attrs["POSITION"]))
         record("back" if back else "front", start, "Hips")
 
     for side, prefix in [(-1, "Right"), (1, "Left")]:
@@ -421,6 +499,7 @@ def build(mesh, bones, thigh_bind):
             for u in [0.028, 0.45, 0.972]:
                 mesh.stud(anchor, u, 0.84 if i == 4 else 0.79, 0.00325)
             record(prefix.lower() + "_" + str(i + 1), start, bone)
+    fit_waist(mesh, harness_start, bones, thigh_bind, front_guard)
     return retained, panels
 
 

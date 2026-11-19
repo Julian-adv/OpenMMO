@@ -8,6 +8,8 @@
   "steel_triangles": 2130,
   "total_triangles": 4279,
   "edge_length_check": "Compared with the archived Tripo edges after one similarity transform per panel.",
-  "maximum_relative_error": 2.9831525342638443e-05,
+  "maximum_relative_error_outside_collar": 2.9831525342638443e-05,
+  "front_collar_drop_mm": 18,
+  "reshaped_steel_triangles": 123,
   "previous_fit_relative_error_p95": 0.11886766141947314
 }

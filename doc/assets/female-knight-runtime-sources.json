@@ -166,9 +166,9 @@
     "assets/items/female_pink_maid_outfit/boots/fitted_v1/body-occlusion.json": "deecd091d45c7270206dbd86ec1e3231122cdc8a85962e59afd9c1bcc8e83877",
     "assets/items/female_pink_maid_outfit/gloves/fitted_v1/body-occlusion.json": "125ae4924ed3423f889b1948edeb9bdb024ba9e2b8cfea694a8b68708f26d473",
     "assets/items/female_pink_maid_outfit/garters/fitted_v1/garters_female_pink_maid.glb": "50ac593b2d1c559109a5a30541b56008e2f25f41b0ac9a1692abbe135688c2d7",
-    "assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb": "7301f073f7593c4c6bd1c3de014f61cf1d85785517742b3e0ddf40a2ea3d7db7",
+    "assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb": "3b3a4de8e91264fc5b0b680e9d7c7d57eb3bdf7adf70a68c9ab05a0eed0add69",
     "assets/items/female_knight_top/tripo_v1/fitted_v4/body-occlusion.json": "06645405b378dd6db11e472cd409390bfb0868b6a8be11ca91f9791b5a357115",
-    "assets/items/female_knight_bottom/reference_v1/fitted_v1/bottom_female_knight.glb": "4069fe3393d2da6caefcf85ffb64f59f337deb136d940b0a65617375c803687c",
+    "assets/items/female_knight_bottom/reference_v1/fitted_v1/bottom_female_knight.glb": "1dcd35266836aac8dc34f6bc53e7e46a6f34f900ca14881a4b04bef8c8515b57",
     "assets/items/female_knight_bottom/reference_v1/fitted_v1/body-occlusion.json": "662cb6d64411c1e7f438b335b139d05d98eb2174577e5fa19f5401cca2a0dd02",
     "assets/items/female_knight_boots/reference_v2/fitted_v1/boots_female_knight.glb": "43320533420fbb4a0ac9b8825d96c0fad0519cadc9dd9216e0fe409df26dfd10",
     "assets/items/female_knight_boots/reference_v2/fitted_v1/body-occlusion.json": "77cc208567ee4aded2d5134b9bc2d31c9163990066f651f0d34a6605f147957c"
@@ -176,8 +176,8 @@
   "outputs": {
     "client/public/models/characters/modular_female/base.glb": "cecc147ab62348fa88861223a64a533a2ba992e658e69fe2dd31e1749beac21c",
     "client/public/models/characters/modular_female/hair.glb": "60af2aeff3ef428b4743e79bde3036c238fa44155b8069d12c30825b5b3b6395",
-    "client/public/models/characters/modular_female/top.glb": "8fb0e10346bee5439b67438a5ffc45c657ddd069cd36261835a8cf0908e67b5a",
-    "client/public/models/characters/modular_female/bottom.glb": "3698432de46b655d9a9b58bc766f98048b7743f32fac2b66d3340047e347350b",
+    "client/public/models/characters/modular_female/top.glb": "56bfd52ac959697d2b49bafe7a696486923b03bd1e9d71be79533cbb3582c4d5",
+    "client/public/models/characters/modular_female/bottom.glb": "7618f1e5671c0e3d3674a8b635a8690b99a2f181f67dda840de47b717e08da0b",
     "client/public/models/characters/modular_female/boots.glb": "895fbd7eb4fc9806cb5b4ad72aa906573aa9bf96255fbd76b32a833a8aea1832",
     "client/public/models/characters/modular_female/gloves.glb": "3c4edabb39605ea1f439730c6a6ec46a3e4780d9d75d2664a7b9360bf20e7717",
     "client/public/models/characters/modular_female/helmet.glb": "9f8d2c7caf82c7dcddee93eec07b5acfebb29428d4d27df4080ead6b20be2eff",
