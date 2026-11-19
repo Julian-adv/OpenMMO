@@ -32,6 +32,8 @@ LEGS = ('LeftLeg', 'LeftFoot', 'LeftToe', 'RightLeg', 'RightFoot', 'RightToe')
 FEET = ('LeftFoot', 'LeftToe', 'RightFoot', 'RightToe')
 CEREMONY_V2 = dict(source='tripo_multiview_v2/segmented.glb',
                    sha256='c1f2f134b29268b6671362923eb4114d6965fedff6495dd130b969a4691d9b90', scale=1)
+# Dyes for the key-green stockings, sRGB. The white carries 45% of the leg's skin colour.
+STOCKING_COLOURS = {'coffee': (.25, .2, .18), 'white': (.868, .784, .734), 'pink': (.96, .72, .78)}
 # Leg skin of the female base, sRGB.
 LEG_SKIN = (.767, .594, .494)
 OUTFITS = {
@@ -217,15 +219,16 @@ OUTFITS = {
                                                 for bone, (x, y, z), radii in (
                                                     ('UpLeg', (.137, .785, -.04), [.095, .225, .105]),
                                                     ('Leg', (.2, .34, -.045), [.075, .265, .085]))])),
-            # Thigh-high stockings and pumps in one piece. The sole came 1 cm below the plate boots' sole, whose lift
-            # every heel shares, and the heel tip 2.5 cm short of it: the shoe is raised as one piece and the heel
-            # stretched by half the gap, as on the ceremony pumps.
+            # Thigh-high stockings with a lace band and red-soled pumps, generated alone on the bare mannequin with
+            # the knit in a key green and dyed here (user request: any colour from one model). The first pair
+            # came with the whole outfit: its shoes' gloss ended in a ragged edge, which showed once the black
+            # knit was lightened. A second pair came with two posts under each heel.
             'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=LEGS, rigid_post=.075,
-                          lower_shoe=-.0102, extend_heel={'gap': .0127}, level_tops=True,
-                          clip_hem=dict(keep='above', within=.4, per_side=True, shift=-.003),
-                          # Leg skin (sRGB) blended into the black knit: opaque black read as leggings.
-                          repaint=dict(mode='sheer', skin=LEG_SKIN, amount=.3, band=.078),
-                          taper=dict(opening=.03, ankle=.07, ankle_fade=.05, clearance=.002, reach=.13)),
+                          clip_hem=dict(keep='above', within=.4, per_side=True, shift=-.003), lower_shoe=.019,
+                          repaint=dict(mode='dye', colour=STOCKING_COLOURS['coffee'], roughness=.9, margin=4),
+                          sole_colour=(.74, .05, .06),
+                          model=dict(source='tripo_boots_v3/segmented.glb',
+                                     sha256='927728d2283b2a1b3a83e615a2934b908debee12bac5661817cb69cbd8e378cc', scale=1)),
             'helmet': dict(nodes=['helmet'], version='fitted_v1'),
         }),
 }
@@ -233,17 +236,10 @@ OUTFITS = {
 MAID = OUTFITS['maid']
 OUTFITS['pink_maid'] = dict(MAID, source='../female_maid_outfit/' + MAID['source'], parts={
     'gloves': dict(MAID['parts']['gloves'], repaint=dict(mode='white_cloth', white=(1, .985, .97), margin=8)),
-    # White stockings and black pumps generated alone on the bare mannequin: painting the maid's stockings white
-    # showed the ragged edge of its shoes' gloss.
-    'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=LEGS, rigid_post=.075,
-                  clip_hem=dict(keep='above', within=.4, per_side=True, shift=-.003),
-                  # The sole stood 2.3 cm over the plate boots' sole, whose lift every heel shares.
-                  lower_shoe=.023,
-                  repaint=dict(mode='clean_knit', rough=.2, margin=4),
-                  # The generated red stopped halfway down the heels' inner faces.
-                  sole_colour=(.74, .05, .06),
-                  # Generated 9 mm ahead of the leg all the way down: moved back as one piece.
-                  model=dict(source='tripo_boots_v1/segmented.glb', sha256='0a1cd062e336270aa135f12463aec9eb694d8661b7996299119d7071a96e9b07', scale=1, offset_y=.009)),
+    'boots': dict(MAID['parts']['boots'],
+                  repaint=dict(MAID['parts']['boots']['repaint'], colour=STOCKING_COLOURS['white'], floor=.72),
+                  model=dict(MAID['parts']['boots']['model'],
+                             source='../female_maid_outfit/' + MAID['parts']['boots']['model']['source'])),
     # White puff-sleeved blouse under a pink pinafore bodice, generated alone on a bust. Its cuff frill is white
     # like the sleeve, so the arm is cut by the frill's place at the sleeve's end, not its colour.
     'top': dict(nodes=['top'], version='fitted_v1', hide_underwear=(1.15, 1.7),
@@ -882,7 +878,7 @@ def repaint(spec):
     `sheer`: skin colour blended into the matte knit so the leg seems to show through. The glossy shoe (low
     roughness) keeps its colour, and so does the lace and welt band, `band` metres down from each stocking's
     top edge. Picking the band by its tone left the knit's baked shadows black too.
-    `clean_knit`: white knit stained by the shoe's black is made white again.
+    `dye`: a knit generated in key green takes any colour.
     `white_cloth`: dark cloth turns white, its highlights and folds kept as shading.
     """
     def image_of(socket):
@@ -897,8 +893,9 @@ def repaint(spec):
         image.pixels.foreach_get(values)
         return values.reshape(image.size[1], image.size[0], -1)
 
-    colour_image = image_of('Base Color')
-    colour, rough = read(colour_image), read(image_of('Roughness'))[:, :, 1]
+    colour_image, orm_image = image_of('Base Color'), image_of('Roughness')
+    colour, orm = read(colour_image), read(orm_image)
+    rough = orm[:, :, 1]
     assert rough.shape == colour.shape[:2]
     height, width = rough.shape
     position = np.array([v.co for v in mesh.vertices])
@@ -909,8 +906,6 @@ def repaint(spec):
             leg = position[:, 0] * sign > 0
             centre, normal = fit_plane(closed_rim(position[leg], 1))
             below[leg] = (centre - position[leg]) @ (normal * np.sign(normal[2]))
-    if spec['mode'] == 'clean_knit':
-        below = np.array([v.normal.z for v in mesh.vertices])
     depth = np.full((height, width), -1, np.float32)
     used = np.zeros((height, width), bool)
     # A light colour needs a wider rim than 1.5 px: the game's 1024 px texture mixed the black past the islands'
@@ -941,18 +936,26 @@ def repaint(spec):
     if spec['mode'] == 'sheer':
         weight = spec['amount'] * knit * under_band
         target = np.array(spec['skin'], np.float32)
-    elif spec['mode'] == 'clean_knit':
-        # The shoe's black ran over its edge onto the matte knit: knit texels (rougher than `rough`) take the
-        # knit's own white.
-        white = np.median(rgb[used & (tone > .7)], axis=0)
-        target = np.maximum(rgb, white)
-        # The red sole is as matte as the knit and stays: by its colour, and in shadow by facing down.
-        weight = (used * smoothstep((rough - spec['rough']) / .03) * (rgb[:, :, 0] < 1.3 * rgb[:, :, 2] + .02)
-                  * (depth > -.3))
+    elif spec['mode'] == 'dye':
+        # The knit was generated in a key green: those texels take `colour` at their own shading, so the lace's
+        # darker pattern stays. Shoes and soles are not green.
+        green = rgb[:, :, 1] - np.maximum(rgb[:, :, 0], rgb[:, :, 2])
+        # Every green texel, used or not: the game's smaller texture pulled green in from past the islands' edges.
+        # The glossy black shoe carries a faint green cast (up to .06); the knit and its lace start at .11.
+        weight = smoothstep((green - .07) / .05)
+        # `floor`: how dark the lace pattern and folds may go; on white a lower floor read as black thread.
+        shade = np.clip(rgb[:, :, 1] / np.median(rgb[:, :, 1][weight > .9]), spec.get('floor', .35), 1.3)
+        target = np.clip(np.array(spec['colour'], np.float32) * shade[:, :, None], 0, 1)
     else:
         target = np.maximum(rgb, np.clip(.78 + .9 * tone, 0, .97)[:, :, None] * np.array(spec['white'], np.float32))
         weight = used.astype(np.float32)
     rgb += (target - rgb) * weight[:, :, None]
+    if 'roughness' in spec:
+        # A dyed knit takes one roughness, so every colour is as matte.
+        orm[:, :, 1] += (spec['roughness'] - orm[:, :, 1]) * weight
+        orm_image.pixels.foreach_set(orm.ravel())
+        orm_image.update()
+        orm_image.pack()
     colour_image.pixels.foreach_set(colour.ravel())
     colour_image.update()
     colour_image.pack()

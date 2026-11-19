@@ -26,6 +26,10 @@ MANNEQUIN_PIECE = 200
 HEAD = float(sys.argv[2]) if len(sys.argv) > 2 else 1.6
 
 source = Source(SOURCE)
+# `green` anywhere in the arguments: the garment is painted in a key green, which is nearly as far from red as
+# the mannequin's blue. Greener than blue is cloth.
+if 'green' in sys.argv:
+    source.warmth[source.colour[:, :, 1].astype(int) > source.colour[:, :, 2]] = 0
 faces = source.faces
 blue = source.face_share(source.warmth < MANNEQUIN_BLUE, faces) > .5
 around = source.neighbours()
@@ -62,7 +66,7 @@ if sys.argv[3:4] == ['boots']:
              for name in ('left_boots', 'right_boots')}
     # A fourth argument cuts the stocking tops level at that height (m): a lace band lost to the mannequin's
     # colour left them ragged.
-    if len(sys.argv) > 4:
+    if len(sys.argv) > 4 and sys.argv[4] != 'green':
         top = float(sys.argv[4])
         for name, triangles in parts.items():
             triangles = source.clip(triangles, top)

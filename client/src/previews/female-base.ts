@@ -1001,7 +1001,8 @@ export async function showFemaleBase(
     })
   }
   collectMaterials(model)
-  // Straps shown while a skirt and its boots are both worn.
+  // Straps shown while a skirt and its boots are both worn. Boots with a second material for the
+  // sole are named _1 and _2 by three.js.
   const garterSets = [
     {
       url: '/__modular-character/parts/female_rogue_garters.glb',
@@ -1009,11 +1010,10 @@ export async function showFemaleBase(
     },
     {
       url: '/__modular-character/parts/female_maid_garters.glb',
-      worn: ['bottom_female_maid', 'boots_female_maid'],
+      worn: ['bottom_female_maid', 'boots_female_maid_1'],
     },
     {
       url: '/__modular-character/parts/female_pink_maid_garters.glb',
-      // The boots have a second material for the red sole, so three.js names their meshes _1 and _2.
       worn: ['bottom_female_pink_maid', 'boots_female_pink_maid_1'],
     },
   ].map((set) => ({
