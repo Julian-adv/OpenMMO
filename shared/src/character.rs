@@ -43,13 +43,19 @@ pub enum HairStyle {
     Ponytail,
     LongBangs,
     LongWavy,
+    Twintail,
 }
 
 impl HairStyle {
     fn is_female(self) -> bool {
         matches!(
             self,
-            Self::Bob | Self::Long | Self::Ponytail | Self::LongBangs | Self::LongWavy
+            Self::Bob
+                | Self::Long
+                | Self::Ponytail
+                | Self::LongBangs
+                | Self::LongWavy
+                | Self::Twintail
         )
     }
 
@@ -68,6 +74,7 @@ impl HairStyle {
             Self::Ponytail => 0x432e26,
             Self::LongBangs => 0xdbb99d,
             Self::LongWavy => 0xb9aca3,
+            Self::Twintail => 0x643625,
             _ => 0xceb294,
         })
     }

@@ -8,6 +8,7 @@ export const FEMALE_HAIR_COLORS = {
   ponytail: '#432e26',
   long_bangs: '#dbb99d',
   long_wavy: '#b9aca3',
+  twintail: '#643625',
 } as const
 export const originalHairColor = (hair: string) =>
   FEMALE_HAIR_COLORS[hair as keyof typeof FEMALE_HAIR_COLORS] ??

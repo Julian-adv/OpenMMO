@@ -23,7 +23,9 @@ ROOT = Path(__file__).resolve().parents[1]
 BODY = ROOT / 'assets/modular_human_female_01/faces/tripo_ranger_v1/base_ranger.glb'
 # Folder, and the red minus blue under which a texel is mannequin: blond sits well above blue, ash silver barely
 # above grey.
-STYLES = {'side': ('tripo_long_side_v3', 30), 'bangs': ('tripo_long_bangs_v2', 30), 'wavy': ('tripo_rica_wavy_v1', -20)}
+STYLES = {'side': ('tripo_long_side_v3', 30), 'bangs': ('tripo_long_bangs_v2', 30), 'wavy': ('tripo_rica_wavy_v1', -20),
+          # The black hair ties are neutral, not blue.
+          'twintail': ('tripo_twintail_v1', -20)}
 parser = argparse.ArgumentParser()
 parser.add_argument('--style', choices=STYLES, required=True)
 folder, mannequin_below = STYLES[parser.parse_args().style]

@@ -21,6 +21,7 @@ import { modularOutfitForArmor } from './modularEquipment'
 import { attachValkyrieWings } from '../effects/valkyrie-wings'
 import { fitFemaleHair } from './femaleHairFit'
 import { fitFemaleHelmet } from './femaleHelmetFit'
+import { neckPlaneMask, neckPlaneSlot } from './femaleNeckPlane'
 
 const slots = ['top', 'bottom', 'boots', 'gloves', 'helmet'] as const
 type Slot = (typeof slots)[number]
@@ -36,6 +37,7 @@ type Style =
   | 'ceremony'
   | 'shopkeeper'
   | 'guard'
+  | 'maid'
 const prefixes: Record<Style, string> = {
   plate: '',
   barbarian: 'barbarian_',
@@ -48,6 +50,7 @@ const prefixes: Record<Style, string> = {
   ceremony: 'ceremony_',
   shopkeeper: 'shopkeeper_',
   guard: 'guard_',
+  maid: 'maid_',
 }
 const styles = Object.keys(prefixes) as Style[]
 type Helmet =
@@ -56,7 +59,7 @@ type Helmet =
 const LAZY_HELMET = 'brilliance_helmet'
 export type FemaleHair = Extract<
   CharacterAppearance['hair'],
-  'bob' | 'long' | 'ponytail' | 'long_bangs' | 'long_wavy'
+  'bob' | 'long' | 'ponytail' | 'long_bangs' | 'long_wavy' | 'twintail'
 >
 export const FEMALE_HAIR_PARTS: Record<FemaleHair, string> = {
   bob: 'hair',
@@ -64,6 +67,7 @@ export const FEMALE_HAIR_PARTS: Record<FemaleHair, string> = {
   ponytail: 'ranger_hair',
   long_bangs: 'long_bangs_hair',
   long_wavy: 'long_wavy_hair',
+  twintail: 'twintail_hair',
 }
 const HAIR_PART_NAMES = new Set([
   ...Object.values(FEMALE_HAIR_PARTS),
@@ -97,6 +101,7 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
   ceremony: slots,
   shopkeeper: ['top', 'bottom', 'boots'],
   guard: slots,
+  maid: slots,
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
@@ -404,6 +409,7 @@ const HELMET_HAIR: Record<Helmet, string | null> = {
   bard: 'hair',
   ceremony: 'hair',
   guard: null,
+  maid: 'hair',
 }
 // Helmets with a hood round the whole head: no hair shows under them, whatever its style.
 const HOODED_HELMETS = new Set<Helmet>(['guard'])
@@ -475,6 +481,7 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/ceremony_')) return 'ceremony'
   if (model.startsWith('armor/shopkeeper_')) return 'shopkeeper'
   if (model.startsWith('armor/guard_')) return 'guard'
+  if (model.startsWith('armor/maid_')) return 'maid'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))
     return 'rogue'
   return item?.material === 'leather' || model.startsWith('armor/barbarian_')
@@ -538,6 +545,10 @@ function registerLazyPart(
 export const neckSlot = (name: string) => `${name}:neck`
 
 const FEMALE_TABARD = 'guard_tabard'
+// Straps between the maid skirt and stockings, loaded when both are worn.
+const MAID_GARTERS = 'maid_garters'
+const wearsMaidGarters = (outfit: Outfit) =>
+  outfit.bottom === 'maid' && outfit.boots === 'maid'
 
 /** The guard tabard's meshes on a female body, bound on first use; null on
  *  any other body. They start hidden. */
@@ -574,6 +585,20 @@ function registerBodyMask(
     neckStripMask(face, value.hide_triangle_indices),
     neck
   )
+  if (!value.neck_plane) return
+  // A stand collar also cuts the face part's own neck, which no body mask reaches.
+  const slots: string[] = []
+  meshes
+    .filter(
+      (mesh) => mesh.userData.female_part === scene.userData.female_face_name
+    )
+    .forEach((mesh, i) => {
+      const cut = neckPlaneMask(mask.source(mesh), value.neck_plane)
+      if (!cut) return
+      mask.register(neckPlaneSlot(name, i), cut, mesh)
+      slots.push(neckPlaneSlot(name, i))
+    })
+  ;(scene.userData.female_neck_planes ??= {})[name] = slots
 }
 
 /** The cut a body mask makes on the neck strip that stands in for those body triangles. */
@@ -619,6 +644,8 @@ export async function applyFemaleArmorAsync(
   })
   const hairName = hairPart(scene, hair)
   if (!scene.userData.female_parts[hairName]) missing.push(hairName)
+  if (wearsMaidGarters(outfit) && !scene.userData.female_parts[MAID_GARTERS])
+    missing.push(MAID_GARTERS)
   if (missing.length) {
     await Promise.all(
       missing.map((name) =>
@@ -734,11 +761,16 @@ export function applyFemaleArmor(
   }
   for (const mesh of part('rogue_garters'))
     mesh.visible = equipped.bottom === 'rogue' && equipped.boots === 'rogue'
+  for (const mesh of part(MAID_GARTERS))
+    mesh.visible = wearsMaidGarters(equipped)
   if (scene.userData.female_face_part) {
     shown[scene.userData.female_face_name] = true
     for (const name of Object.keys(shown))
-      if (scene.userData.female_parts[name]?.body_mask)
+      if (scene.userData.female_parts[name]?.body_mask) {
         shown[neckSlot(name)] = shown[name]
+        for (const slot of scene.userData.female_neck_planes?.[name] ?? [])
+          shown[slot] = shown[name]
+      }
   }
   state.mask.setEquippedAll(shown)
   state.underwearColor(

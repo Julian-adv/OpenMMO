@@ -491,32 +491,35 @@ describe('female modular starter outfits', () => {
         const ceremony = item.worldModel?.startsWith('armor/ceremony_')
         const shopkeeper = item.worldModel?.startsWith('armor/shopkeeper_')
         const guard = item.worldModel?.startsWith('armor/guard_')
+        const maid = item.worldModel?.startsWith('armor/maid_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||
           ['leather_armor', 'leather_gloves', 'leather_boots'].includes(id)
-        const [shown, hidden] = guard
-          ? [`guard_${part}`, part]
-          : shopkeeper
-            ? [`shopkeeper_${part}`, part]
-            : ceremony
-              ? [`ceremony_${part}`, part]
-              : bard
-                ? [`bard_${part}`, part]
-                : priest
-                  ? [`priest_${part}`, part]
-                  : ranger
-                    ? [`ranger_${part}`, `barbarian_${part}`]
-                    : caveman
-                      ? [`caveman_${part}`, part]
-                      : valkyrie
-                        ? [`valkyrie_${part}`, part]
-                        : rogueStyle
-                          ? [`rogue_${part}`, part]
-                          : brilliance
-                            ? ['brilliance_helmet', part]
-                            : barbarianStyle
-                              ? [`barbarian_${part}`, part]
-                              : [part, `barbarian_${part}`]
+        const [shown, hidden] = maid
+          ? [`maid_${part}`, part]
+          : guard
+            ? [`guard_${part}`, part]
+            : shopkeeper
+              ? [`shopkeeper_${part}`, part]
+              : ceremony
+                ? [`ceremony_${part}`, part]
+                : bard
+                  ? [`bard_${part}`, part]
+                  : priest
+                    ? [`priest_${part}`, part]
+                    : ranger
+                      ? [`ranger_${part}`, `barbarian_${part}`]
+                      : caveman
+                        ? [`caveman_${part}`, part]
+                        : valkyrie
+                          ? [`valkyrie_${part}`, part]
+                          : rogueStyle
+                            ? [`rogue_${part}`, part]
+                            : brilliance
+                              ? ['brilliance_helmet', part]
+                              : barbarianStyle
+                                ? [`barbarian_${part}`, part]
+                                : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
         expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)
@@ -526,7 +529,7 @@ describe('female modular starter outfits', () => {
             barbarianStyle && !bard
           )
           expect(count(modelRoot, 'hair') > 0, id).toBe(
-            valkyrie || priest || !!bard || !!ceremony
+            valkyrie || priest || !!bard || !!ceremony || !!maid
           )
         }
       }
@@ -652,6 +655,26 @@ describe('female modular starter outfits', () => {
       await applyCharacterArmor(modelRoot, undefined, look('bob'))
       expect(count(modelRoot, 'hair')).toBeGreaterThan(0)
       expect(count(modelRoot, 'valkyrie_hair')).toBe(0)
+      disposeCharacterSkeletons(modelRoot)
+    }
+  )
+  it.skipIf(!hasAssets)(
+    'shows the maid garters only with the maid skirt and stockings',
+    async () => {
+      const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+      const { modelRoot } = createCharacterModelRoot(source.scene)
+      const maid = { pants: 'maid_pants', boots: 'maid_boots' }
+      await applyCharacterArmor(modelRoot, maid)
+      expect(count(modelRoot, 'maid_garters')).toBe(448)
+      await applyCharacterArmor(modelRoot, { ...maid, boots: null })
+      expect(count(modelRoot, 'maid_garters')).toBe(0)
+      await applyCharacterArmor(modelRoot, {
+        ...maid,
+        pants: 'worn_rogue_pants',
+      })
+      expect(count(modelRoot, 'maid_garters')).toBe(0)
+      await applyCharacterArmor(modelRoot, maid)
+      expect(count(modelRoot, 'maid_garters')).toBe(448)
       disposeCharacterSkeletons(modelRoot)
     }
   )

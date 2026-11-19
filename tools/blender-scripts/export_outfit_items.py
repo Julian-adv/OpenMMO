@@ -41,6 +41,10 @@ OUTFITS = {
         item: f"female_shopkeeper_outfit/{part}/fitted_v1/{part}_female_shopkeeper.glb"
         for item, part in (("top", "top"), ("pants", "bottom"), ("boots", "boots"))
     },
+    "maid": {
+        item: f"female_maid_outfit/{part}/fitted_v1/{part}_female_maid.glb"
+        for item, part in (("helmet", "helmet"), ("top", "top"), ("pants", "bottom"), ("gloves", "gloves"), ("boots", "boots"))
+    },
     "tuxedo": {
         part: f"../modular_human_male_01/tuxedo/tripo_v1/{part}_tuxedo.glb" for part in ("top", "pants", "gloves", "boots")
     },

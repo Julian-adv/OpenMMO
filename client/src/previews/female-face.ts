@@ -35,7 +35,7 @@ export async function showFemaleFace(
       <label for="female-face">얼굴</label>
       <select id="female-face"><option value="ranger">순찰자 얼굴 (게임 기본)</option><option value="chic">시크 얼굴 (게임 새 얼굴)</option><option value="custom">이전 새 얼굴</option><option value="default">기존 얼굴</option></select>
       <label for="face-hair">헤어</label>
-      <select id="face-hair"><option value="bob">단발</option><option value="long">긴 머리</option><option value="ponytail">묶은 머리</option><option value="long_bangs">긴 머리 · 앞머리</option><option value="long_wavy">긴 웨이브</option><option value="none">없음</option></select>
+      <select id="face-hair"><option value="bob">단발</option><option value="long">긴 머리</option><option value="ponytail">묶은 머리</option><option value="long_bangs">긴 머리 · 앞머리</option><option value="long_wavy">긴 웨이브</option><option value="twintail">트윈테일</option><option value="none">없음</option></select>
       <label for="face-view">시점</label>
       <select id="face-view"><option value="face">얼굴 확대</option><option value="angle">얼굴 사선</option><option value="side">얼굴 측면</option><option value="back">뒤통수</option><option value="full">전신</option></select>
       <label for="face-motion">동작</label>
@@ -64,9 +64,15 @@ export async function showFemaleFace(
     params.get('hair') === 'warrior' ? 'long' : params.get('hair')
   hair.value =
     requestedHair &&
-    ['bob', 'long', 'ponytail', 'long_bangs', 'long_wavy', 'none'].includes(
-      requestedHair
-    )
+    [
+      'bob',
+      'long',
+      'ponytail',
+      'long_bangs',
+      'long_wavy',
+      'twintail',
+      'none',
+    ].includes(requestedHair)
       ? requestedHair
       : 'bob'
   const reload = () => {
@@ -102,7 +108,7 @@ export async function showFemaleFace(
     hair.value === 'none'
       ? null
       : load(
-          `/models/characters/modular_female/${({ bob: 'hair', long: 'valkyrie_hair', ponytail: 'ranger_hair', long_bangs: 'long_bangs_hair', long_wavy: 'long_wavy_hair' } as Record<string, string>)[hair.value]}.glb`
+          `/models/characters/modular_female/${({ bob: 'hair', long: 'valkyrie_hair', ponytail: 'ranger_hair', long_bangs: 'long_bangs_hair', long_wavy: 'long_wavy_hair', twintail: 'twintail_hair' } as Record<string, string>)[hair.value]}.glb`
         ),
   ])
   if (disposed()) return

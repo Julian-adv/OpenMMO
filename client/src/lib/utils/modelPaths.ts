@@ -23,7 +23,6 @@ export const FEMALE_BARD_CHARACTER_MODEL_PATH =
   '/models/characters/female_bard.glb'
 export const NIGHT_MERCHANT_CHARACTER_MODEL_PATH =
   '/models/characters/night_merchant.glb'
-export const MAID_CHARACTER_MODEL_PATH = '/models/characters/maid.glb'
 export const PINK_MAID_CHARACTER_MODEL_PATH = '/models/characters/pink_maid.glb'
 export const STEWARD_CHARACTER_MODEL_PATH = '/models/characters/steward.glb'
 export const ESTATE_ARCHITECT_CHARACTER_MODEL_PATH =
@@ -88,7 +87,7 @@ const CLASS_GENDER_MODELS: Partial<
     male: MODULAR_MALE_MODEL_PATH,
     female: MODULAR_FEMALE_MODEL_PATH,
   },
-  maid: { female: MAID_CHARACTER_MODEL_PATH },
+  maid: { female: MODULAR_FEMALE_MODEL_PATH },
 }
 
 /** Named NPC models override their class model. */

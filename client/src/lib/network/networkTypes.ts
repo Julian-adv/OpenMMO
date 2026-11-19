@@ -41,6 +41,7 @@ export type CharacterAppearance = {
     | 'ponytail'
     | 'long_bangs'
     | 'long_wavy'
+    | 'twintail'
   hair_color?: string
   hair_color_original?: boolean
   eye_color?: string

@@ -29,6 +29,9 @@ STYLES = {
               'level_fringe': True, 'square_fringe': True},
     # Rica's wavy hair with temple braids; swept back, so the hairline drops (female-hairline.json) and settles as on the side-part hair.
     'wavy': {'folder': 'tripo_rica_wavy_v1', 'part': 'hair_female_long_wavy', 'fit': 'long_wavy', 'tuck': True},
+    # Twin tails behind the shoulders, with the fringe of the long hair with bangs.
+    'twintail': {'folder': 'tripo_twintail_v1', 'part': 'hair_female_twintail', 'fit': 'twintail', 'tuck': False,
+                 'level_fringe': True, 'square_fringe': True},
 }
 CLEARANCE = .003
 parser = argparse.ArgumentParser()

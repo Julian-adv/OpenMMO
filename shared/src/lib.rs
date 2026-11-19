@@ -303,7 +303,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// no longer warns, so `warned` left `PatrolScouted` and `PatrolSweepResult`.
 /// `PatrolShovel`/`PatrolShovelled`/`PlayerShovelled`/`RoadSnowCleared`, guards
 /// shovelling snow off the road. `WeatherSync.snow_laid`.
-pub const PROTOCOL_VERSION: u32 = 163;
+/// v164: female `HairStyle::Twintail`.
+pub const PROTOCOL_VERSION: u32 = 164;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

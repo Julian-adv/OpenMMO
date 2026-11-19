@@ -30,7 +30,7 @@ export function femaleHelmetFit(file = target) {
       let input
       try { input = JSON.parse(raw) } catch { return reply(400, { error: '저장값을 읽을 수 없습니다.' }) }
       if (typeof input?.helmet !== 'string' || !/^([a-z]+_)?helmet$/.test(input.helmet) ||
-          !['bob', 'long', 'ponytail', 'long_bangs', 'long_wavy'].includes(input.hair))
+          !['bob', 'long', 'ponytail', 'long_bangs', 'long_wavy', 'twintail'].includes(input.hair))
         return reply(400, { error: '투구와 헤어를 확인하세요.' })
       const fit = {}
       for (const [key, [min, max]] of Object.entries(ranges)) {

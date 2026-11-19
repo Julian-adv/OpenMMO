@@ -9,6 +9,7 @@ import femaleLong from '../../assets/character-appearance/female-hair-long.png'
 import femalePonytail from '../../assets/character-appearance/female-hair-ponytail.png'
 import femaleLongBangs from '../../assets/character-appearance/female-hair-long-bangs.png'
 import femaleLongWavy from '../../assets/character-appearance/female-hair-long-wavy.png'
+import femaleTwintail from '../../assets/character-appearance/female-hair-twintail.png'
 import femaleDefaultFace from '../../assets/character-appearance/female-face-default.png'
 import femaleCustomFace from '../../assets/character-appearance/female-face-custom.png'
 
@@ -76,5 +77,10 @@ export const FEMALE_HAIR_OPTIONS = [
     value: 'long_wavy',
     label: 'characterCreate.hairLongWavy',
     thumbnail: femaleLongWavy,
+  },
+  {
+    value: 'twintail',
+    label: 'characterCreate.hairTwintail',
+    thumbnail: femaleTwintail,
   },
 ] as const

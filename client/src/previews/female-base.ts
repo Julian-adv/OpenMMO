@@ -19,6 +19,11 @@ import {
   type FemaleFace,
 } from '../lib/utils/femaleCharacter'
 import { fitFemaleHair } from '../lib/utils/femaleHairFit'
+import {
+  neckPlaneMask,
+  neckPlaneSlot,
+  type NeckPlane,
+} from '../lib/utils/femaleNeckPlane'
 import { bindModularPart, skinnedParts } from '../lib/utils/modularCharacter'
 import { updateModularPoseCorrectives } from '../lib/utils/modularPoseCorrectives'
 import { femaleOutfitMask } from '../lib/utils/female-outfit-mask'
@@ -89,6 +94,7 @@ export async function showFemaleBase(
         <option value="warrior">긴 생머리 · 옆 가르마</option>
         <option value="long_bangs">긴 생머리 · 앞머리</option>
         <option value="long_wavy">긴 웨이브 · 땋은 머리</option>
+        <option value="twintail">트윈테일</option>
         <option value="ranger">순찰자 갈색 포니테일 (피팅 검수 중)</option>
       </select>
       <div id="warrior-hair-fit" hidden>
@@ -121,6 +127,7 @@ export async function showFemaleBase(
         <option value="bard">바드 깃털 모자 (피팅 검수 중)</option>
         <option value="ceremony">예복 베일 (피팅 검수 중)</option>
         <option value="guard">경비대 철모·사슬 두건</option>
+        <option value="maid">메이드 머리띠 (피팅 검수 중)</option>
       </select>
       <p class="details">긴 헤어와 포니테일은 모든 투구 아래 그대로 보입니다. 단발은 뿔 투구에서 투구용 단발로, 기사·광휘 투구에서는 숨깁니다.</p>
       <div id="helmet-hair-brush" hidden>
@@ -150,6 +157,7 @@ export async function showFemaleBase(
         <option value="bard">바드 코르셋과 망토 (피팅 검수 중)</option>
         <option value="ceremony">예복 보디스 (피팅 검수 중)</option>
         <option value="guard">경비대 사슬 갑옷</option>
+        <option value="maid">메이드 상의 (피팅 검수 중)</option>
         <option value="shopkeeper">잡화점 블라우스와 코르셋 (피팅 검수 중)</option>
         <option value="rogue">로그 가죽 코르셋</option>
       </select>
@@ -165,6 +173,7 @@ export async function showFemaleBase(
         <option value="bard">바드 주름치마 (피팅 검수 중)</option>
         <option value="ceremony">예복 종 모양 치마 (피팅 검수 중)</option>
         <option value="guard">경비대 가죽 띠 치마</option>
+        <option value="maid">메이드 앞치마 치마 (피팅 검수 중)</option>
         <option value="shopkeeper">잡화점 앞치마 치마 (피팅 검수 중)</option>
         <option value="rogue">로그 벨트 미니스커트</option>
       </select>
@@ -178,6 +187,7 @@ export async function showFemaleBase(
         <option value="bard">바드 스틸레토 부츠 (피팅 검수 중)</option>
         <option value="ceremony">예복 스타킹과 구두 (피팅 검수 중)</option>
         <option value="guard">경비대 허벅지 장화</option>
+        <option value="maid">메이드 스타킹과 구두 (피팅 검수 중)</option>
         <option value="shopkeeper">잡화점 앵클부츠 (피팅 검수 중)</option>
         <option value="rogue">로그 빨간 밑창 가죽 부츠</option>
         <option value="barbarian">야만전사 가죽 하이힐 샌들</option>
@@ -197,6 +207,7 @@ export async function showFemaleBase(
         <option value="bard">바드 반장갑과 팔 보호대 (피팅 검수 중)</option>
         <option value="ceremony">예복 긴 장갑 (피팅 검수 중)</option>
         <option value="guard">경비대 가죽 장갑</option>
+        <option value="maid">메이드 긴 장갑 (피팅 검수 중)</option>
         <option value="rogue">로그 검은 가죽 반장갑</option>
       </select>
       <div id="outfit-fit" hidden>
@@ -392,9 +403,15 @@ export async function showFemaleBase(
   const requestedHair = new URLSearchParams(location.search).get('hair')
   hairSelect.value =
     requestedHair &&
-    ['bob', 'warrior', 'long_bangs', 'long_wavy', 'ranger', 'none'].includes(
-      requestedHair
-    )
+    [
+      'bob',
+      'warrior',
+      'long_bangs',
+      'long_wavy',
+      'twintail',
+      'ranger',
+      'none',
+    ].includes(requestedHair)
       ? requestedHair
       : 'bob'
   const initialHair = hairSelect.value
@@ -451,6 +468,7 @@ export async function showFemaleBase(
     warrior: 'valkyrie_hair',
     long_bangs: 'long_bangs_hair',
     long_wavy: 'long_wavy_hair',
+    twintail: 'twintail_hair',
     ranger: 'ranger_hair',
   }
   const bindHair = (key: string, source: THREE.Object3D) => {
@@ -973,34 +991,51 @@ export async function showFemaleBase(
     })
   }
   collectMaterials(model)
-  let garters: THREE.SkinnedMesh[] = []
-  let gartersPending: Promise<void> | undefined
-  const gartersEquipped = () =>
-    !!model.getObjectByName('bottom_female_rogue')?.visible &&
-    !!model.getObjectByName('boots_female_rogue_right')?.visible
+  // Straps shown while a skirt and its boots are both worn.
+  const garterSets = [
+    {
+      url: '/__modular-character/parts/female_rogue_garters.glb',
+      worn: ['bottom_female_rogue', 'boots_female_rogue_right'],
+    },
+    {
+      url: '/__modular-character/parts/female_maid_garters.glb',
+      worn: ['bottom_female_maid', 'boots_female_maid'],
+    },
+  ].map((set) => ({
+    ...set,
+    meshes: [] as THREE.SkinnedMesh[],
+    pending: undefined as Promise<void> | undefined,
+  }))
   const updateGarters = async () => {
-    for (const mesh of garters) mesh.visible = gartersEquipped()
-    if (!gartersEquipped()) return
-    gartersPending ??= loader
-      .loadAsync('/__modular-character/parts/female_rogue_garters.glb')
-      .then((asset) => {
-        if (disposed()) {
-          disposeObjects([asset.scene])
-          return
-        }
-        resources.push(asset.scene)
-        garters = bindModularPart(model, asset.scene)
-        for (const mesh of garters) collectMaterials(mesh)
-        for (const material of materials) material.wireframe = wireframe.checked
-      })
-      .catch((error: unknown) => {
-        gartersPending = undefined
-        throw error
-      })
-    await gartersPending
-    if (disposed()) return
-    for (const mesh of garters) mesh.visible = gartersEquipped()
-    updateModularPoseCorrectives(model, motion.value)
+    let shown = false
+    for (const set of garterSets) {
+      const equipped = () =>
+        set.worn.every((name) => model.getObjectByName(name)?.visible)
+      for (const mesh of set.meshes) mesh.visible = equipped()
+      if (!equipped()) continue
+      shown = true
+      set.pending ??= loader
+        .loadAsync(set.url)
+        .then((asset) => {
+          if (disposed()) {
+            disposeObjects([asset.scene])
+            return
+          }
+          resources.push(asset.scene)
+          set.meshes = bindModularPart(model, asset.scene)
+          for (const mesh of set.meshes) collectMaterials(mesh)
+          for (const material of materials)
+            material.wireframe = wireframe.checked
+        })
+        .catch((error: unknown) => {
+          set.pending = undefined
+          throw error
+        })
+      await set.pending
+      if (disposed()) return
+      for (const mesh of set.meshes) mesh.visible = equipped()
+    }
+    if (shown) updateModularPoseCorrectives(model, motion.value)
   }
   const underwearColor = femaleUnderwearColor(base)
   const bodyMask = femaleOutfitMask(base)
@@ -1011,6 +1046,8 @@ export async function showFemaleBase(
   )
   // As in the game, a body mask also cuts the face part's neck strip, which stands in for body triangles.
   const necks = new Set<string>()
+  // A stand collar also cuts the face part's own neck along its plane.
+  const neckPlanes = new Map<string, string[]>()
   const outfitMask: typeof bodyMask = {
     ...bodyMask,
     register(name, value, mesh) {
@@ -1025,15 +1062,32 @@ export async function showFemaleBase(
         neckStrip
       )
       necks.add(name)
+      const plane = (value as { neck_plane?: NeckPlane }).neck_plane
+      if (!plane) return
+      const slots: string[] = []
+      skinnedParts(model)
+        .filter((part) => part.userData.female_part === faceName)
+        .forEach((part, i) => {
+          const cut = neckPlaneMask(bodyMask.source(part), plane)
+          if (!cut) return
+          bodyMask.register(neckPlaneSlot(name, i), cut, part)
+          slots.push(neckPlaneSlot(name, i))
+        })
+      neckPlanes.set(name, slots)
     },
     unregister(name) {
       bodyMask.unregister(name)
       if (necks.delete(name)) bodyMask.unregister(neckSlot(name))
+      for (const slot of neckPlanes.get(name) ?? []) bodyMask.unregister(slot)
+      neckPlanes.delete(name)
     },
     setEquipped(name, enabled) {
       bodyMask.setEquippedAll({
         [name]: enabled,
         ...(necks.has(name) ? { [neckSlot(name)]: enabled } : {}),
+        ...Object.fromEntries(
+          (neckPlanes.get(name) ?? []).map((slot) => [slot, enabled])
+        ),
       })
     },
   }
@@ -1303,6 +1357,7 @@ export async function showFemaleBase(
     bard: '바드',
     ceremony: '예복',
     guard: '경비대',
+    maid: '메이드',
     shopkeeper: '잡화점',
   }
   const fitSlotNames: Record<string, string> = {
@@ -1339,6 +1394,7 @@ export async function showFemaleBase(
     warrior: 'long',
     long_bangs: 'long_bangs',
     long_wavy: 'long_wavy',
+    twintail: 'twintail',
     ranger: 'ponytail',
   }
   const helmetHair = () => helmetHairStyles[hairSelect.value]
@@ -2489,6 +2545,7 @@ export async function showFemaleBase(
     bard: 'bard_helmet',
     ceremony: 'ceremony_helmet',
     guard: 'guard_helmet',
+    maid: 'maid_helmet',
     brilliance: 'brilliance_helmet',
   }
   const hairParts: Record<string, string> = {
@@ -2496,6 +2553,7 @@ export async function showFemaleBase(
     warrior: 'valkyrie_hair',
     long_bangs: 'long_bangs_hair',
     long_wavy: 'long_wavy_hair',
+    twintail: 'twintail_hair',
     ranger: 'ranger_hair',
   }
   let hairBrushPaused = false

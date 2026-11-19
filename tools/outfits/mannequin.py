@@ -104,7 +104,8 @@ class Source:
                     scale = ((p @ rotation.T) * q).sum() / (p ** 2).sum()
             else:
                 rotation, stretch = kabsch(a - a0, b - b0)
-                scale = stretch / ((a - a0) ** 2).sum()
+                if rescale:
+                    scale = stretch / ((a - a0) ** 2).sum()
             offset = b0 - scale * rotation @ a0
         distance = tree.query(scale * moving @ rotation.T + offset)[0]
         self.points = scale * self.points @ rotation.T + offset

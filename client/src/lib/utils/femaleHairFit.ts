@@ -21,6 +21,7 @@ export type HairFitStyle =
   | 'ponytail'
   | 'long_bangs'
   | 'long_wavy'
+  | 'twintail'
 export type HairFits = Record<
   HairFitFace,
   Partial<Record<HairFitStyle, HairFit>>
@@ -32,6 +33,7 @@ const styles: Record<string, HairFitStyle> = {
   ranger_hair: 'ponytail',
   long_bangs_hair: 'long_bangs',
   long_wavy_hair: 'long_wavy',
+  twintail_hair: 'twintail',
 }
 export const femaleHairStyle = (part: string): HairFitStyle | undefined =>
   styles[part]
@@ -77,6 +79,7 @@ const BODY_HELD: ReadonlySet<HairFitStyle> = new Set([
   'long',
   'long_bangs',
   'long_wavy',
+  'twintail',
 ])
 const HELD_BELOW = 1.46
 const FITTED_ABOVE = 1.6

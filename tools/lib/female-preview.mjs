@@ -8,6 +8,7 @@ export const sources = {
   warrior: 'assets/modular_human_female_01/hair/tripo_long_side_v3/fitted_v1/hair_female_long_side.glb',
   long_bangs: 'assets/modular_human_female_01/hair/tripo_long_bangs_v2/fitted_v1/hair_female_long_bangs.glb',
   long_wavy: 'assets/modular_human_female_01/hair/tripo_rica_wavy_v1/fitted_v1/hair_female_long_wavy.glb',
+  twintail: 'assets/modular_human_female_01/hair/tripo_twintail_v1/fitted_v1/hair_female_twintail.glb',
   valkyrie: 'assets/items/valkyrie_boots/fitted_v1/boots_female_valkyrie.glb',
   animations: 'assets/modular_human_female_01/rig_v1/female-base.glb',
 }

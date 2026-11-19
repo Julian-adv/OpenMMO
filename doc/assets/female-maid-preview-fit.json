@@ -1,0 +1,22 @@
+{
+  "version": 1,
+  "parts": {
+    "helmet": {
+      "baked": [
+        {
+          "move-x": 0,
+          "move-y": 2.9,
+          "move-z": 2.76,
+          "scale": 100.1,
+          "scale-x": 100,
+          "scale-y": 100,
+          "scale-z": 100,
+          "rotate-x": 0,
+          "rotate-y": 0,
+          "rotate-z": 0,
+          "baked_at": "2026-11-18T17:12:33.578816+00:00"
+        }
+      ]
+    }
+  }
+}

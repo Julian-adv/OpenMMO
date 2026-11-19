@@ -354,6 +354,10 @@ export function femaleOutfitMask(base?: GLTF) {
         changed = toggle(name, enabled) || changed
       if (changed) apply()
     },
+    /** The mesh's geometry before any mask, which mask triangle indices refer to. */
+    source(mesh: THREE.Mesh): THREE.BufferGeometry {
+      return states.get(mesh)?.original ?? mesh.geometry
+    },
     unregister(name: string) {
       const wasEquipped = equipped.delete(name)
       slots.delete(name)

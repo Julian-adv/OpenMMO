@@ -176,6 +176,48 @@ OUTFITS = {
                            model=dict(source='tripo_helmet_v1/segmented.glb',
                                       sha256='0aa366b476346266fbacdcb9783815dfa6cdf154725a3b673070b88ab2eaf4c6', scale=1)),
         }),
+    # Miriel's maid uniform, generated on the blue mannequin from front and back views and aligned by
+    # tools/split-female-maid-outfit.py.
+    'maid': dict(
+        source='tripo_multiview_v1/segmented.glb',
+        sha256='779d0f2aadbbca5f4b7cadca90b4dcb8ae880b0f0b25a8de03dad0d02aeeb17a',
+        scale=1, on_heels=True, snug_cover=True,
+        parts={
+            # Satin gloves to above the elbow, each topped with a frill and a bow. They cover the whole forearm,
+            # whose skin came through at the elbow in the idle pose. The frill stands off the arm, and the skin
+            # hidden near it by whole triangles left notches above it: the arm is cut 1 cm inside the rim instead.
+            'gloves': dict(nodes=['left_glove', 'right_glove'], version='fitted_v1',
+                           hide_bones=('LeftHand', 'RightHand', 'LeftForeArm', 'RightForeArm'),
+                           clip_cuff=.01, cuff_past_elbow=True),
+            # Bodice with collar, bib, puff sleeves and corset waist; the arms stay bare below the sleeve cuffs.
+            # The corset is drawn 1.5 cm tighter than the body's waist, so the skin that stands out of it is not
+            # restored: it showed as a band of belly between corset and waistband.
+            # Generated alone on a bust by tools/split-female-maid-top.py: the bodice that came with the whole
+            # outfit had its collar at the trapezius, narrower than the neck there.
+            'top': dict(nodes=['top'], version='fitted_v1', hide_underwear=(1.15, 1.7),
+                        clip_hem=dict(keep='below', within=.25), clip_sleeve=.01,
+                        rigid_collar=1.535,
+                        hide_neck=dict(above=1.47, collar=1.545, level=.62, within=.1),
+                        model=dict(source='tripo_top_v2/segmented.glb',
+                                   sha256='6c20ac95d269b96c79ea33a892e036d9154a98c61b517a443d6c14ac1eb868f9', scale=1)),
+            # Short skirt over a petticoat with the apron, its waistband and the back bow, hung from the hips as a
+            # bell: skinned to the thighs its hem tore apart between the legs at a walk.
+            'bottom': dict(nodes=['skirt'], version='fitted_v1', hide_underwear=(.8, 1.25),
+                           clip_hem=dict(keep='above', within=.25),
+                           robe=dict(waist_height_m=1.18, hem_height_m=.81, center_z_m=-.02, waist_radii_m=[.14, .11],
+                                     driven_below_m=1.13, blend_m=.08, lift=1, max_angle=1.2,
+                                     colliders=[dict(bone=side + bone, center=[sign * x, y, z], radii=radii)
+                                                for side, sign in (('Left', 1), ('Right', -1))
+                                                for bone, (x, y, z), radii in (
+                                                    ('UpLeg', (.137, .785, -.04), [.095, .225, .105]),
+                                                    ('Leg', (.2, .34, -.045), [.075, .265, .085]))])),
+            # Thigh-high stockings and pumps in one piece. The sole came 1 cm below the plate boots' sole, whose lift
+            # every heel shares, and the heel tip 2.5 cm short of it: the shoe is raised as one piece and the heel
+            # stretched by half the gap, as on the ceremony pumps.
+            'boots': dict(nodes=['left_boots', 'right_boots'], version='fitted_v1', hide_bones=LEGS, rigid_post=.075,
+                          lower_shoe=-.0102, extend_heel={'gap': .0127}, clip_hem=dict(keep='above', within=.4)),
+            'helmet': dict(nodes=['helmet'], version='fitted_v1'),
+        }),
 }
 COVER_RAY = .06
 # Sleeve alignment fades in over this distance from the shoulder joint, leaving the shoulder pads in place.
@@ -213,6 +255,11 @@ EDGE_LIP = .008
 EDGE_TUCK = .002
 # `clip_hem` fits its plane to the open edges within this distance (m) of the cloth's extreme height.
 HEM_BAND = .04
+# `rigid_collar` takes the weights of the cloth within this height (m) of the collar's base, inside this half width.
+COLLAR_RING = .012
+COLLAR_HALF_WIDTH = .1
+# Depth (m) below the extreme height taken as the cap of an edge generated closed.
+HEM_CAP = .01
 # Garment points farther than this (m) from the centre plane belong to a sleeve (`clip_sleeve`).
 SLEEVE_SIDE = .25
 # Open-edge loops shorter than this (m) are slits, not openings.
@@ -446,6 +493,14 @@ def skin_weights(points):
         bary = np.clip([1 - uv.sum(), *uv], 0, 1)
         weights[i] = (bary / bary.sum()) @ bw[bf[face]]
     weights = smooth(weights[first], .5, 6)[welded]
+    if 'rigid_collar' in SPEC:
+        # A stand collar and its frill move as one piece with the cloth they stand on. Weighted from the nearest
+        # skin, the frill followed the head and lifted off the collar when the head tilted.
+        base = SPEC['rigid_collar']
+        neck = np.abs(points[:, 0]) < COLLAR_HALF_WIDTH
+        ring = weights[neck & (np.abs(points[:, 2] - base) < COLLAR_RING)].mean(0)
+        blend = smoothstep((points[:, 2] - base) / COLLAR_RING) * neck
+        weights = weights * (1 - blend[:, None]) + ring * blend[:, None]
     for side, sign in (('Left', -1), ('Right', 1)):
         opposite = [j for j, n in enumerate(names) if n.startswith(side)]
         weights[np.ix_(points[:, 0] * sign > .02, opposite)] = 0
@@ -775,6 +830,10 @@ def rigid_posts(posed, order, values, height):
         near = np.linalg.norm(posed[back, :2] - tip[:2], axis=1) < .03
         post = back[near & (rise < height)]
         ring = back[near & (rise > height - .015) & (rise < height)]
+        if not len(ring):
+            # A stiletto of long triangles has no vertex in that band: the next ring up stands in.
+            above = near & (rise >= height)
+            ring = back[above & (rise < rise[above].min() + .015)]
         dense[post] = dense[ring].mean(0)
         count += len(post)
     order = np.argsort(dense, axis=1)[:, -4:][:, ::-1]
@@ -1054,7 +1113,11 @@ if 'clip_cuff' in SPEC:
         centre, normal, _ = cuff_plane(points[points[:, 0] * sign > 0], side)
         origin = centre + normal * SPEC['clip_cuff']
         depth = (rest_points - origin) @ normal
-        arm = (bw[:, forearm_hand_columns(side)].sum(1) > .5)[bf].all(1)
+        columns = forearm_hand_columns(side)
+        if SPEC.get('cuff_past_elbow'):
+            # The rim sits on the upper arm, whose skin is cut there too.
+            columns = columns + [names.index(side + 'Arm')]
+        arm = (bw[:, columns].sum(1) > .5)[bf].all(1)
         inside = (depth > 0)[bf]
         hidden[arm & inside.all(1)] = True
         hidden[arm & ~inside.all(1)] = False
@@ -1077,6 +1140,29 @@ if 'clip_sleeve' in SPEC:
         hidden[arm & ~inside.all(1)] = False
         cuff_clips.append({'point': (origin @ TO_GLTF.T).round(5).tolist(), 'normal': (axis @ TO_GLTF.T).round(5).tolist(),
                            'triangle_indices': np.flatnonzero(arm & inside.any(1) & ~inside.all(1)).tolist()})
+neck_plane = None
+if 'hide_neck' in SPEC:
+    # A stand collar closed round the neck: the neck is wider than the collar band at the nape and came through
+    # it. Neck skin is cut along the collar's own tilted plane, `level` of the way up the collar, and hidden
+    # below it. The face part's neck stands in the same band and is cut by the same plane in the client.
+    spec = SPEC['hide_neck']
+    collar = points[(np.abs(points[:, 0]) < COLLAR_HALF_WIDTH) & (points[:, 2] > spec['collar'])]
+    centre = collar.mean(0)
+    normal = np.linalg.svd(collar - centre)[2][2]
+    normal *= np.sign(normal[2])
+    along = (collar - centre) @ normal
+    origin = centre + normal * (along.min() + spec['level'] * np.ptp(along))
+    corners = rest_points[bf]
+    neck = (corners[:, :, 2] > spec['above']).all(1) & (islands[bf] == skin_island).all(1) \
+        & (np.linalg.norm(corners[:, :, :2] - origin[:2], axis=2) < spec['within']).all(1)
+    under = (corners - origin) @ normal < 0
+    hidden[neck & under.all(1)] = True
+    straddling = neck & under.any(1) & ~under.all(1)
+    hidden[straddling] = False
+    neck_plane = {'point': (origin @ TO_GLTF.T).round(5).tolist(), 'normal': (normal @ TO_GLTF.T).round(5).tolist(),
+                  'radius': spec['within'], 'tilt_deg': float(np.degrees(np.arccos(normal[2])))}
+    cuff_clips.append({'point': neck_plane['point'], 'normal': neck_plane['normal'],
+                       'triangle_indices': np.flatnonzero(straddling).tolist()})
 if 'clip_hem' in SPEC:
     # A flat hem or top edge: skin is cut along its plane instead of by whole triangles, whose corners showed as
     # teeth over the cloth. `keep` is the bare side, `within` the half width (m) of the body the edge goes round.
@@ -1093,7 +1179,10 @@ if 'clip_hem' in SPEC:
     cloth_points = np.zeros((cloth_ids.max() + 1, 3))
     cloth_points[cloth_ids] = points
     rim = np.array([(cloth_points[a] + cloth_points[b]) / 2 for (a, b), count in uses.items() if count == 1])
-    rim = rim[(rim[:, 2] - height) * up > -HEM_BAND]
+    rim = rim[(rim[:, 2] - height) * up > -HEM_BAND] if len(rim) else rim
+    if not len(rim):
+        # A stocking top generated closed has no open edge: the cap that closes it is the edge.
+        rim = cloth_points[(cloth_points[:, 2] - height) * up > -HEM_CAP]
     hem_centre = rim.mean(0)
     hem_normal = np.linalg.svd(rim - hem_centre)[2][2]
     hem_normal *= np.sign(hem_normal[2]) * up
@@ -1279,6 +1368,8 @@ mask = {'body': str(BODY.relative_to(ROOT)), 'body_sha256': body_sha256, 'mesh_i
                  + (f', plus triangles weighted over half to {", ".join(SPEC["hide_bones"])} bones.' if hide_columns else '.')}
 if cuff_clips:
     mask['clip_planes'] = cuff_clips
+if neck_plane:
+    mask['neck_plane'] = neck_plane
 if tucked:
     # Every copy of a moved vertex across UV seams moves with it.
     copies = {}
