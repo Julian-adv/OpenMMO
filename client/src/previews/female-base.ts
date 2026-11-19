@@ -834,6 +834,7 @@ export async function showFemaleBase(
   }
   const updateAnimation = (delta: number) => {
     bootGround?.restore()
+    plateGround?.restore()
     mixer.update(delta)
     updateModularPoseCorrectives(model, motion.value)
     if (shield.visible && motion.value !== 'rest') {
