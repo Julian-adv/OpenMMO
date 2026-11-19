@@ -33,6 +33,11 @@ impl SharedState {
         self.recent_seatings.drain(..).collect()
     }
 
+    /// Hand the queued chair leavings to the driver, emptying the queue.
+    pub fn drain_recent_risings(&mut self) -> Vec<(PlayerId, bool)> {
+        self.recent_risings.drain(..).collect()
+    }
+
     /// Classify how urgent a server event is for LLM processing.
     pub fn classify_event(&self, msg: &ServerMessage) -> EventUrgency {
         if self.dialogue_ignores_event(msg) {
@@ -201,6 +206,7 @@ impl SharedState {
             | ServerMessage::PlayerArmorChanged { .. }
             | ServerMessage::PlayerMountChanged { .. }
             | ServerMessage::PlayerTitleChanged { .. }
+            | ServerMessage::PlayerAppearanceChanged { .. }
             | ServerMessage::PlayerFamilyChanged { .. }
             | ServerMessage::TitleEarned { .. }
             | ServerMessage::PlayerTitles { .. } => EventUrgency::Routine,
@@ -911,6 +917,20 @@ impl SharedState {
                     me.title = title.clone();
                 }
             }
+            ServerMessage::PlayerAppearanceChanged {
+                player_id,
+                appearance,
+            } => {
+                if let Some(p) = self.nearby_players.get_mut(player_id) {
+                    p.appearance = *appearance;
+                    if p.object_type.as_deref() == Some(SIT_OBJECT_TYPE) {
+                        self.restyled.insert(*player_id);
+                    }
+                }
+                if let Some(me) = self.self_player.as_mut().filter(|me| me.id == *player_id) {
+                    me.appearance = *appearance;
+                }
+            }
             ServerMessage::PlayerFamilyChanged { player_id, family } => {
                 if let Some(p) = self.nearby_players.get_mut(player_id) {
                     p.family = family.clone();
@@ -1005,6 +1025,14 @@ impl SharedState {
                     let was_seated = p.object_type.as_deref() == Some(SIT_OBJECT_TYPE);
                     p.object_type = object_type.clone();
                     p.object_id = *object_id;
+                    if was_seated && object_type.as_deref() != Some(SIT_OBJECT_TYPE) {
+                        let restyled = self.restyled.remove(player_id);
+                        push_capped(
+                            &mut self.recent_risings,
+                            (*player_id, restyled),
+                            MAX_RECENT_SEATINGS,
+                        );
+                    }
                     if !was_seated && object_type.as_deref() == Some(SIT_OBJECT_TYPE) {
                         push_capped(&mut self.recent_seatings, *player_id, MAX_RECENT_SEATINGS);
                     }

@@ -1207,6 +1207,7 @@ fn spawn_llm_task(
         schedule,
         sickroom,
         serve_tables: npc.serves_tables(),
+        salon: npc.id.as_deref() == Some(onlinerpg_shared::salon::HAIRDRESSER),
         notice_rounds,
         maid_names: shared.maid_names.clone(),
         tables,

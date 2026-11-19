@@ -65,11 +65,13 @@ pub struct NpcDefinition {
     /// Shown after the name; the client translates `rank.<id>`.
     #[serde(default)]
     pub rank: Option<String>,
-    /// Hair style and colour worn in place of the class default.
+    /// Hair style, hair colour and face worn in place of the class default.
     #[serde(default)]
     pub hair: Option<onlinerpg_shared::HairStyle>,
     #[serde(rename = "hairColor", default)]
     pub hair_color: Option<onlinerpg_shared::AppearanceColor>,
+    #[serde(default)]
+    pub face: Option<onlinerpg_shared::FaceStyle>,
     /// Set on the character at boot: a registry NPC is created with the agent client's default.
     #[serde(default)]
     pub gender: Option<onlinerpg_shared::Gender>,
@@ -94,6 +96,7 @@ impl NpcDefinition {
         appearance: onlinerpg_shared::CharacterAppearance,
     ) -> onlinerpg_shared::CharacterAppearance {
         onlinerpg_shared::CharacterAppearance {
+            face: self.face.unwrap_or(appearance.face),
             hair: self.hair.unwrap_or(appearance.hair),
             hair_color: self.hair_color.unwrap_or(appearance.hair_color),
             ..appearance

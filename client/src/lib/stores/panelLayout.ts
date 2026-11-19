@@ -15,6 +15,7 @@ export const PANEL_IDS = [
   'playerTrade',
   'landscaping',
   'storage',
+  'salon',
   'stall',
   'inspection',
 ] as const

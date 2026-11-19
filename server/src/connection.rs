@@ -1178,6 +1178,16 @@ async fn handle_client_message(
                     .await;
             }
         }
+        ClientMessage::ChangeAppearance {
+            npc_player_id,
+            appearance,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .change_appearance(id, &npc_player_id, appearance, auth_service)
+                    .await;
+            }
+        }
         ClientMessage::StartLandscapingMode { tool } => {
             if let Some(id) = &state.player_id {
                 game_state

@@ -42,6 +42,16 @@ pub fn protocol_version() -> u32 {
     crate::PROTOCOL_VERSION
 }
 
+/// Copper the hairdresser charges to turn one appearance into another.
+#[wasm_bindgen]
+pub fn salon_price(from: JsValue, to: JsValue) -> Result<u32, JsError> {
+    let parse = |value| {
+        serde_wasm_bindgen::from_value::<crate::character::CharacterAppearance>(value)
+            .map_err(|e| JsError::new(&format!("Invalid appearance: {e}")))
+    };
+    Ok(crate::salon::price(&parse(from)?, &parse(to)?) as u32)
+}
+
 #[wasm_bindgen]
 pub fn ability_mana_cost(ability: JsValue) -> Result<u32, JsError> {
     let ability: crate::ability::AbilityId = serde_wasm_bindgen::from_value(ability)

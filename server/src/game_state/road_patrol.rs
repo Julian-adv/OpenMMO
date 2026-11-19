@@ -219,10 +219,15 @@ fn on_road_cell(
 }
 
 fn is_guard_captain(npc: &crate::types::Player) -> bool {
+    is_registry_npc(npc, GUARD_CAPTAIN)
+}
+
+/// Whether `npc` is the official NPC registered as `id`.
+pub(super) fn is_registry_npc(npc: &crate::types::Player, id: &str) -> bool {
     npc.is_official_npc
         && npc_defs()
             .get_by_npc_name(&npc.name)
-            .is_some_and(|def| def.id == GUARD_CAPTAIN)
+            .is_some_and(|def| def.id == id)
 }
 
 impl GameState {
@@ -669,11 +674,22 @@ impl GameState {
     }
 
     async fn at_guard_captain(&self, player_id: &PlayerId, npc_player_id: &PlayerId) -> bool {
+        self.at_registry_npc(player_id, npc_player_id, GUARD_CAPTAIN)
+            .await
+    }
+
+    /// Whether `npc_player_id` is the registry NPC `id`, awake and within trading reach of `player_id`.
+    pub(super) async fn at_registry_npc(
+        &self,
+        player_id: &PlayerId,
+        npc_player_id: &PlayerId,
+        id: &str,
+    ) -> bool {
         let players = self.players.read().await;
         let (Some(player), Some(npc)) = (players.get(player_id), players.get(npc_player_id)) else {
             return false;
         };
-        is_guard_captain(npc)
+        is_registry_npc(npc, id)
             && reachable_dist_sq(
                 player.position,
                 player.floor_level,

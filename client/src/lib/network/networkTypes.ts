@@ -415,6 +415,12 @@ export type ClientMessage =
   | { LandAccount: { merchant_player_id: number } }
   | { ImpoundQuery: { npc_player_id: number } }
   | { ImpoundReclaim: { npc_player_id: number } }
+  | {
+      ChangeAppearance: {
+        npc_player_id: number
+        appearance: CharacterAppearance
+      }
+    }
   | { LandDeposit: { merchant_player_id: number; amount: number } }
   | { LandWithdraw: { merchant_player_id: number; amount: number } }
   | {

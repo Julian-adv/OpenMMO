@@ -84,6 +84,7 @@
     mountMannequin,
     updateMannequins,
   } from '../../utils/mannequin'
+  import { mirrorPlateMaterial } from '../../utils/planarMirror'
   import type { Unsubscriber } from 'svelte/store'
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
@@ -248,6 +249,11 @@
         model = gltf.scene.clone()
         model.traverse((child) => {
           if (child instanceof THREE.Mesh) {
+            if (
+              def.mirrorMaterial &&
+              (child.material as THREE.Material).name === def.mirrorMaterial
+            )
+              child.material = mirrorPlateMaterial
             // The alpha=0 collision plane sits on the deck and would shadow it
             const shadows = !isCollisionMaterial(child.material)
             child.castShadow = shadows

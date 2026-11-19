@@ -406,6 +406,10 @@ pub struct SharedState {
     /// respawn, a seating only matters while the player is still nearby,
     /// so the name is looked up at drain time.
     recent_seatings: VecDeque<PlayerId>,
+    /// Seated players whose look changed since they sat down.
+    restyled: HashSet<PlayerId>,
+    /// Players seen getting up from a chair, and whether their look changed while seated. Capped like seatings.
+    recent_risings: VecDeque<(PlayerId, bool)>,
     /// Latest game time -- only the most recent matters
     latest_time: Option<ServerMessage>,
     /// Players we've already seen within NEARBY_PLAYER_RADIUS -- prevents duplicate events
@@ -594,6 +598,8 @@ impl SharedState {
             latest_player_moves: HashMap::new(),
             recent_respawns: VecDeque::new(),
             recent_seatings: VecDeque::new(),
+            restyled: HashSet::new(),
+            recent_risings: VecDeque::new(),
             latest_time: None,
             seen_nearby_players: HashSet::new(),
             music_performers: HashMap::new(),

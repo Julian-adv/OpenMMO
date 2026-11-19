@@ -208,6 +208,8 @@ pub struct DriverConfig {
     /// Walk over to guests who sit down on a chair nearby and take their
     /// order. For NPCs that wait tables (the inn maid).
     pub serve_tables: bool,
+    /// Stand behind a customer who sits down nearby and ask what they would like changed (the hairdresser).
+    pub salon: bool,
     /// Take down expired notices from boards in sight during the day.
     pub notice_rounds: bool,
     /// Character names of every table-waiting NPC: never anyone's guest.
@@ -273,14 +275,14 @@ async fn announce_seat(
         ));
 }
 
-/// The seated guest's name and a schedule entry standing beside them,
-/// facing the seat. `None` when the guest is gone, off their chair, on
-/// another floor, or beyond serving range.
-fn table_entry(
-    s: &SharedState,
+/// A guest seated on a chair on our floor within `reach` of us, and that chair's position and rotation.
+/// The broadcast position is where the guest stood when they clicked the chair (the sit never re-sends
+/// a move), so the chair comes from its placement where one is known.
+fn seated_guest<'a>(
+    s: &'a SharedState,
     guest_id: &onlinerpg_shared::PlayerId,
-    tables: &[VisitSpot],
-) -> Option<(String, ScheduleEntry)> {
+    reach: f32,
+) -> Option<(&'a onlinerpg_shared::Player, (f32, f32, Option<f32>))> {
     let me = s.self_player.as_ref()?;
     let p = s.nearby_players.get(guest_id)?;
     if p.object_type.as_deref() != Some(crate::state::SIT_OBJECT_TYPE)
@@ -289,24 +291,32 @@ fn table_entry(
     {
         return None;
     }
-    // The broadcast position is where the guest stood when they clicked the
-    // chair (the sit never re-sends a move), so the chair itself comes from
-    // the placement.
-    let (seat_x, seat_z) = p
+    let seat = p
         .object_id
         .and_then(|id| {
-            s.furniture_position(
+            s.furniture_pose(
                 crate::state::SIT_OBJECT_TYPE,
                 id,
                 p.position.x,
                 p.position.z,
             )
         })
-        .unwrap_or((p.position.x, p.position.z));
-    let to_seat = crate::geom::PlanarDelta::to_xz(&me.position, seat_x, seat_z);
-    if to_seat.dist > TABLE_SERVICE_RADIUS {
-        return None;
-    }
+        .map_or((p.position.x, p.position.z, None), |(x, z, rotation)| {
+            (x, z, Some(rotation))
+        });
+    (crate::geom::PlanarDelta::to_xz(&me.position, seat.0, seat.1).dist <= reach)
+        .then_some((p, seat))
+}
+
+/// The seated guest's name and a schedule entry standing beside them,
+/// facing the seat. `None` when the guest is gone, off their chair, on
+/// another floor, or beyond serving range.
+fn table_entry(
+    s: &SharedState,
+    guest_id: &onlinerpg_shared::PlayerId,
+    tables: &[VisitSpot],
+) -> Option<(String, ScheduleEntry)> {
+    let (p, (seat_x, seat_z, _)) = seated_guest(s, guest_id, TABLE_SERVICE_RADIUS)?;
     let label = "the guest's table";
     // A curated spot for this chair wins over the computed one.
     if let Some(t) = tables.iter().find(|t| p.object_id == Some(t.object_id)) {
@@ -314,6 +324,62 @@ fn table_entry(
     }
     let entry = chair_flank_entry(s, seat_x, seat_z, p.floor_level as u8, p.position.y, label);
     Some((p.name.clone(), entry))
+}
+
+/// How far behind a salon chair the hairdresser stands, and how near a chair must be to count as hers.
+const SALON_STAND_BEHIND: f32 = 0.8;
+const SALON_CHAIR_RANGE: f32 = 6.0;
+
+/// The seated customer's name and a schedule entry standing behind their chair, facing the way they face.
+fn salon_entry(
+    s: &SharedState,
+    guest_id: &onlinerpg_shared::PlayerId,
+) -> Option<(String, ScheduleEntry)> {
+    let (p, (x, z, rotation)) = seated_guest(s, guest_id, SALON_CHAIR_RANGE)?;
+    let rotation = rotation?;
+    // A chair turned 0° faces +Z.
+    let (sin, cos) = rotation.to_radians().sin_cos();
+    Some((
+        p.name.clone(),
+        ScheduleEntry {
+            pos: [
+                x - sin * SALON_STAND_BEHIND,
+                s.self_player.as_ref()?.position.y,
+                z - cos * SALON_STAND_BEHIND,
+            ],
+            rotation,
+            floor_level: p.floor_level as u8,
+            label: Some("behind the customer's chair".to_string()),
+            ..Default::default()
+        },
+    ))
+}
+
+/// What the hairdresser is told as each customer near her gets up: a compliment for a changed look,
+/// a light send-off otherwise.
+fn salon_farewells(s: &mut SharedState) {
+    for (id, restyled) in s.drain_recent_risings() {
+        let Some(name) = s.self_player.as_ref().and_then(|me| {
+            let p = s.nearby_players.get(&id).filter(|p| !p.is_official_npc)?;
+            let near = crate::geom::PlanarDelta::to_xz(&me.position, p.position.x, p.position.z);
+            (near.dist <= SALON_CHAIR_RANGE).then(|| p.name.clone())
+        }) else {
+            continue;
+        };
+        s.push_ambient_event(if restyled {
+            format!(
+                "[Salon] {name} has just had their look changed in your salon and is getting up \
+                 from the chair. Tell them in one short, warm line of your own how well the new \
+                 look suits them."
+            )
+        } else {
+            format!(
+                "[Salon] {name} is getting up from your salon chair without changing anything. \
+                 Tell them in one short, easy line of your own that they are welcome back \
+                 whenever they change their mind."
+            )
+        });
+    }
 }
 
 /// A standing spot beside the chair at `(seat_x, seat_z)`, facing it: the
@@ -495,6 +561,7 @@ pub async fn llm_driver(
         schedule,
         sickroom,
         serve_tables,
+        salon,
         notice_rounds,
         maid_names,
         tables,
@@ -872,7 +939,7 @@ pub async fn llm_driver(
                 ));
             }
         }
-        if serve_tables && attack_target.is_none() {
+        if (serve_tables || salon) && attack_target.is_none() {
             // Drain every tick so stale seatings don't pile up. A bedside
             // visit outranks table service; an ongoing visit keeps its spot.
             let seated = {
@@ -886,7 +953,12 @@ pub async fn llm_driver(
                         if is_staff(&s, &pid, &maid_names) {
                             continue;
                         }
-                        let Some((name, entry)) = table_entry(&s, &pid, &tables) else {
+                        let found = if salon {
+                            salon_entry(&s, &pid)
+                        } else {
+                            table_entry(&s, &pid, &tables)
+                        };
+                        let Some((name, entry)) = found else {
                             continue;
                         };
                         if claims.try_claim(ClaimKey::Guest(pid), &label, GUEST_CLAIM_TTL) {
@@ -908,8 +980,19 @@ pub async fn llm_driver(
                 }
             };
             if let Some((name, entry)) = seated {
-                info!("[{label}] {name} took a seat nearby — going over for the order");
-                visit = Some((
+                let event = if salon {
+                    info!(
+                        "[{label}] {name} sat down in the salon — going to stand behind the chair"
+                    );
+                    format!(
+                        "[Salon] {name} just sat down in one of your salon chairs and you are \
+                         on your way to stand behind it — no move action needed. Ask them once, \
+                         in your own words and in the language they speak, how they would like \
+                         their look changed. The salon window that opened for them handles the \
+                         choices and the payment. If they have already left the chair, let it go."
+                    )
+                } else {
+                    info!("[{label}] {name} took a seat nearby — going over for the order");
                     format!(
                         "[Guest] {name} just took a seat at one of your tables and \
                          you are on your way over — no move action needed. Greet \
@@ -918,10 +1001,13 @@ pub async fn llm_driver(
                          they ask for, you bring with the serve action; other goods \
                          they buy by clicking you to open your shop. If they have \
                          already left the seat, let it go."
-                    ),
-                    entry,
-                ));
+                    )
+                };
+                visit = Some((event, entry));
             }
+        }
+        if salon {
+            salon_farewells(&mut *state.lock().await);
         }
         if let Some((event, entry)) = visit {
             // Any routine walk still in flight would fight this one for the body.
@@ -1774,6 +1860,7 @@ mod tests {
             schedule: Vec::new(),
             sickroom: Vec::new(),
             serve_tables: false,
+            salon: false,
             notice_rounds: false,
             maid_names: HashSet::new(),
             tables: Vec::new(),

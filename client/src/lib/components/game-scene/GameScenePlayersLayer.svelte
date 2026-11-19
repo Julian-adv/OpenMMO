@@ -780,56 +780,59 @@
 {/if}
 
 {#if currentPlayer && cameraInitialized && camera}
-  <PlayerModel
-    bind:this={currentPlayerModel}
-    teleportHidden={$teleportHiddenPlayers.has(currentPlayer.id)}
-    position={currentPlayer.position}
-    mount={currentPlayer.mount}
-    name={currentPlayer.name}
-    title={currentPlayer.title}
-    family={currentPlayer.family}
-    petrified={currentPlayer.petrified}
-    isCurrentPlayer={true}
-    floorLevel={localFloorLevel}
-    playerState={effectivePlayerState}
-    catchPresentation={localCatch}
-    interactionAnim={effectiveInteractionAnim}
-    interactionCounter={effectiveInteractionCounter}
-    interactOffsetY={currentPlayerState.interactOffsetY}
-    attackCounter={currentPlayerState.attackCounter}
-    hitCounter={currentPlayer.hitCounter}
-    speed={currentPlayerState.speed}
-    rotation={currentPlayerState.rotation}
-    movementMode={currentPlayerState.movementMode}
-    {camera}
-    chatBubble={chatBubbles.get(currentPlayer.id)?.message}
-    chatBubbleAt={chatBubbles.get(currentPlayer.id)?.timestamp}
-    characterClass={currentPlayer.characterClass}
-    gender={currentPlayer.gender}
-    appearance={currentPlayer.appearance}
-    health={currentPlayer.health}
-    maxHealth={currentPlayer.maxHealth}
-    {onAttackDuration}
-    onDyingFinished={onCurrentPlayerDyingFinished}
-    onInteractionFinished={() => {
-      // The finished cast hands over to the looping fishing idle; the event
-      // still goes to the FSM, which ignores anims it didn't start.
-      if (fishingOverrideActive) fishingCastDone = true
-      onPlayerControlEvent?.({ type: 'anim_interaction_finished' })
-    }}
-    onPickupGrab={() => {
-      onPlayerControlEvent?.({ type: 'anim_pickup_grab' })
-    }}
-    bind:isLoading={isCurrentPlayerLoading}
-    lastDamageInfo={currentPlayer.lastDamageInfo}
-    lastRegenInfo={currentPlayer.lastRegenInfo}
-    lastGoldInfo={currentPlayer.lastGoldInfo}
-    {heightManager}
-    {waterSurfaceAt}
-    {waterFoamMap}
-    {waterSunDirection}
-    {torchEffectsDisabled}
-  />
+  <!-- The face is part of the loaded body, so a new one needs a new model. -->
+  {#key currentPlayer.appearance?.face}
+    <PlayerModel
+      bind:this={currentPlayerModel}
+      teleportHidden={$teleportHiddenPlayers.has(currentPlayer.id)}
+      position={currentPlayer.position}
+      mount={currentPlayer.mount}
+      name={currentPlayer.name}
+      title={currentPlayer.title}
+      family={currentPlayer.family}
+      petrified={currentPlayer.petrified}
+      isCurrentPlayer={true}
+      floorLevel={localFloorLevel}
+      playerState={effectivePlayerState}
+      catchPresentation={localCatch}
+      interactionAnim={effectiveInteractionAnim}
+      interactionCounter={effectiveInteractionCounter}
+      interactOffsetY={currentPlayerState.interactOffsetY}
+      attackCounter={currentPlayerState.attackCounter}
+      hitCounter={currentPlayer.hitCounter}
+      speed={currentPlayerState.speed}
+      rotation={currentPlayerState.rotation}
+      movementMode={currentPlayerState.movementMode}
+      {camera}
+      chatBubble={chatBubbles.get(currentPlayer.id)?.message}
+      chatBubbleAt={chatBubbles.get(currentPlayer.id)?.timestamp}
+      characterClass={currentPlayer.characterClass}
+      gender={currentPlayer.gender}
+      appearance={currentPlayer.appearance}
+      health={currentPlayer.health}
+      maxHealth={currentPlayer.maxHealth}
+      {onAttackDuration}
+      onDyingFinished={onCurrentPlayerDyingFinished}
+      onInteractionFinished={() => {
+        // The finished cast hands over to the looping fishing idle; the event
+        // still goes to the FSM, which ignores anims it didn't start.
+        if (fishingOverrideActive) fishingCastDone = true
+        onPlayerControlEvent?.({ type: 'anim_interaction_finished' })
+      }}
+      onPickupGrab={() => {
+        onPlayerControlEvent?.({ type: 'anim_pickup_grab' })
+      }}
+      bind:isLoading={isCurrentPlayerLoading}
+      lastDamageInfo={currentPlayer.lastDamageInfo}
+      lastRegenInfo={currentPlayer.lastRegenInfo}
+      lastGoldInfo={currentPlayer.lastGoldInfo}
+      {heightManager}
+      {waterSurfaceAt}
+      {waterFoamMap}
+      {waterSunDirection}
+      {torchEffectsDisabled}
+    />
+  {/key}
 {/if}
 
 {#if cameraInitialized && camera}
@@ -845,59 +848,61 @@
       {@const caught = $fishingCatches.get(player.id)}
       {@const showingCatch =
         caught !== undefined && remotePlayer.state === 'idle'}
-      <PlayerModel
-        bind:this={otherPlayerModels[index]}
-        teleportHidden={$teleportHiddenPlayers.has(player.id)}
-        position={new THREE.Vector3(
-          displayX,
-          visible ? baseY : OFFSCREEN_Y,
-          remotePlayer.position.z
-        )}
-        name={player.name}
-        title={player.title}
-        family={player.family}
-        rank={player.rank}
-        petrified={player.petrified}
-        isCurrentPlayer={false}
-        playerState={showingCatch ? 'interact' : remotePlayer.state}
-        interactionAnim={showingCatch
-          ? FishingAnimationName.IDLE
-          : remotePlayer.interactionAnim}
-        catchPresentation={visible ? caught : undefined}
-        interactionCounter={remotePlayer.interactionCounter}
-        interactOffsetY={remotePlayer.interactOffsetY}
-        attackCounter={remotePlayer.attackCounter}
-        hitCounter={remotePlayerManager.hitCounters.get(player.id)}
-        speed={remotePlayer.speed}
-        rotation={remotePlayer.rotation}
-        movementMode={remotePlayer.movementMode}
-        {camera}
-        chatBubble={chatBubbles.get(player.id)?.message}
-        chatBubbleAt={chatBubbles.get(player.id)?.timestamp}
-        characterClass={player.characterClass}
-        gender={player.gender}
-        appearance={player.appearance}
-        health={player.health}
-        maxHealth={player.maxHealth}
-        lastRegenInfo={player.lastRegenInfo}
-        torchOn={player.torchOn}
-        mount={player.mount}
-        mainHand={player.mainHand}
-        armor={player.armor}
-        back={player.back}
-        backColor={player.backColor}
-        backTexture={player.backTexture}
-        {torchEffectsDisabled}
-        npcPlayerId={player.isOfficialNpc ? player.id : undefined}
-        remotePlayerId={player.id}
-        floorLevel={player.floorLevel}
-        {heightManager}
-        {waterSurfaceAt}
-        {waterFoamMap}
-        {waterSunDirection}
-        onInteractionFinished={() =>
-          remotePlayerManager.handleInteractionFinished(player.id)}
-      />
+      {#key player.appearance?.face}
+        <PlayerModel
+          bind:this={otherPlayerModels[index]}
+          teleportHidden={$teleportHiddenPlayers.has(player.id)}
+          position={new THREE.Vector3(
+            displayX,
+            visible ? baseY : OFFSCREEN_Y,
+            remotePlayer.position.z
+          )}
+          name={player.name}
+          title={player.title}
+          family={player.family}
+          rank={player.rank}
+          petrified={player.petrified}
+          isCurrentPlayer={false}
+          playerState={showingCatch ? 'interact' : remotePlayer.state}
+          interactionAnim={showingCatch
+            ? FishingAnimationName.IDLE
+            : remotePlayer.interactionAnim}
+          catchPresentation={visible ? caught : undefined}
+          interactionCounter={remotePlayer.interactionCounter}
+          interactOffsetY={remotePlayer.interactOffsetY}
+          attackCounter={remotePlayer.attackCounter}
+          hitCounter={remotePlayerManager.hitCounters.get(player.id)}
+          speed={remotePlayer.speed}
+          rotation={remotePlayer.rotation}
+          movementMode={remotePlayer.movementMode}
+          {camera}
+          chatBubble={chatBubbles.get(player.id)?.message}
+          chatBubbleAt={chatBubbles.get(player.id)?.timestamp}
+          characterClass={player.characterClass}
+          gender={player.gender}
+          appearance={player.appearance}
+          health={player.health}
+          maxHealth={player.maxHealth}
+          lastRegenInfo={player.lastRegenInfo}
+          torchOn={player.torchOn}
+          mount={player.mount}
+          mainHand={player.mainHand}
+          armor={player.armor}
+          back={player.back}
+          backColor={player.backColor}
+          backTexture={player.backTexture}
+          {torchEffectsDisabled}
+          npcPlayerId={player.isOfficialNpc ? player.id : undefined}
+          remotePlayerId={player.id}
+          floorLevel={player.floorLevel}
+          {heightManager}
+          {waterSurfaceAt}
+          {waterFoamMap}
+          {waterSunDirection}
+          onInteractionFinished={() =>
+            remotePlayerManager.handleInteractionFinished(player.id)}
+        />
+      {/key}
     {/if}
   {/each}
 

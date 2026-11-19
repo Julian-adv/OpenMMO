@@ -521,6 +521,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PlayerWetToggled { .. } => "PlayerWetToggled",
         ServerMessage::PlayerPetrifiedToggled { .. } => "PlayerPetrifiedToggled",
         ServerMessage::PlayerTitleChanged { .. } => "PlayerTitleChanged",
+        ServerMessage::PlayerAppearanceChanged { .. } => "PlayerAppearanceChanged",
+        ServerMessage::AppearanceChangeResult { .. } => "AppearanceChangeResult",
         ServerMessage::TitleEarned { .. } => "TitleEarned",
         ServerMessage::PlayerTitles { .. } => "PlayerTitles",
         ServerMessage::PlayerMainHandChanged { .. } => "PlayerMainHandChanged",
@@ -768,6 +770,7 @@ always_sprint = true
             "grida",
             "tobin",
             "clothier",
+            "hairdresser",
         ] {
             let config = parse(&format!(
                 "server = \"ws://127.0.0.1:10006\"\n\n[[npcs]]\nid = \"{id}\"\n"

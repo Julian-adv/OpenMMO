@@ -40,6 +40,7 @@ pub mod notice_board;
 pub mod pathfinding;
 pub mod pricing;
 pub mod reach;
+pub mod salon;
 pub mod schedule;
 pub mod shelter;
 pub mod skills;
@@ -305,7 +306,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// shovelling snow off the road. `WeatherSync.snow_laid`.
 /// v164: female `HairStyle::Twintail`.
 /// v165: female `FaceStyle::Elegant`.
-pub const PROTOCOL_VERSION: u32 = 165;
+/// v166: `ChangeAppearance`/`AppearanceChangeResult`/`PlayerAppearanceChanged`, the
+/// hair salon.
+pub const PROTOCOL_VERSION: u32 = 166;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

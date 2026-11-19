@@ -86,6 +86,14 @@
     - 실내에서 숨긴 텐트 전면이 침대 클릭을 가로채지 않도록 오브젝트 클릭 검사에서 자신 또는 상위 그룹이 숨겨진 면을 제외한다. 실제 배치 좌표·모델과 기본 게임 카메라로 침대 위 9개 지점을 검사해 모두 수면 요청으로 처리됨을 확인했다.
     - [Blender 원본](../../assets/items/ysolde_camp_bed/bedding.blend), [재생성 소스](../../assets/items/ysolde_camp_bed/build.py), [출처·라이선스·해시](../../assets/items/ysolde_camp_bed/sources.json), [매트리스 렌더](../images/props/ysolde-camp-bedding/ground-mattress.png)·[야전침대 렌더](../images/props/ysolde-camp-bedding/field-cot.png).
 
+- wall_mirror.glb — 미장원 칸막이 벽에 거는 거울 (2026-11-20). 외부 에셋이나 생성 도구 없이 Blender 5.2.0 LTS 스크립트로 직접 만들었다:
+  `blender -b --python-exit-code 1 --python tools/blender-scripts/build_wall_mirror.py`. 나무 틀과 밝은 판, 0.8×1.2m, 30면, 텍스처 없음(5KB).
+  원점은 뒷면 아래 가운데이고 앞이 +Z라 벽 횃불처럼 건다. 금속 재질은 비칠 것이 없어 검게 나와서 판을 비금속으로 했다.
+  - 반사(2026-11-20, `client/src/lib/utils/planarMirror.ts`): 플레이어가 거울 9m 안, 거울 앞쪽에 있을 때만 판에 반사를 그린다. 그 밖에서는 밝은 판이다.
+    실제 반사각이 아니다(사용자 결정). 게임 카메라가 높고 비스듬해 진짜 반사는 앉은 사람 옆 바닥을 비추므로, 거울마다 정면을 30° 내려다본 모습을 보여 준다.
+    같은 벽의 거울은 한 번에 그리고, 시야를 거울 윤곽으로 잘라 그 안에 드는 것만 그린다. 나무·풀(인스턴스 메시)과 물은 빼고, 그림자 맵은 다시 그리지 않으며, 두 프레임에 한 번 갱신한다.
+    측정(개발 서버, 1066×1120 창, 거울 2개, 매 프레임 갱신 기준): 프레임당 스크립트 시간 3.06ms → 4.82ms, 거울 패스 1.45ms·드로 콜 58·삼각형 117,000(나무를 빼기 전 827,000), 반사 그림 416×192. 60fps 유지.
+
 ## Mounts
 
 - rowboat.glb — `tools/blender-scripts/build_rowboat.py`가 절차적으로 생성하는 노 젓는 배 (2026-09-14,

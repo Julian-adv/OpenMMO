@@ -235,6 +235,30 @@ fn read_visible_equipment(
 }
 
 impl AuthService {
+    /// A salon visit: the new look and the gold left after paying, saved together.
+    pub fn change_appearance(
+        &self,
+        character: &super::CharacterSaveData,
+        appearance: &CharacterAppearance,
+    ) -> Result<(), AuthError> {
+        let mut conn = self.open_connection()?;
+        let tx = conn.transaction_with_behavior(rusqlite::TransactionBehavior::Immediate)?;
+        Self::write_character_states(&tx, std::slice::from_ref(character))?;
+        let changed = tx.execute(
+            "UPDATE characters SET appearance = ?2 WHERE id = ?1",
+            params![
+                character.character_id,
+                serde_json::to_string(appearance)
+                    .map_err(|error| AuthError::Database(error.to_string()))?
+            ],
+        )?;
+        if changed != 1 {
+            return Err(AuthError::Database("character not found".into()));
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
     /// The character list plus the gear its preview draws. Both reads share one
     /// connection: this runs on every login, so it costs one checkout, not two.
     pub fn list_characters_with_equipment(

@@ -990,6 +990,12 @@ class NetworkManager {
     this.sendMessage({ ImpoundReclaim: { npc_player_id: npcPlayerId } })
   }
 
+  sendChangeAppearance(npcPlayerId: number, appearance: CharacterAppearance) {
+    this.sendMessage({
+      ChangeAppearance: { npc_player_id: npcPlayerId, appearance },
+    })
+  }
+
   sendLandAccount(merchantPlayerId: number) {
     this.sendMessage({ LandAccount: { merchant_player_id: merchantPlayerId } })
   }

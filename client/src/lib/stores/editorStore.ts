@@ -215,6 +215,8 @@ export interface ObjectDef {
   fire?: Position
   /** Flame shape; a torch tip vs the default log-bed fire. */
   fireKind?: 'torch'
+  /** Name of the model's material that reflects what stands in front of it. */
+  mirrorMaterial?: string
 }
 
 export interface ObjectPlacement {

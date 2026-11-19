@@ -325,6 +325,12 @@
     "fireKind": "torch"
   },
   {
+    "id": "wall_mirror",
+    "name": "Wall Mirror",
+    "model": "objects/wall_mirror.glb",
+    "mirrorMaterial": "Mirror plate"
+  },
+  {
     "id": "mine_timber_post",
     "name": "Mine Timber Post",
     "model": "objects/mine_timber_post.glb"

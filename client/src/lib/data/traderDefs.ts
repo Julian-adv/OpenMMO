@@ -17,6 +17,9 @@ export interface NpcDefinition {
 
 const npcDefs = npcsJson as Record<string, NpcDefinition>
 
+/** Character name of the registry NPC `id`. */
+export const npcNameById = (id: string) => npcDefs[id]?.npcName
+
 const byNpcName = new Map(
   Object.values(npcDefs).map((def) => [def.npcName, def])
 )

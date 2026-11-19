@@ -496,6 +496,47 @@ fn an_npc_taking_a_seat_counts_as_a_guest() {
     assert!(s.drain_recent_seatings().is_empty());
 }
 
+#[test]
+fn getting_up_from_a_chair_is_queued_with_whether_the_look_changed_while_seated() {
+    let (mut s, _rx) = test_state();
+    s.self_player_id = Some(PlayerId::from(1));
+    let mut customer = test_player(1.0, 0.0);
+    customer.id = PlayerId::from(2);
+    let position = customer.position;
+    s.nearby_players.insert(customer.id, customer);
+    let pose = |object_type: Option<&str>| ServerMessage::PlayerInteractionChanged {
+        position,
+        rotation: 0.0,
+        floor_level: 0,
+        player_id: PlayerId::from(2),
+        object_type: object_type.map(str::to_string),
+        object_id: object_type.map(|_| 156),
+    };
+    let restyle = ServerMessage::PlayerAppearanceChanged {
+        player_id: PlayerId::from(2),
+        appearance: Default::default(),
+    };
+
+    s.push_event(pose(Some(SIT_OBJECT_TYPE)));
+    s.push_event(pose(None));
+    // A new look while standing does not count towards the next sitting.
+    s.push_event(restyle.clone());
+    s.push_event(pose(Some(SIT_OBJECT_TYPE)));
+    s.push_event(pose(None));
+    s.push_event(pose(Some(SIT_OBJECT_TYPE)));
+    s.push_event(restyle);
+    s.push_event(pose(None));
+    s.push_event(pose(None));
+    assert_eq!(
+        s.drain_recent_risings(),
+        vec![
+            (PlayerId::from(2), false),
+            (PlayerId::from(2), false),
+            (PlayerId::from(2), true)
+        ]
+    );
+}
+
 fn chat_state() -> SharedState {
     let (mut s, _rx) = test_state();
     let mut me = test_player(0.0, 0.0);

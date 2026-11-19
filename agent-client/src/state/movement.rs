@@ -384,13 +384,25 @@ impl SharedState {
         x: f32,
         z: f32,
     ) -> Option<(f32, f32)> {
+        self.furniture_pose(type_id, object_id, x, z)
+            .map(|(x, z, _)| (x, z))
+    }
+
+    /// World XZ and rotation in degrees of the same placement.
+    pub fn furniture_pose(
+        &self,
+        type_id: &str,
+        object_id: u32,
+        x: f32,
+        z: f32,
+    ) -> Option<(f32, f32, f32)> {
         // Covers the gap between a piece and whoever interacts with it, and
         // disambiguates same-id placements from other regions.
         const RESOLVE_RADIUS: f32 = 3.0;
         let world = self.world_cache.read().unwrap();
         world
             .furniture_placement_near(type_id, object_id, x, z, RESOLVE_RADIUS)
-            .map(|p| (p.x, p.z))
+            .map(|p| (p.x, p.z, p.rotation_deg))
     }
 
     /// A goal for walking toward `(x, z)`: the point itself, or — when its

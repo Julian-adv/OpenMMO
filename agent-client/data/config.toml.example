@@ -281,3 +281,10 @@ id = "clothier"
 account = "npc_clothier"
 gender = "female"
 llm = "codex"
+
+# Silver Comb Salon hairdresser.
+[[npcs]]
+id = "hairdresser"
+account = "npc_hairdresser"
+gender = "female"
+llm = "codex"

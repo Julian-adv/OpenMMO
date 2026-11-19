@@ -33,6 +33,7 @@ export type OverlayId =
   | 'altarOffering'
   | 'mergerPledge'
   | 'impound'
+  | 'salon'
   | 'noticeBoard'
   | 'mailbox'
   | 'capeTexture'
@@ -74,6 +75,7 @@ const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   altarOffering: { layer: 3 },
   mergerPledge: { layer: 3 },
   impound: { layer: 3 },
+  salon: { layer: 3 },
   noticeBoard: { layer: 3 },
   mailbox: { layer: 3 },
   capeTexture: { layer: 3 },

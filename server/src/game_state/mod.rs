@@ -258,6 +258,7 @@ pub use pricing::TargetPath;
 mod road_patrol;
 pub(crate) use player::restored_floor_level;
 mod salary;
+mod salon;
 mod skills;
 mod teleport_departure;
 mod teleport_scroll;

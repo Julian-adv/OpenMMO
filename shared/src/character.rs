@@ -148,20 +148,23 @@ impl Default for CharacterAppearance {
 }
 
 impl CharacterAppearance {
+    /// Whether this class and gender has a body that takes face and hair choices.
+    pub fn is_styled(class: &CharacterClass, gender: Gender) -> bool {
+        matches!(
+            class,
+            CharacterClass::Knight
+                | CharacterClass::Barbarian
+                | CharacterClass::Rogue
+                | CharacterClass::Caveman
+                | CharacterClass::Ranger
+                | CharacterClass::Priest
+                | CharacterClass::Bard
+                | CharacterClass::Guard
+        ) || (gender == Gender::Female && *class == CharacterClass::Valkyrie)
+    }
+
     pub fn for_character(self, class: &CharacterClass, gender: Gender) -> Self {
-        if gender == Gender::Male
-            && matches!(
-                class,
-                CharacterClass::Knight
-                    | CharacterClass::Barbarian
-                    | CharacterClass::Rogue
-                    | CharacterClass::Caveman
-                    | CharacterClass::Ranger
-                    | CharacterClass::Priest
-                    | CharacterClass::Bard
-                    | CharacterClass::Guard
-            )
-        {
+        if gender == Gender::Male && Self::is_styled(class, gender) {
             let hair = if self.hair.is_female() {
                 HairStyle::Crop
             } else {
@@ -173,20 +176,7 @@ impl CharacterAppearance {
                 self.face
             };
             Self { face, hair, ..self }
-        } else if gender == Gender::Female
-            && matches!(
-                class,
-                CharacterClass::Knight
-                    | CharacterClass::Barbarian
-                    | CharacterClass::Rogue
-                    | CharacterClass::Caveman
-                    | CharacterClass::Valkyrie
-                    | CharacterClass::Ranger
-                    | CharacterClass::Priest
-                    | CharacterClass::Bard
-                    | CharacterClass::Guard
-            )
-        {
+        } else if gender == Gender::Female && Self::is_styled(class, gender) {
             let (hair, hair_color) = if self.hair.is_female() {
                 (self.hair, self.hair_color)
             } else {

@@ -228,6 +228,7 @@ import {
   MAX_PENDING_FRIEND_REQUESTS,
 } from '../stores/friendStore'
 import { applyImpoundState, openImpound } from '../stores/impoundStore'
+import { applySalonResult, openSalonFromChair } from '../stores/salonStore'
 import {
   applyFamilyState,
   familyStorageLog,
@@ -1991,6 +1992,15 @@ export function handleServerMessage(
       break
     }
 
+    case 'PlayerAppearanceChanged': {
+      updatePlayer(data.player_id, { appearance: data.appearance })
+      break
+    }
+
+    case 'AppearanceChangeResult':
+      applySalonResult(data)
+      break
+
     case 'PlayerFamilyChanged': {
       updatePlayer(data.player_id, { family: data.family ?? null })
       break
@@ -2259,6 +2269,7 @@ export function handleServerMessage(
       if (state.currentPlayer?.id === data.player_id) {
         events.interactionChanged.emit(data)
         if (!data.object_type) emoteStopRequest.set(true)
+        if (data.object_type === 'chair') openSalonFromChair()
         // Our own /emote went to the server unresolved; this broadcast is
         // its reply, the way PlayerMusicStarted starts /play_music.
         if (data.object_type && SLASH_EMOTE_ANIMS.has(data.object_type)) {

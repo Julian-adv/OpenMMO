@@ -98,6 +98,7 @@
   import { instrumentPanelVisible } from '../stores/instrumentStore'
   import LazyContent from './LazyContent.svelte'
   import ObjectOverlay from './map-editor/ObjectOverlay.svelte'
+  import MirrorReflections from './game-scene/MirrorReflections.svelte'
   import { type PlayerState } from '../utils/movementUtils'
   import {
     SUN_MAX_INTENSITY,
@@ -1707,6 +1708,7 @@
   </LazyContent>
 {/if}
 <ObjectOverlay bind:this={objectOverlayRef} />
+<MirrorReflections viewer={currentPlayer?.position ?? null} />
 
 {#if $hoveredSignpost && camera}
   <SignpostBubble

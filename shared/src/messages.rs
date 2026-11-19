@@ -771,6 +771,11 @@ pub enum ClientMessage {
     ImpoundReclaim {
         npc_player_id: PlayerId,
     },
+    /// Pay the hairdresser to take on `appearance` (shared/src/salon.rs).
+    ChangeAppearance {
+        npc_player_id: PlayerId,
+        appearance: crate::character::CharacterAppearance,
+    },
     StartLandscapingMode {
         tool: crate::landscaping::LandscapingTool,
     },
@@ -1250,6 +1255,7 @@ impl ClientMessage {
             | PatrolShovel
             | PatrolBreakOut { .. }
             | ImpoundReclaim { .. }
+            | ChangeAppearance { .. }
             | StartLandscapingMode { .. }
             | EditLandscape { .. }
             | PlaceEstateChest { .. }
@@ -1888,6 +1894,16 @@ pub enum ServerMessage {
     PlayerTitleChanged {
         player_id: PlayerId,
         title: Option<String>,
+    },
+    /// A nearby player's face, hair or colours changed at the salon.
+    PlayerAppearanceChanged {
+        player_id: PlayerId,
+        appearance: crate::character::CharacterAppearance,
+    },
+    /// Reply to `ChangeAppearance`: what was charged, or why nothing changed.
+    AppearanceChangeResult {
+        price: i64,
+        error: Option<crate::salon::SalonError>,
     },
     /// The recipient earned a title; sent to them alone.
     TitleEarned {
@@ -2720,6 +2736,7 @@ impl ServerMessage {
             | Self::PlayerWetToggled { .. }
             | Self::PlayerPetrifiedToggled { .. }
             | Self::PlayerTitleChanged { .. }
+            | Self::PlayerAppearanceChanged { .. }
             | Self::PlayerFamilyChanged { .. }
             | Self::FenceVisibility { .. }
             | Self::EstateChestVisibility { .. }
@@ -2845,6 +2862,7 @@ impl ServerMessage {
             | Self::PatrolShovelled { .. }
             | Self::PatrolBrokeOut { .. }
             | Self::ImpoundState { .. }
+            | Self::AppearanceChangeResult { .. }
             | Self::EstateChestMode { .. }
             | Self::EstateFurnitureMoveMode { .. }
             | Self::EstateChestEditResult { .. }

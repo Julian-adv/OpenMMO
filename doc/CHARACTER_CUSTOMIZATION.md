@@ -150,7 +150,7 @@ DB는 고치지 않는다. 프로토콜은 **136**이며 서버·웹 WASM·에�
 
 체형 슬라이더, 얼굴 조형, 긴 머리 물리, 긴 치마·로브·망토의 통합 의상 시스템,
 전 장비의 개별 모델 제작, 장비 형상변환과 방어구 염색은 후속 범위다.
-생성 후 미용 서비스의 비용·아이템·NPC도 이 문서에서 정하지 않는다.
+생성 후 미용 서비스는 7절의 미장원으로 들어갔다.
 
 ## 3. 파츠와 겹침 규칙
 
@@ -371,7 +371,32 @@ DB에는 nullable `appearance_json`을 추가하는 안을 사용한다. NULL은
 
 `CreateCharacter`의 선택적 `appearance`와 캐릭터 목록·게임 입장 데이터의 외모
 필드를 추가한다. 외모가 없으면 기존 경로로 처리해 agent-client와 기존 NPC 생성
-경로도 유지한다. 생성 후 외모 변경 메시지는 미용 기능을 구현할 때 추가한다.
+경로도 유지한다.
+
+### 미장원 (2026-11-20, 프로토콜 166)
+
+앨더마크 옷가게 북쪽 Silver Comb Salon의 미용사 Odette(레지스트리 id `hairdresser`)에게서
+얼굴·머리 모양·머리색·눈색을 바꾼다(사용자 결정). 성별·직업·이름은 바꾸지 않는다.
+
+- 값은 바꾼 항목마다 따로 받는다: 얼굴 1금, 머리 모양 50은, 머리색 20은, 눈색 20은
+  (`shared/src/salon.rs`). 색과 "원래 색" 스위치는 한 항목이다. 클라이언트는 같은 함수를
+  wasm `salon_price`로 불러 항목별 값을 보여 준다.
+- `ChangeAppearance { npc_player_id, appearance }` → `AppearanceChangeResult { price, error }`.
+  서버가 `for_character`로 맞춘 뒤 값을 계산하고, 거래 거리(6m)·미용사 수면·플레이어 간 거래 중·
+  소지금을 확인한다. 외형과 남은 골드를 한 트랜잭션으로 저장하고, 저장에 실패하면 골드를 돌려준다.
+- `PlayerAppearanceChanged { player_id, appearance }`가 주변에 퍼지고, 나중에 다가온 플레이어가 받는
+  `PlayerAppeared` 스냅샷에도 반영된다.
+- 공식 NPC와 외형 선택이 없는 직업(`CharacterAppearance::is_styled`가 거짓)은 거절한다.
+- 클라이언트: 미용사 6m 안의 의자에 앉으면 `SalonDialog`가 열린다(사용자 결정: 미용사 클릭으로는 열지 않는다).
+  끌어 옮기는 패널이고 화면을 가리지 않는다. 손님 의자 둘은 거울이 걸린 칸막이 벽을 본다. 선택 부분은 생성 화면과 같은
+  `AppearanceFields`다. 얼굴은 불러온 모델에 들어 있어서, 얼굴이 바뀌면 `PlayerModel`을 다시 만든다.
+- 미용사 동작(agent-client): 들어온 손님에게 거울 앞 의자에 앉으라고 안내한다. 손님이 앉으면 의자 뒤로 가서 서고
+  (의자 방향 기준 0.8m 뒤, `salon_entry`) 어떻게 바꿀지 한 번 묻는다. 손님이 일어나면 외형을 바꿨을 때는 칭찬을,
+  바꾸지 않았을 때는 다시 오라는 인사를 한다(`salon_farewells`).
+  말은 정해진 문구가 아니라 지침에 따라 직접 한다.
+- 창은 기본으로 화면 오른쪽 아래에 열린다. 앉은 캐릭터가 화면 가운데, 거울이 그 왼쪽 위에 오기 때문이다.
+- NPC 레지스트리에 `face` 열을 두었다. 미용사는 세 번째 여성 얼굴과 긴 웨이브 헤어다.
+- 건물·포장·물건은 런타임 월드 데이터라 git에 없다.
 
 `VisibleEquipment`에는 `head`, `shirt`, `chest`, `hands`, `pants`, `boots`를
 추가한다. 서버의 `read_visible_equipment`와 `PREVIEW_EQUIP_SLOTS`를 함께 확장해야
