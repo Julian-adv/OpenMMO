@@ -700,6 +700,10 @@ impl super::GameState {
             .spend_satiation(player_id, onlinerpg_shared::hunger::SHOUT_SATIATION_COST)
             .await
         {
+            self.shout_cooldowns
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .cancel(player_id);
             self.send_system_message(player_id, "Shout: you are too hungry to shout.")
                 .await;
             return;

@@ -1964,13 +1964,15 @@ async fn a_starving_player_cannot_shout() {
     let auth = make_test_auth("shout_starving");
     let (speaker, mut rx) = add_hungry_player(&game_state, "speaker", 0).await;
 
-    game_state
-        .send_chat_message(&speaker, "!help".to_string(), &auth)
-        .await;
-    assert!(matches!(
-        rx.try_recv(),
-        Ok(ServerMessage::SystemMessage { message, .. }) if message.contains("hungry")
-    ));
+    for _ in 0..2 {
+        game_state
+            .send_chat_message(&speaker, "!help".to_string(), &auth)
+            .await;
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ServerMessage::SystemMessage { message, .. }) if message.contains("hungry")
+        ));
+    }
     assert!(rx.try_recv().is_err());
 }
 

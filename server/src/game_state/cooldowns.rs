@@ -19,6 +19,11 @@ impl<K: Hash + Eq> Cooldowns<K> {
         self.0.clear();
     }
 
+    /// Undoes a start whose action then fell through.
+    pub(super) fn cancel(&mut self, key: &K) {
+        self.0.remove(key);
+    }
+
     /// Starts the cooldown and returns true when `key` may act now.
     pub(super) fn try_start(&mut self, key: K, cooldown: Duration, now: Instant) -> bool {
         if self.0.get(&key).is_some_and(|until| now < *until) {
