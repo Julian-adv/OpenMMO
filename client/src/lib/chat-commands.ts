@@ -169,6 +169,7 @@ const COMMANDS: Record<string, Command> = {
       })
     },
   },
+  '/join_dance': { desc: 'command.help.join_dance' },
   // Debug clips are resolved locally from animation packs.
   '/anim': {
     desc: 'command.help.anim',

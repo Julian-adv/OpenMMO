@@ -304,6 +304,7 @@ impl SharedState {
             // Cosmetic: only the browser's footprint trail reads it.
             | ServerMessage::PlayerWetToggled { .. }
             | ServerMessage::PlayerPetrifiedToggled { .. }
+            | ServerMessage::PlayerDanceSync { .. }
             | ServerMessage::PlayerTradeRequestResult { .. }
             | ServerMessage::PlayerTradeUpdate { .. } => EventUrgency::Noise,
             ServerMessage::PlayerTradeRequested { .. }
@@ -1644,6 +1645,8 @@ impl SharedState {
             // event in its own right.
             ServerMessage::TradeBusy { .. } => return urgency,
             ServerMessage::PartyPositions { .. } => return urgency,
+            // Only a browser seeks a clip to the beat.
+            ServerMessage::PlayerDanceSync { .. } => return urgency,
             // In-flight fishing beats: the reflex layer above already
             // answered them; the LLM only needs the FishingEnded outcome.
             ServerMessage::FishingCasted { .. }

@@ -194,6 +194,7 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
 
 pub(crate) mod ambient_spawn;
 mod chat;
+mod dance;
 pub(crate) use chat::{parse_admin_command, parse_notice_command, GOD_ON_MESSAGE};
 mod auto_attack;
 mod combat;
@@ -388,6 +389,9 @@ pub struct GameState {
     /// `elapsed_secs` sent to players entering earshot mid-performance;
     /// cleared with the `MUSIC_EMOTE` interaction.
     music_performances: Arc<RwLock<HashMap<PlayerId, (String, Instant)>>>,
+    /// When each looping emote's beat started; a join copies the dancer's.
+    dance_beats: Arc<RwLock<dance::DanceBeats>>,
+    dance_join_limits: Arc<std::sync::Mutex<HashMap<PlayerId, crate::rate_limit::RateLimiter>>>,
     live_instrument_players: Arc<RwLock<HashSet<PlayerId>>>,
     /// Mirrors `live_instrument_players.len()` so move packets skip the lock.
     live_instruments_active: Arc<std::sync::atomic::AtomicUsize>,
@@ -799,6 +803,8 @@ impl GameState {
             player_spatial_cells: Arc::new(RwLock::new(SpatialIndex::default())),
             monsters: Arc::new(RwLock::new(monster::MonsterRegistry::default())),
             music_performances: Arc::new(RwLock::new(HashMap::new())),
+            dance_beats: Arc::new(RwLock::new(Default::default())),
+            dance_join_limits: Arc::new(std::sync::Mutex::new(HashMap::new())),
             live_instrument_players: Arc::new(RwLock::new(HashSet::new())),
             live_instruments_active: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
             broadcast_tx,

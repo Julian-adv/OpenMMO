@@ -862,6 +862,11 @@ impl super::GameState {
         self.forget_goal_movement(player_id).await;
         self.player_action_versions.write().await.remove(player_id);
         self.music_performances.write().await.remove(player_id);
+        self.end_dance_beat(player_id).await;
+        self.dance_join_limits
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(player_id);
         self.remove_live_instrument(player_id).await;
         if !self.stall_owner_is_offline(player_id).await {
             self.remove_player_stall(player_id).await;
@@ -990,6 +995,7 @@ impl super::GameState {
         drop(movement.regions);
         self.update_bed_rest(&moved_player).await;
         self.music_performances.write().await.remove(player_id);
+        self.end_dance_beat(player_id).await;
         let left_strum =
             movement.player.object_type.as_deref() == Some(onlinerpg_shared::messages::MUSIC_EMOTE);
         if movement.player.object_type.is_some() {
@@ -1281,6 +1287,7 @@ impl super::GameState {
         };
 
         drop(movement.regions);
+        self.end_dance_beat(player_id).await;
         info!("Player {} ({}) respawned", player.name, player.id);
         let update_msg = ServerMessage::PlayerRespawned {
             player: player.clone(),
@@ -1333,11 +1340,21 @@ impl super::GameState {
             self.delay_mana_regeneration(player_id).await;
             player.health = (player.max_health * hp_percent / 100).max(1);
             self.combat_audit.health(0, player, "revive");
+            // Viewers re-apply the respawned pose, so a dance must go first.
+            if player
+                .object_type
+                .as_deref()
+                .is_some_and(super::dance::is_looping_emote)
+            {
+                player.object_type = None;
+                player.object_id = None;
+            }
             player.clone()
         };
         info!("Player {} ({}) revived in place", revived.name, revived.id);
         self.mark_dirty(player_id).await;
         self.mark_party_vitals_dirty(player_id).await;
+        self.end_dance_beat(player_id).await;
         let (position, floor_level) = (revived.position, revived.floor_level);
         self.publish_nearby(
             &position,

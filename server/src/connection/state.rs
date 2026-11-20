@@ -1,4 +1,5 @@
 use crate::game_state::KickNotice;
+use crate::rate_limit::RateLimiter;
 use crate::types::{CharacterAttributes, CharacterClass, ClientKind, PlayerId, ServerMessage};
 use bytes::Bytes;
 use onlinerpg_shared::furniture_shop::FurnitureTip;
@@ -9,36 +10,6 @@ use tracing::warn;
 
 const INSTRUMENT_BATCHES_PER_SEC: f32 = 4.0;
 const INSTRUMENT_BATCH_BURST: f32 = 4.0;
-
-pub(super) struct InstrumentBatchLimiter {
-    tokens: f32,
-    last: Instant,
-}
-
-impl InstrumentBatchLimiter {
-    pub(super) fn new() -> Self {
-        Self {
-            tokens: INSTRUMENT_BATCH_BURST,
-            last: Instant::now(),
-        }
-    }
-
-    pub(super) fn allow(&mut self) -> bool {
-        self.allow_at(Instant::now())
-    }
-
-    fn allow_at(&mut self, now: Instant) -> bool {
-        let elapsed = now.saturating_duration_since(self.last).as_secs_f32();
-        self.tokens =
-            (self.tokens + elapsed * INSTRUMENT_BATCHES_PER_SEC).min(INSTRUMENT_BATCH_BURST);
-        self.last = now;
-        if self.tokens < 1.0 {
-            return false;
-        }
-        self.tokens -= 1.0;
-        true
-    }
-}
 
 pub(super) struct ConnectionState {
     /// Address the client is held accountable for; see `resolve_client_ip`.
@@ -81,7 +52,7 @@ pub(super) struct ConnectionState {
     /// as long as the connection, which is what saves the store from having
     /// to expire anything.
     pub(super) cape_upload_token: Option<String>,
-    pub(super) instrument_batch_limiter: InstrumentBatchLimiter,
+    pub(super) instrument_batch_limiter: RateLimiter,
 }
 
 /// Positions snapshot requests inside this window are dropped. Steady-state
@@ -133,7 +104,10 @@ impl ConnectionState {
             last_furniture_tip: Default::default(),
             env_reported: false,
             cape_upload_token: None,
-            instrument_batch_limiter: InstrumentBatchLimiter::new(),
+            instrument_batch_limiter: RateLimiter::new(
+                INSTRUMENT_BATCHES_PER_SEC,
+                INSTRUMENT_BATCH_BURST,
+            ),
         }
     }
 

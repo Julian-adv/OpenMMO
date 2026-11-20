@@ -17,6 +17,7 @@
   import GameSceneTeleportLayer from './GameSceneTeleportLayer.svelte'
   import GameSceneGroundEruptionLayer from './GameSceneGroundEruptionLayer.svelte'
   import { teleportHiddenPlayers } from '../../stores/teleportEffectStore'
+  import { danceAnchors } from '../../stores/danceBeatStore'
   import type { EnchantSuccess } from '../../stores/enchantSuccessStore'
   import type { EnchantEffectAnchor } from '../../utils/playerEffectAnchors'
   import {
@@ -797,6 +798,7 @@
       catchPresentation={localCatch}
       interactionAnim={effectiveInteractionAnim}
       interactionCounter={effectiveInteractionCounter}
+      danceAnchorMs={danceAnchors.get(currentPlayer.id)}
       interactOffsetY={currentPlayerState.interactOffsetY}
       attackCounter={currentPlayerState.attackCounter}
       hitCounter={currentPlayer.hitCounter}
@@ -869,6 +871,7 @@
             : remotePlayer.interactionAnim}
           catchPresentation={visible ? caught : undefined}
           interactionCounter={remotePlayer.interactionCounter}
+          danceAnchorMs={danceAnchors.get(player.id)}
           interactOffsetY={remotePlayer.interactOffsetY}
           attackCounter={remotePlayer.attackCounter}
           hitCounter={remotePlayerManager.hitCounters.get(player.id)}

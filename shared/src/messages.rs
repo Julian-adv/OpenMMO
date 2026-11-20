@@ -445,6 +445,16 @@ pub const LOOPING_EMOTES: &[&str] = &[
     "weight_shift",
 ];
 
+/// Looping dances a nearby player may join with [`ClientMessage::JoinDance`].
+/// Poses are left out.
+pub const JOINABLE_DANCES: &[&str] = &["twist", "macarena", "chicken"];
+/// How far from the dancer a joiner may stand when asking, in metres.
+pub const JOIN_DANCE_RANGE_M: f32 = 5.0;
+/// Largest height difference between joiner and dancer, in metres.
+pub const JOIN_DANCE_MAX_RISE_M: f32 = 2.0;
+/// Dancers one dance can hold, the first one included.
+pub const MAX_DANCE_GROUP: usize = 8;
+
 /// `message` is `prefix` as a whole slash-command word; returns the trimmed
 /// remainder. Shared because the agent-client types the commands this parses —
 /// the two sides must agree on what counts as the command word.
@@ -694,6 +704,13 @@ pub enum ClientMessage {
         events: Vec<InstrumentNoteEvent>,
     },
     StopInteraction,
+    /// Dance alongside `target_id`, who must be dancing one of
+    /// [`JOINABLE_DANCES`] within [`JOIN_DANCE_RANGE_M`]. Answered with the
+    /// joiner's `PlayerInteractionChanged` and `PlayerDanceSync`, or a
+    /// localized `SystemMessage` refusal.
+    JoinDance {
+        target_id: PlayerId,
+    },
     Heartbeat,
     PlaceHouse {
         instance_id: u64,
@@ -1237,6 +1254,7 @@ impl ClientMessage {
             | SendMail { .. }
             | StartInstrument
             | InstrumentNotes { .. }
+            | JoinDance { .. }
             | PlaceHouse { .. }
             | RemoveHouse { .. }
             | ToggleDoor { .. }
@@ -2091,6 +2109,14 @@ pub enum ServerMessage {
     PlayerInstrumentStarted {
         player_id: PlayerId,
     },
+    /// Seconds into a looping emote (`LOOPING_EMOTES`); viewers seek the clip
+    /// to `elapsed_secs` modulo its length. Follows the
+    /// `PlayerInteractionChanged` that starts the loop. `f64` so snapshot
+    /// republishes do not lose time to rounding.
+    PlayerDanceSync {
+        player_id: PlayerId,
+        elapsed_secs: f64,
+    },
     PlayerInstrumentNotes {
         player_id: PlayerId,
         position: Position,
@@ -2746,6 +2772,7 @@ impl ServerMessage {
             | Self::PlayerInteractionChanged { .. }
             | Self::PlayerMusicStarted { .. }
             | Self::PlayerInstrumentStarted { .. }
+            | Self::PlayerDanceSync { .. }
             | Self::HouseSpawned { .. }
             | Self::HouseUpdated { .. }
             | Self::HouseRemoved { .. }

@@ -25,6 +25,7 @@ mod metrics;
 mod monster_defs;
 mod npc_defs;
 mod npc_schedule;
+mod rate_limit;
 mod road_index;
 mod semicolon_list;
 mod terrain;
