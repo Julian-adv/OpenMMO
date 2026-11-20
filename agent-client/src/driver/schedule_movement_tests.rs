@@ -537,7 +537,37 @@ async fn schedule_completion_requires_the_target_floor_even_when_nearby() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_partial_intermediate_segment_does_not_complete_the_schedule() {
+async fn a_partial_intermediate_segment_that_got_closer_is_walked_on_from() {
+    let (state, mut rx) = walker();
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [70.5, 0.0, 0.5],
+            ..Default::default()
+        },
+    );
+    let first = next_goal(&mut rx, 48.5).await;
+    state
+        .lock()
+        .await
+        .push_event(progress(first, 48.1, MoveStatus::Partial));
+    let second = next_goal(&mut rx, 70.5).await;
+    state
+        .lock()
+        .await
+        .push_event(progress(second, 70.0, MoveStatus::Arrived));
+    timeout(Duration::from_secs(1), task)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(ClientMessage::PlayerFace { .. })
+    ));
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_partial_intermediate_segment_that_got_no_closer_ends_the_move() {
     let (state, mut rx) = walker();
     let task = spawn_move(
         &state,
@@ -550,7 +580,7 @@ async fn a_partial_intermediate_segment_does_not_complete_the_schedule() {
     state
         .lock()
         .await
-        .push_event(progress(id, 48.1, MoveStatus::Partial));
+        .push_event(progress(id, 1.0, MoveStatus::Partial));
     timeout(Duration::from_secs(1), task)
         .await
         .unwrap()

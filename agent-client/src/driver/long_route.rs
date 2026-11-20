@@ -7,6 +7,8 @@ use std::collections::{BinaryHeap, HashMap, HashSet};
 use onlinerpg_shared::pathfinding::{self, PassabilityCache, DIRS};
 use onlinerpg_shared::{EVENT_DELIVERY_RADIUS, MAX_MOVE_TARGET_DISTANCE};
 
+use crate::state::walkable_near;
+
 pub(super) const MAX_LEG: f32 = MAX_MOVE_TARGET_DISTANCE * 0.8;
 const SECTOR: i32 = 8;
 const CELLS: usize = (SECTOR * SECTOR) as usize;
@@ -54,7 +56,8 @@ impl LongRoute {
         {
             return Some(toward(from, to));
         }
-        let Some(route) = self.plan(cache, from, to) else {
+        let (x, z) = walkable_near(cache, to.0, to.1, 0);
+        let Some(route) = self.plan(cache, from, (x, z)) else {
             self.unreachable = true;
             return None;
         };

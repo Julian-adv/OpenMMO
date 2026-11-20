@@ -136,3 +136,14 @@ fn a_failed_leg_is_not_offered_again() {
     let second = route.leg(&cache, (0.5, 0.5), (300.5, 0.5)).unwrap();
     assert_ne!(sector_of(first), sector_of(second));
 }
+
+#[test]
+fn a_goal_sealed_in_its_own_cell_is_approached_from_beside_it() {
+    let mut all = edges(40, -6, 52, 6, &[]);
+    all.extend(edges(56, 0, 57, 1, &[]));
+    let (from, to) = ((0.5, 0.5), (56.2, 0.5));
+    let mut route = LongRoute::default();
+    let leg = route.leg(&cache_of(all.iter()), from, to).unwrap();
+    assert!(!(40.0..52.0).contains(&leg.0) || leg.1.abs() > 6.0);
+    assert!(arrives(&all, |_| cache_of(all.iter()), from, to, true));
+}

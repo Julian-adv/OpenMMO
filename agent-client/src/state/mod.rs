@@ -183,6 +183,7 @@ mod inventory;
 mod mail;
 pub use mail::refusal_text as mail_refusal_text;
 mod movement;
+pub(crate) use movement::walkable_near;
 mod music;
 mod notice_board;
 pub use notice_board::refusal_text as notice_board_refusal_text;

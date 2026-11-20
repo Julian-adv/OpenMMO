@@ -405,24 +405,9 @@ impl SharedState {
             .map(|p| (p.x, p.z, p.rotation_deg))
     }
 
-    /// A goal for walking toward `(x, z)`: the point itself, or — when its
-    /// cell is sealed (furniture swallows the cell a bed pose is authored
-    /// on) — the centre of the nearest open neighbouring cell.
     pub fn walkable_near(&self, x: f32, z: f32, floor: u8) -> (f32, f32) {
         let world = self.world_cache.read().unwrap();
-        let cache = world.passability_cache();
-        if !pathfinding::is_cell_sealed(cache, x, z, floor, None) {
-            return (x, z);
-        }
-        let (cx, cz) = (x.floor() + 0.5, z.floor() + 0.5);
-        let d2 = |(nx, nz): (f32, f32)| (nx - x).powi(2) + (nz - z).powi(2);
-        (-1..=1i32)
-            .flat_map(|dz| (-1..=1i32).map(move |dx| (dx, dz)))
-            .filter(|&d| d != (0, 0))
-            .map(|(dx, dz)| (cx + dx as f32, cz + dz as f32))
-            .filter(|&(nx, nz)| !pathfinding::is_cell_sealed(cache, nx, nz, floor, None))
-            .min_by(|&a, &b| d2(a).total_cmp(&d2(b)))
-            .unwrap_or((x, z))
+        walkable_near(world.passability_cache(), x, z, floor)
     }
 
     /// Whether a wall stands between us and a point, as the server judges
@@ -545,4 +530,21 @@ impl SharedState {
             rotation: to_target.rotation(),
         })
     }
+}
+
+/// A goal for walking toward `(x, z)`: the point itself, or the centre of the
+/// nearest open neighbouring cell when furniture seals its cell.
+pub(crate) fn walkable_near(cache: &PassabilityCache, x: f32, z: f32, floor: u8) -> (f32, f32) {
+    if !pathfinding::is_cell_sealed(cache, x, z, floor, None) {
+        return (x, z);
+    }
+    let (cx, cz) = (x.floor() + 0.5, z.floor() + 0.5);
+    let d2 = |(nx, nz): (f32, f32)| (nx - x).powi(2) + (nz - z).powi(2);
+    (-1..=1i32)
+        .flat_map(|dz| (-1..=1i32).map(move |dx| (dx, dz)))
+        .filter(|&d| d != (0, 0))
+        .map(|(dx, dz)| (cx + dx as f32, cz + dz as f32))
+        .filter(|&(nx, nz)| !pathfinding::is_cell_sealed(cache, nx, nz, floor, None))
+        .min_by(|&a, &b| d2(a).total_cmp(&d2(b)))
+        .unwrap_or((x, z))
 }
