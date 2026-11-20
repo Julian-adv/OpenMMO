@@ -1190,7 +1190,7 @@ export function handleServerMessage(
     case 'Recital': {
       if (data.logged) logSpokenLine(data.player_id, data.line)
       // Held until the next verse replaces it.
-      addChatBubble(data.player_id, data.line, RECITAL_BUBBLE_MS)
+      addChatBubble(data.player_id, data.line, { holdMs: RECITAL_BUBBLE_MS })
       break
     }
 
@@ -1214,7 +1214,7 @@ export function handleServerMessage(
       addChatMessage(
         shoutChatEntry(data.from, data.message, data.from_family ?? null)
       )
-      addChatBubble(data.player_id, data.message)
+      addChatBubble(data.player_id, data.message, { shout: true })
       break
 
     case 'PartyChatMessage':

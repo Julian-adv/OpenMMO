@@ -804,8 +804,7 @@
       rotation={currentPlayerState.rotation}
       movementMode={currentPlayerState.movementMode}
       {camera}
-      chatBubble={chatBubbles.get(currentPlayer.id)?.message}
-      chatBubbleAt={chatBubbles.get(currentPlayer.id)?.timestamp}
+      chatBubble={chatBubbles.get(currentPlayer.id)}
       characterClass={currentPlayer.characterClass}
       gender={currentPlayer.gender}
       appearance={currentPlayer.appearance}
@@ -876,8 +875,7 @@
           rotation={remotePlayer.rotation}
           movementMode={remotePlayer.movementMode}
           {camera}
-          chatBubble={chatBubbles.get(player.id)?.message}
-          chatBubbleAt={chatBubbles.get(player.id)?.timestamp}
+          chatBubble={chatBubbles.get(player.id)}
           characterClass={player.characterClass}
           gender={player.gender}
           appearance={player.appearance}

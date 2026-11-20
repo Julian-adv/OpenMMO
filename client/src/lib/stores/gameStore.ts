@@ -109,6 +109,7 @@ export interface ChatBubble {
   message: string
   timestamp: number
   duration: number
+  shout: boolean
 }
 
 export type ChatSender =
@@ -329,7 +330,7 @@ const MAX_BUBBLE_DURATION = 10000
 export const addChatBubble = (
   playerId: number,
   message: string,
-  holdMs?: number
+  { holdMs, shout = false }: { holdMs?: number; shout?: boolean } = {}
 ) => {
   gameStore.update((state) => {
     const newChatBubbles = new Map(state.chatBubbles)
@@ -344,6 +345,7 @@ export const addChatBubble = (
       message,
       timestamp: Date.now(),
       duration,
+      shout,
     })
     return { ...state, chatBubbles: newChatBubbles }
   })

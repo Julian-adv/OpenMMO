@@ -225,7 +225,11 @@
   import { TorchFireParticles } from '../effects/fire-particles'
   import ChatBubble from './ChatBubble.svelte'
   import { DamageTextEmitter } from '../effects/damage-text-pool'
-  import type { PlayerDamageInfo, PlayerGoldInfo } from '../stores/gameStore'
+  import type {
+    ChatBubble as ChatBubbleData,
+    PlayerDamageInfo,
+    PlayerGoldInfo,
+  } from '../stores/gameStore'
   import {
     addChatMessage,
     hoveredPlayerId,
@@ -262,8 +266,7 @@
     rotation: number
     movementMode?: MovementMode
     camera: THREE.Camera | undefined
-    chatBubble?: string
-    chatBubbleAt?: number
+    chatBubble?: ChatBubbleData
     characterClass: CharacterClass
     appearance?: CharacterAppearance
     gender: Gender
@@ -328,7 +331,6 @@
     movementMode,
     camera,
     chatBubble,
-    chatBubbleAt,
     characterClass,
     gender,
     appearance,
@@ -1638,7 +1640,7 @@
 
   /** A new chat message while seated plays the talk clip right away. */
   $effect(() => {
-    if (chatBubbleAt === undefined) return
+    if (chatBubble?.timestamp === undefined) return
     untrack(() => {
       if (
         playerState !== 'interact' ||
@@ -2462,6 +2464,11 @@
 
   <!-- Chat bubble (appears above player when they send a message) -->
   {#if chatBubble}
-    <ChatBubble {position} {camera} message={chatBubble} />
+    <ChatBubble
+      {position}
+      {camera}
+      message={chatBubble.message}
+      shout={chatBubble.shout}
+    />
   {/if}
 </T.Group>

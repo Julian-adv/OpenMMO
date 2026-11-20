@@ -4,14 +4,16 @@
   import { truncateGraphemes } from '../utils/textWrap'
   import { billboardScale, billboardZoomT } from '../utils/billboardScale'
   import { bubbleLayer } from '../stores/bubbleLayerStore'
+  import { speechBurstDrop, speechBurstPath } from '../utils/speechBurst'
 
   interface Props {
     position: THREE.Vector3
     camera: THREE.Camera | undefined
     message: string
+    shout?: boolean
   }
 
-  let { position, camera, message }: Props = $props()
+  let { position, camera, message, shout = false }: Props = $props()
 
   const { size, renderStage } = useThrelte()
 
@@ -34,7 +36,9 @@
   let lastX = NaN
   let lastY = NaN
 
-  const tailH = $derived(Math.round(TAIL * scale))
+  const tailH = $derived(
+    Math.round(shout ? speechBurstDrop(boxH, scale) : TAIL * scale)
+  )
 
   const displayText = $derived.by(() => {
     const truncated = truncateGraphemes(message, MAX_DISPLAY_CHARS)
@@ -105,8 +109,10 @@
   )
 </script>
 
-<div class="bubble" bind:this={el} style:--s={scale}>
-  <svg class="shape"><path d={shapePath} /></svg>
+<div class="bubble" class:shout bind:this={el} style:--s={scale}>
+  <svg class="shape"
+    ><path d={shout ? speechBurstPath(boxW, boxH, scale) : shapePath} /></svg
+  >
   <div class="box" bind:this={boxEl}>{displayText}</div>
 </div>
 
@@ -130,6 +136,16 @@
     fill: rgba(0, 0, 0, 0.55);
     stroke: #fff;
     stroke-width: 1;
+  }
+
+  .shout .shape {
+    stroke: #ee9282;
+    stroke-width: 1.5;
+    stroke-linejoin: round;
+  }
+
+  .shout .box {
+    color: #f2b3a8;
   }
 
   .box {
