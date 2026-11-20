@@ -139,13 +139,13 @@
   }
 
   .shout .shape {
-    stroke: #ee9282;
+    stroke: var(--shout-accent);
     stroke-width: 1.5;
     stroke-linejoin: round;
   }
 
   .shout .box {
-    color: #f2b3a8;
+    color: var(--shout-text);
   }
 
   .box {

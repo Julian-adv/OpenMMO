@@ -920,16 +920,16 @@
   }
 
   .message.shout {
-    color: #f2b3a8;
+    color: var(--shout-text);
   }
 
   .message.shout .name {
-    color: #ee9282;
+    color: var(--shout-accent);
     font-weight: 600;
   }
 
   .shout-tag {
-    color: #ee9282;
+    color: var(--shout-accent);
     font-weight: 700;
   }
 
