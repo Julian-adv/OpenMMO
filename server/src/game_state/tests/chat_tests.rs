@@ -1933,6 +1933,48 @@ async fn housestyle_restyles_village_houses_in_reach_only() {
 }
 
 #[tokio::test]
+async fn a_second_shout_inside_the_cooldown_is_refused_for_free() {
+    let game_state = make_test_game_state("shout_cooldown");
+    let auth = make_test_auth("shout_cooldown");
+    let (speaker, mut rx) = add_hungry_player(&game_state, "speaker", 5).await;
+
+    for text in ["!one", "!two"] {
+        game_state
+            .send_chat_message(&speaker, text.to_string(), &auth)
+            .await;
+    }
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(ServerMessage::HungerUpdate { satiation: 4, .. })
+    ));
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(ServerMessage::ShoutMessage { .. })
+    ));
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(ServerMessage::SystemMessage { message, .. }) if message.contains("wait")
+    ));
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test]
+async fn a_starving_player_cannot_shout() {
+    let game_state = make_test_game_state("shout_starving");
+    let auth = make_test_auth("shout_starving");
+    let (speaker, mut rx) = add_hungry_player(&game_state, "speaker", 0).await;
+
+    game_state
+        .send_chat_message(&speaker, "!help".to_string(), &auth)
+        .await;
+    assert!(matches!(
+        rx.try_recv(),
+        Ok(ServerMessage::SystemMessage { message, .. }) if message.contains("hungry")
+    ));
+    assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test]
 async fn a_shout_carries_past_speech_range_and_costs_satiation() {
     let game_state = make_test_game_state("shout_range");
     let auth = make_test_auth("shout_range");
@@ -1967,15 +2009,6 @@ async fn a_shout_carries_past_speech_range_and_costs_satiation() {
         }
     }
     assert!(beyond_rx.try_recv().is_err());
-
-    game_state
-        .send_chat_message(&speaker, "!again".to_string(), &auth)
-        .await;
-    assert!(matches!(
-        speaker_rx.try_recv(),
-        Ok(ServerMessage::SystemMessage { .. })
-    ));
-    assert!(far_rx.try_recv().is_err());
 
     game_state
         .send_chat_message(&speaker, "!?".to_string(), &auth)

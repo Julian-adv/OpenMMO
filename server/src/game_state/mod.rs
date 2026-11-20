@@ -194,6 +194,7 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
 
 pub(crate) mod ambient_spawn;
 mod chat;
+mod cooldowns;
 pub(crate) use chat::{parse_admin_command, parse_notice_command, GOD_ON_MESSAGE};
 mod auto_attack;
 mod combat;
@@ -494,8 +495,9 @@ pub struct GameState {
     /// Open `swingDoor` objects by (region x, region z, placement id). A leaf:
     /// never held across an await or together with another lock.
     open_object_doors: Arc<std::sync::RwLock<HashSet<object_door::DoorKey>>>,
-    notice_cooldowns: Arc<std::sync::Mutex<notice_board::NoticeCooldowns>>,
-    mail_cooldowns: Arc<std::sync::Mutex<mail::MailCooldowns>>,
+    notice_cooldowns: Arc<std::sync::Mutex<cooldowns::Cooldowns<(i64, notice_board::Write)>>>,
+    mail_cooldowns: Arc<std::sync::Mutex<cooldowns::Cooldowns<i64>>>,
+    shout_cooldowns: Arc<std::sync::Mutex<cooldowns::Cooldowns<PlayerId>>>,
     notice_papers: Arc<std::sync::Mutex<notice_board::NoticePaperCache>>,
     /// The one altar-summoned raid allowed at a time; lost on restart.
     field_raid: Arc<tokio::sync::Mutex<Option<field_raid::FieldRaid>>>,
@@ -859,6 +861,7 @@ impl GameState {
             open_object_doors: Arc::new(std::sync::RwLock::new(HashSet::new())),
             notice_cooldowns: Arc::default(),
             mail_cooldowns: Arc::default(),
+            shout_cooldowns: Arc::default(),
             notice_papers: Arc::default(),
             field_raid: Arc::new(tokio::sync::Mutex::new(None)),
             field_boss_sites: Arc::new(std::sync::RwLock::new(Vec::new())),

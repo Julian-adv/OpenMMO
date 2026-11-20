@@ -9,36 +9,8 @@ use onlinerpg_shared::mail::{
     MAIL_SEND_COOLDOWN_SECS,
 };
 use onlinerpg_shared::ServerMessage;
-use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tracing::{error, info};
-
-#[derive(Default)]
-pub(super) struct MailCooldowns(HashMap<i64, Instant>);
-
-impl MailCooldowns {
-    #[cfg(test)]
-    pub(super) fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    fn try_start(&mut self, character_id: i64, now: Instant) -> bool {
-        let cooldown = Duration::from_secs(MAIL_SEND_COOLDOWN_SECS);
-        if self
-            .0
-            .get(&character_id)
-            .is_some_and(|last| now.duration_since(*last) < cooldown)
-        {
-            return false;
-        }
-        if self.0.len() >= 4096 {
-            self.0
-                .retain(|_, last| now.duration_since(*last) < cooldown);
-        }
-        self.0.insert(character_id, now);
-        true
-    }
-}
 
 impl GameState {
     async fn refuse_mail(&self, player_id: &PlayerId, reason: MailRefusal) {
@@ -190,7 +162,11 @@ impl GameState {
             .mail_cooldowns
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .try_start(sender_id, Instant::now());
+            .try_start(
+                sender_id,
+                Duration::from_secs(MAIL_SEND_COOLDOWN_SECS),
+                Instant::now(),
+            );
         if !allowed {
             return self.refuse_mail(player_id, MailRefusal::TooFast).await;
         }

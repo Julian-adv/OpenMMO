@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 pub const SATIATION_MAX: u32 = 1000;
 pub const SHOUT_SATIATION_COST: u32 = 1;
+pub const SHOUT_COOLDOWN_SECS: u64 = 5;
 /// New characters start comfortably fed.
 pub const SATIATION_START: u32 = 700;
 

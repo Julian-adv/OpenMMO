@@ -31,7 +31,7 @@ const PEEK_RANGE_M: f32 = 80.0;
 pub(super) struct NoticePaperCache(HashMap<BoardKey, Arc<Vec<StoredPaper>>>);
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
-enum Write {
+pub(super) enum Write {
     Post,
     Comment,
 }
@@ -49,33 +49,6 @@ impl Write {
             Self::Post => "post",
             Self::Comment => "comment",
         }
-    }
-}
-
-#[derive(Default)]
-pub(super) struct NoticeCooldowns(HashMap<(i64, Write), Instant>);
-
-impl NoticeCooldowns {
-    #[cfg(test)]
-    pub(super) fn clear(&mut self) {
-        self.0.clear();
-    }
-
-    /// Starts the cooldown and returns true when `character_id` may write now.
-    fn try_start(&mut self, character_id: i64, write: Write, now: Instant) -> bool {
-        let open = |(_, w): &(i64, Write), last: &Instant| now.duration_since(*last) < w.cooldown();
-        if self
-            .0
-            .get_key_value(&(character_id, write))
-            .is_some_and(|(key, last)| open(key, last))
-        {
-            return false;
-        }
-        if self.0.len() >= 4096 {
-            self.0.retain(|key, last| open(key, last));
-        }
-        self.0.insert((character_id, write), now);
-        true
     }
 }
 
@@ -374,7 +347,7 @@ impl GameState {
             .notice_cooldowns
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .try_start(character_id, write, Instant::now());
+            .try_start((character_id, write), write.cooldown(), Instant::now());
         if !allowed {
             self.refuse_notice(player_id, NoticeBoardRefusal::TooFast)
                 .await;
@@ -706,25 +679,5 @@ impl GameState {
         })
         .await;
         self.reply_post(player_id, board_ref, result).await;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn cooldown_blocks_until_it_elapses() {
-        let mut cooldowns = NoticeCooldowns::default();
-        let start = Instant::now();
-        assert!(cooldowns.try_start(1, Write::Post, start));
-        assert!(!cooldowns.try_start(1, Write::Post, start + Duration::from_secs(1)));
-        assert!(cooldowns.try_start(1, Write::Comment, start));
-        assert!(cooldowns.try_start(2, Write::Post, start));
-        assert!(cooldowns.try_start(
-            1,
-            Write::Post,
-            start + Duration::from_secs(NOTICE_POST_COOLDOWN_SECS)
-        ));
     }
 }

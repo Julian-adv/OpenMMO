@@ -658,8 +658,8 @@ impl super::GameState {
         self.send_speech(player_id, len, msg).await;
     }
 
-    /// `!<message>` — costs satiation and carries `SHOUT_RADIUS`, through
-    /// walls and storeys. Mute and block rules are speech's.
+    /// `!<message>` — costs satiation, waits out `SHOUT_COOLDOWN_SECS` and carries `SHOUT_RADIUS`,
+    /// through walls and storeys. Mute and block rules are speech's.
     async fn shout(&self, player_id: &PlayerId, message: String) {
         let speaker = {
             let players = self.players.read().await;
@@ -677,6 +677,23 @@ impl super::GameState {
             return;
         };
         if self.refuse_if_muted(player_id, &from, "chat").await {
+            return;
+        }
+        let cooled = self
+            .shout_cooldowns
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .try_start(
+                *player_id,
+                Duration::from_secs(onlinerpg_shared::hunger::SHOUT_COOLDOWN_SECS),
+                Instant::now(),
+            );
+        if !cooled {
+            self.send_system_message(
+                player_id,
+                "Shout: wait a few seconds before shouting again.",
+            )
+            .await;
             return;
         }
         if !self
