@@ -813,12 +813,16 @@ describe.skipIf(
       hands: 'iron_gauntlets',
       head: 'iron_helmet',
     })
-    for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet']) {
+    expect(visible(modelRoot, 'top_guard')).toBe(true)
+    expect(visible(modelRoot, 'top_plate')).toBe(false)
+    expect(visible(modelRoot, 'top_rogue')).toBe(false)
+    for (const part of ['pants', 'boots', 'gloves', 'helmet']) {
       expect(visible(modelRoot, `${part}_plate`)).toBe(true)
       expect(visible(modelRoot, `${part}_rogue`)).toBe(false)
     }
 
     await applyCharacterArmor(modelRoot, {})
+    expect(visible(modelRoot, 'top_guard')).toBe(false)
     for (const part of ['top', 'pants', 'boots', 'gloves', 'helmet'])
       expect(visible(modelRoot, `${part}_plate`)).toBe(false)
     expect(visible(modelRoot, 'hair_crop')).toBe(true)

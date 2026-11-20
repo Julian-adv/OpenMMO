@@ -487,7 +487,7 @@ def add_shoe(mesh, side, foot):
 
 def build():
     body, raw = read_glb(BODY)
-    doc, template = read_glb(ITEM / "fitted_v5/boots_female_knight.glb")
+    doc, template = read_glb(BODY.with_name("heel-ground-samples.glb"))
     deform, pose = heel_pose(body, raw)
     body_hash = hashlib.sha256(BODY.read_bytes()).hexdigest()
     doc["scenes"][0]["extras"]["heel_pose"] = dict(pose, body_sha256=body_hash)

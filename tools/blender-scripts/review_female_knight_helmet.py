@@ -25,7 +25,7 @@ def add_part(path):
         else: bpy.data.objects.remove(obj, do_unlink=True)
 
 add_part(OUT/'helmet_female_knight.glb')
-top = ROOT/'assets/items/female_knight_top/tripo_v1/fitted_v3'
+top = ROOT/'assets/items/female_knight_top/tripo_v1/fitted_v4'
 add_part(top/'top_female_knight.glb')
 body = bpy.data.objects['female_body']
 hidden = json.loads((top/'body-occlusion.json').read_text())['hide_triangle_indices']

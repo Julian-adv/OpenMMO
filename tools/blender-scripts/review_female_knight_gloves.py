@@ -40,7 +40,7 @@ def add_part(path):
 
 
 gloves = add_part(OUT / ('gloves_female_knight.glb' if PAIR else 'glove_right.glb'))
-top_dir = ROOT / 'assets/items/female_knight_top/tripo_v1/fitted_v3'
+top_dir = ROOT / 'assets/items/female_knight_top/tripo_v1/fitted_v4'
 tops = add_part(top_dir / 'top_female_knight.glb')
 top_hidden = json.loads((OUT / 'top-occlusion.json').read_text())['hide_triangle_indices']
 for top in tops:

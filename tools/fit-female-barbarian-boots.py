@@ -24,7 +24,7 @@ BODY = ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb'
 OUTPUT = DIRECTORY / 'fitted_v3'
 OUTPUT.mkdir(exist_ok=True)
 REPORT = ROOT / 'doc/assets/modular-female-barbarian-boots-fitting-v3.json'
-KNIGHT_FITTING = ROOT / 'assets/items/female_knight_boots/fitted_v5/fitting.json'
+HEEL_GROUND = ROOT / 'assets/modular_human_female_01/rig_v1/heel-ground.json'
 SOLE_GAP = .0027
 RING_CLEARANCE = .0054
 MAX_RING_THICKNESS = .0108
@@ -490,7 +490,7 @@ for i in np.flatnonzero(footbed):
     if hit is not None:
         targets[i, 1] = points[i, 1] - .018 + hit - SOLE_GAP
         fixed[i] = True
-ground = -json.loads(KNIGHT_FITTING.read_text())['posed_floor_offset']
+ground = -json.loads(HEEL_GROUND.read_text())['posed_floor_offset']
 sole_bottom = lower & (normals[:, 1] < -.5) & (source[:, 1] < -.45) & (source[:, 0] < .1)
 targets[sole_bottom, 1] = ground
 fixed |= sole_bottom
@@ -982,7 +982,7 @@ report = {'date': '2026-10-15',
           'toe_profile': 'Quadratic toe lift and animation blend for a continuous, gradually increasing curve.',
           'instep_strap_lift_m': {'right': RIGHT_INSTEP_LIFT, 'left': 0},
           'instep_surface_offset_m': {'right': RIGHT_INSTEP_CLEARANCE, 'left': 0},
-          'ground_source': str(KNIGHT_FITTING.relative_to(ROOT)),
+          'ground_source': str(HEEL_GROUND.relative_to(ROOT)),
           'posed_ground': float(ground), 'heel_height_m': float(fitted[seat, 1].min() - ground),
           'clearance_m': {'sole': SOLE_GAP, 'rings': RING_CLEARANCE, 'straps': STRAP_CLEARANCE},
           'left_front_ring_clearance_m': LEFT_FRONT_RING_CLEARANCE,

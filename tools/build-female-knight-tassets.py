@@ -15,7 +15,6 @@ from outfits.knight_plate_surfaces import SurfaceMesh, atlas, STEEL, GUNMETAL, B
 ROOT = Path(__file__).resolve().parents[1]
 ITEM = ROOT / "assets/items/female_knight_bottom"
 OUT = ITEM / "reference_v1/fitted_v1"
-OLD = ITEM / "tripo_v1/fitted_v42"
 lin = np.linspace
 
 
@@ -504,16 +503,25 @@ def build(mesh, bones, thigh_bind):
 
 
 def main():
-    doc, binary = read_glb(OLD / "bottom_female_knight.glb")
-    names = [doc["nodes"][j]["name"] for j in doc["skins"][0]["joints"]]
-    mesh = SurfaceMesh()
-    mask = json.loads((OLD / "body-occlusion.json").read_text())
+    mask = json.loads((OUT / "body-occlusion.json").read_text())
     base, data = read_glb(ROOT / mask["body"])
+    skin = base["skins"][0]
+    bind = accessor(base, data, skin["inverseBindMatrices"])
+    names = [base["nodes"][j]["name"] for j in skin["joints"]]
+    mesh = SurfaceMesh()
     add_leather_underwear(mesh, base, data, mask, names)
     retained, panels = build(mesh, names, thigh_bind_transforms(base, data))
-    bind = accessor(doc, binary, doc["skins"][0]["inverseBindMatrices"])
+    part = "bottom_female_knight"
+    nodes = list(base["nodes"])
+    nodes[0] = dict(name=part, mesh=0, skin=0, extras={
+        "rig_id": "human_female_01_local_v1", "part_id": part, "fitting_version": 44,
+    })
+    doc = dict(
+        asset=dict(version="2.0", generator="build-female-knight-tassets.py"),
+        accessors=[], bufferViews=[], meshes=[dict(name=part)], nodes=nodes,
+        scene=base["scene"], scenes=base["scenes"], skins=[dict(skin)],
+    )
     data = bytearray()
-    doc.update(bufferViews=[], accessors=[])
     attrs = {
         k: add_accessor(
             doc,
@@ -549,11 +557,8 @@ def main():
         )
     ]
     doc["buffers"] = [dict(byteLength=len(data))]
-    doc["nodes"][0]["extras"]["fitting_version"] = 44
     OUT.mkdir(exist_ok=True, parents=True)
     write_glb(OUT / "bottom_female_knight.glb", doc, data)
-    mask["scope"] = "Replace the base underwear with its saddle leather counterpart while the tassets are worn."
-    (OUT / "body-occlusion.json").write_text(json.dumps(mask, indent=2) + "\n")
     (OUT / "fitting.json").write_text(
         json.dumps(dict(harness_triangles=retained, panels=panels), indent=2) + "\n"
     )

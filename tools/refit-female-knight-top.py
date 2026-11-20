@@ -11,7 +11,7 @@ from scipy.sparse.csgraph import connected_components
 from scipy.sparse.linalg import spsolve
 
 from lib.glb import read_glb, view_bytes, write_glb
-from lib.glb_accessors import accessor
+from lib.glb_accessors import accessor, add_accessor
 from outfits.plate_fitting import plate_roughness_map, similarity
 from outfits.rogue_layers import compact_weights
 
@@ -82,18 +82,15 @@ def lower_front_rim(position, normal):
 
 def main():
     source, raw = read_glb(ITEM / 'source/model_url.glb')
-    fitted, previous = read_glb(ITEM / 'fitted_v3/top_female_knight.glb')
+    base, body_raw = read_glb(ROOT / 'assets/modular_human_female_01/rig_v1/female-base.glb')
     src = source['meshes'][0]['primitives'][0]
-    dst = fitted['meshes'][0]['primitives'][0]
-    a, b = src['attributes'], dst['attributes']
-    for left, right in [(src['indices'], dst['indices']), (a['TEXCOORD_0'], b['TEXCOORD_0'])]:
-        np.testing.assert_array_equal(accessor(source, raw, left), accessor(fitted, previous, right))
+    a = src['attributes']
     points = accessor(source, raw, a['POSITION']).astype(float)
     normals = accessor(source, raw, a['NORMAL']).astype(float)
-    target = accessor(fitted, previous, b['POSITION'])
-    joints = accessor(fitted, previous, b['JOINTS_0'])
-    weights = accessor(fitted, previous, b['WEIGHTS_0'])
-    names = [fitted['nodes'][j]['name'] for j in fitted['skins'][0]['joints']]
+    with np.load(ITEM / 'fit-anchors.npz') as anchors:
+        target, target_normals, joints, weights = (anchors[k] for k in ('POSITION', 'NORMAL', 'JOINTS_0', 'WEIGHTS_0'))
+    skeleton = base['skins'][0]
+    names = [base['nodes'][j]['name'] for j in skeleton['joints']]
     faces = accessor(source, raw, src['indices']).reshape(-1, 3)
     uv = accessor(source, raw, a['TEXCOORD_0'])
     orm = source['materials'][0]['pbrMetallicRoughness']['metallicRoughnessTexture']['index']
@@ -111,7 +108,7 @@ def main():
     scales = []
     cuff = field[:, 3:].sum(axis=1, keepdims=True)
     position += cuff * target
-    normal += cuff * accessor(fitted, previous, b['NORMAL'])
+    normal += cuff * target_normals
     skin += cuff * original_skin
     for region, bone in enumerate(['Spine1', 'LeftArm', 'RightArm']):
         anchors = labels == region
@@ -124,43 +121,39 @@ def main():
     normal = unit(normal)
     selected, new_weights = compact_weights(skin.clip(0, 1))
     selected[new_weights == 0] = 0
-    binary = bytearray(previous)
-
-    def replace(index, data):
-        attr = fitted['accessors'][index]
-        view = fitted['bufferViews'][attr['bufferView']]
-        assert 'byteStride' not in view and not attr.get('byteOffset')
-        data = np.asarray(data, dtype=accessor(fitted, previous, index).dtype)
-        start = view.get('byteOffset', 0)
-        assert data.nbytes == view['byteLength']
-        binary[start:start + data.nbytes] = data.tobytes()
-        if 'min' in attr:
-            attr.update(min=data.min(0).tolist(), max=data.max(0).tolist())
-
     collar = lower_front_rim(position, normal)
-    replace(b['POSITION'], position)
-    replace(b['NORMAL'], normal)
-    replace(b['JOINTS_0'], selected)
-    replace(b['WEIGHTS_0'], new_weights)
-    # The renderer reconstructs the tangent frame from the unchanged UVs for the new surface.
-    del b['TANGENT']
-    fitted['materials'][0]['normalTexture']['scale'] = .50
-    material = fitted['materials'][0]['pbrMetallicRoughness']
-    orm_image = fitted['images'][fitted['textures'][material['metallicRoughnessTexture']['index']]['source']]
-    encoded = plate_roughness_map(view_bytes(fitted, previous, orm_image['bufferView']))
-    binary.extend(bytes(-len(binary) % 4))
-    view = fitted['bufferViews'][orm_image['bufferView']]
-    view.update(byteOffset=len(binary), byteLength=len(encoded))
-    binary.extend(encoded)
-    orm_image['mimeType'] = 'image/png'
-    fitted['buffers'][0]['byteLength'] = len(binary)
-    for node in fitted['nodes']:
-        if node.get('extras', {}).get('part_id') == 'top_female_knight':
-            node['extras']['fitting_version'] = 4
+    binary = bytearray()
+    part = 'top_female_knight'
+    fitted = dict(asset=source['asset'], scene=base['scene'], scenes=base['scenes'], nodes=list(base['nodes']),
+                  skins=[dict(skeleton)], accessors=[], bufferViews=[], meshes=[dict(name=part)],
+                  materials=source['materials'], textures=source['textures'], images=source['images'])
+    fitted['samplers'] = [dict(magFilter=9729, minFilter=9987)]
+    for texture in fitted['textures']:
+        texture['sampler'] = 0
+    fitted['nodes'][0] = dict(name=part, skin=0, mesh=0, extras=dict(rig_id='human_female_01_local_v1', part_id=part, fitting_version=4))
+    attributes = {key: add_accessor(fitted, binary, values, kind, component)
+                  for key, values, kind, component in [
+                      ('POSITION', position, 'VEC3', 5126), ('NORMAL', normal, 'VEC3', 5126),
+                      ('TEXCOORD_0', uv, 'VEC2', 5126), ('JOINTS_0', selected, 'VEC4', 5123),
+                      ('WEIGHTS_0', new_weights, 'VEC4', 5126)]}
+    indices = add_accessor(fitted, binary, faces.ravel(), 'SCALAR', 5123)
+    fitted['meshes'][0]['primitives'] = [dict(attributes=attributes, indices=indices, material=0)]
+    bind = accessor(base, body_raw, skeleton['inverseBindMatrices'])
+    fitted['skins'][0]['inverseBindMatrices'] = add_accessor(fitted, binary, bind, 'MAT4')
+    fitted['materials'][0]['normalTexture']['scale'] = 0.5
+    for texture in fitted['images']:
+        data = view_bytes(source, raw, texture['bufferView'])
+        if texture is image:
+            data = plate_roughness_map(data)
+            texture['mimeType'] = 'image/png'
+        binary.extend(bytes(-len(binary) % 4))
+        texture['bufferView'] = len(fitted['bufferViews'])
+        fitted['bufferViews'].append(dict(buffer=0, byteOffset=len(binary), byteLength=len(data)))
+        binary.extend(data)
+    fitted['buffers'] = [dict(byteLength=len(binary))]
     out = ITEM / 'fitted_v4'
     out.mkdir(exist_ok=True)
     write_glb(out / 'top_female_knight.glb', fitted, binary)
-    (out / 'body-occlusion.json').write_bytes((ITEM / 'fitted_v3/body-occlusion.json').read_bytes())
     edges = steel[:, [0, 1, 1, 2, 2, 0]].reshape(-1, 2)
     lengths = np.linalg.norm(points[edges[:, 0]] - points[edges[:, 1]], axis=1)
     expected = lengths * np.asarray(scales)[labels[edges[:, 0]]]

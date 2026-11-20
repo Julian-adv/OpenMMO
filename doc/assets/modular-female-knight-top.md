@@ -6,7 +6,7 @@
 
 원본의 금속성 텍스처와 메시 연결 관계로 흉갑·등판·목깃, 왼쪽 어깨·상완, 오른쪽 어깨·상완을 구분했다. 각 부위에 균일 배율 하나와 회전·이동 하나를 적용했다. 목깃 앞단 중앙은 18mm 낮췄고, 양옆으로 갈수록 낮추는 폭을 줄여 얕은 V자로 연결했다. 흉갑은 Spine1, 양쪽 견갑은 같은 쪽 Arm 본을 따른다. 가죽·천 이음새에서만 변환을 섞었다. 금속 거칠기를 높이고 노멀 맵 강도를 0.5로 줄여 은색 판금에 부드러운 반사가 맺히게 했다. 원본 UV와 삼각형 순서를 유지해 몸체·장갑 가림을 그대로 적용한다.
 
-소매 끝까지 원본에서 통째로 맞춘 첫 시안은 팔 피부가 입구를 최대 21.3mm 통과했다. 기존 v3 천 소맷단과 가중치를 다시 사용했다. 맨팔과 만나는 양쪽 입구 정점 20개를 9동작에서 각각 17번 측정했으며, 최소 여유는 14.3mm였다. 이 측정은 소매 입구에 한정한다.
+소매 끝까지 원본에서 통째로 맞춘 첫 시안은 팔 피부가 입구를 최대 21.3mm 통과했다. 착용 위치와 천 소맷단의 위치·노멀·가중치는 [피팅 기준점](../../assets/items/female_knight_top/tripo_v1/fit-anchors.npz)에 보관하며 골격은 여성 기준 몸체에서 읽는다. 맨팔과 만나는 양쪽 입구 정점 20개를 9동작에서 각각 17번 측정했으며, 최소 여유는 14.3mm였다. 이 측정은 소매 입구에 한정한다.
 
 - [착용 GLB](../../assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb) · [Blender 편집본](../../assets/items/female_knight_top/tripo_v1/fitted_v4/female-knight-top-fitted.blend) · [몸체 가림](../../assets/items/female_knight_top/tripo_v1/fitted_v4/body-occlusion.json)
 - 금속 2,130면의 모서리 길이를 균일 배율 적용 후 원본과 비교했다. 목깃 앞단의 영향을 받은 123면을 따로 기록했다. 목깃 수정 영역 밖 모서리의 최대 상대 오차는 0.003%다. 65본을 결합한 뒤 대기·걷기·달리기·점프·공격·앉기 등을 포함한 9동작 1,089자세에서 단단한 판의 길이 변화를 검사했다. [피팅 측정](modular-female-knight-top-fitting-v4.json) · [동작 측정](modular-female-knight-top-animation-v4.json)
@@ -19,7 +19,7 @@
 .venv/bin/python tools/refit-female-knight-top.py
 blender -b --python-exit-code 1 -P tools/blender-scripts/pack_female_knight_plate.py -- top
 node tools/prepare-female-knight.mjs --part top
-node tools/validate-female-knight-top-v2.mjs v4
+node tools/validate-female-knight-top-v2.mjs
 ```
 
 ## 출처·라이선스
@@ -41,8 +41,3 @@ node tools/validate-female-knight-top-v2.mjs v4
   [Blender](../../assets/items/female_knight_top/tripo_v1/source.blend),
   [메시 진단](../../assets/items/female_knight_top/tripo_v1/review.json)·[스크립트](../../assets/items/female_knight_top/tripo_v1/review_source.py).
 - 피팅·리깅은 로컬 작업이며 추가 비용은 없다.
-
-
-## 이전 피팅 [미사용]
-
-2026-10-12의 v3는 몸통과 팔을 국소 변형한 버전이다. v4는 여기서 여성 리그, 검증된 천 소맷단과 착용 위치를 참조한다. [v3 편집본](../../assets/items/female_knight_top/tripo_v1/fitted_v3/female-knight-top-fitted.blend) · [착용 화면](../images/characters/modular_human_female_01/female-knight-top-v3.png) · [소매 보정](modular-female-knight-top-fitting-v3.json) · [동작 검사](modular-female-knight-top-animation-v3.json) · [브라우저 검사](modular-female-knight-top-preview-v3.json)

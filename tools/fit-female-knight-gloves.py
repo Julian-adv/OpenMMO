@@ -290,10 +290,11 @@ def main():
     mask = {'body':str(BODY.relative_to(ROOT)), 'body_sha256':digest(BODY), 'mesh_index':0, 'primitive_index':0,
             'primitive_triangles':len(body[1]), 'source_triangles':sum(base['accessors'][pr['indices']]['count']//3 for pr in base['meshes'][0]['primitives']), 'hide_triangle_indices':np.flatnonzero(hide).tolist()}
     (OUT / 'body-occlusion.json').write_text(json.dumps(mask, indent=2)+'\n')
-    top_path = ROOT / 'assets/items/female_knight_top/tripo_v1/fitted_v3/top_female_knight.glb'
+    top_path = ROOT / 'assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb'
     top, top_raw = read_glb(top_path)
     top_primitive = top['meshes'][0]['primitives'][0]
-    top_points = accessor(top, top_raw, top_primitive['attributes']['POSITION'])
+    with np.load(top_path.parents[1] / 'fit-anchors.npz') as anchors:
+        top_points = anchors['POSITION']
     top_faces = accessor(top, top_raw, top_primitive['indices']).reshape(-1, 3)
     covered = np.zeros(len(top_points), dtype=bool)
     for side in sides:

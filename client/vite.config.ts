@@ -156,7 +156,7 @@ function modularCharacterPreview(): Plugin {
       import.meta.url
     ),
     female_shared_heel_boots: new URL(
-      '../assets/items/female_knight_boots/fitted_v5/boots_female_knight.glb',
+      '../assets/modular_human_female_01/rig_v1/heel-ground-samples.glb',
       import.meta.url
     ),
     female_knight_boots: new URL(

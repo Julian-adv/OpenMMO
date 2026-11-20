@@ -523,7 +523,8 @@ describe('female modular starter outfits', () => {
         const bard = item.worldModel?.startsWith('armor/bard_')
         const ceremony = item.worldModel?.startsWith('armor/ceremony_')
         const shopkeeper = item.worldModel?.startsWith('armor/shopkeeper_')
-        const guard = item.worldModel?.startsWith('armor/guard_')
+        const guard =
+          id === 'chain_mail' || item.worldModel?.startsWith('armor/guard_')
         const maid = item.worldModel?.startsWith('armor/maid_')
         const rogueStyle =
           item.worldModel?.startsWith('armor/rogue_') ||

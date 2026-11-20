@@ -74,7 +74,7 @@ try {
   mask.register('gloves', coverage)
   mask.setEquipped('gloves', true)
   assert.equal(body.geometry.index.count, bodyGeometry.index.count-coverage.hide_triangle_indices.length*3)
-  const top = bindModularPart(base.scene,(await load('assets/items/female_knight_top/tripo_v1/fitted_v3/top_female_knight.glb')).scene)[0]
+  const top = bindModularPart(base.scene,(await load('assets/items/female_knight_top/tripo_v1/fitted_v4/top_female_knight.glb')).scene)[0]
   const topGeometry = top.geometry
   const sleeves = JSON.parse(readFileSync(`${directory}/top-occlusion.json`))
   mask.register('sleeves', sleeves, top)

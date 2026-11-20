@@ -4,6 +4,7 @@ import { DEFAULT_MODULAR_OUTFIT, type ModularOutfit } from './modularCharacter'
 
 const ARMOR_STYLES = {
   chest: {
+    'armor/chain_mail.glb': 'guard',
     'armor/guard_top.glb': 'guard',
     'armor/tuxedo_top.glb': 'tuxedo',
     'armor/bard_top.glb': 'bard',

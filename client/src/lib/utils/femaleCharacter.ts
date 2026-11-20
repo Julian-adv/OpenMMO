@@ -494,7 +494,8 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
   if (model.startsWith('armor/bard_')) return 'bard'
   if (model.startsWith('armor/ceremony_')) return 'ceremony'
   if (model.startsWith('armor/shopkeeper_')) return 'shopkeeper'
-  if (model.startsWith('armor/guard_')) return 'guard'
+  if (model === 'armor/chain_mail.glb' || model.startsWith('armor/guard_'))
+    return 'guard'
   if (model.startsWith('armor/maid_')) return 'maid'
   if (model.startsWith('armor/pink_maid_')) return 'pink_maid'
   if (model.startsWith('armor/rogue_') || ROGUE_LEATHER_MODELS.has(model))

@@ -62,7 +62,7 @@
     "right": 0.0018000000000000002,
     "left": 0
   },
-  "ground_source": "assets/items/female_knight_boots/fitted_v5/fitting.json",
+  "ground_source": "assets/modular_human_female_01/rig_v1/heel-ground.json",
   "posed_ground": -0.030273308473303836,
   "heel_height_m": 0.06662116779037672,
   "meters_per_source_unit": 1.8,

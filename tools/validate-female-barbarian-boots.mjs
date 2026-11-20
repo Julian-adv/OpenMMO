@@ -139,7 +139,7 @@ try {
   const bareHeel = meanHeel()
   const lift = ground.apply()
   const referenceLift = JSON.parse(
-    readFileSync('assets/items/female_knight_boots/fitted_v5/fitting.json')
+    readFileSync('assets/modular_human_female_01/rig_v1/heel-ground.json')
   ).posed_floor_offset
   assert.ok(
     Math.abs(lift - referenceLift) < 1.8e-6,

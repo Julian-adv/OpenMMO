@@ -241,7 +241,7 @@ async function bakeBootsAndGrip(module, load) {
   const { bakeFemaleClips } = await module('/src/lib/utils/female-clip-bake.ts')
   const partNames = [...new Set([...female.FEMALE_PARTS, ...female.FEMALE_BOOTS_PARTS])]
   const [base, ...parts] = await Promise.all(['base', ...partNames].map(name => load(`${output}/${name}.glb`)))
-  const sharedGround = 'assets/items/female_knight_boots/fitted_v5/boots_female_knight.glb'
+  const sharedGround = 'assets/modular_human_female_01/rig_v1/heel-ground-samples.glb'
   record(sharedGround)
   parts.push(await load(sharedGround))
   partNames.push(female.SHARED_HEEL_GROUND)
