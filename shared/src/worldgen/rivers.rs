@@ -1017,8 +1017,7 @@ fn remove_polyline_self_overlaps(rivers: &mut [Polyline]) {
             }
             let mut first_visit: HashMap<(u32, u32), usize> = HashMap::with_capacity(n);
             let mut drain_range: Option<(usize, usize)> = None;
-            for i in 0..n {
-                let cell = poly.points[i];
+            for (i, &cell) in poly.points.iter().enumerate() {
                 if let Some(&j) = first_visit.get(&cell) {
                     if i - j >= SELF_OVERLAP_MIN_LOOP_VERTICES {
                         drain_range = Some((j + 1, i + 1));
@@ -1098,8 +1097,7 @@ fn merge_overlapping_polylines(map: &GlobalMap, rivers: &mut Vec<Polyline>) {
         // current vertex so the river's last cell sits squarely on
         // the path it joined.
         let mut truncate_at: Option<usize> = None;
-        'outer: for i in lo..hi {
-            let (x, y) = rivers[ri].points[i];
+        'outer: for (&(x, y), i) in rivers[ri].points[lo..hi].iter().zip(lo..) {
             for ddy in -MERGE_PROXIMITY_RADIUS_CELLS..=MERGE_PROXIMITY_RADIUS_CELLS {
                 let cy = y as i32 + ddy;
                 if cy < 0 || cy >= res_i {
