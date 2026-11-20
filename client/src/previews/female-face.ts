@@ -57,7 +57,8 @@ export async function showFemaleFace(
   const params = new URLSearchParams(location.search)
   const requestedFace = params.get('face')
   face.value =
-    requestedFace && ['default', 'custom', 'chic', 'elegant'].includes(requestedFace)
+    requestedFace &&
+    ['default', 'custom', 'chic', 'elegant'].includes(requestedFace)
       ? requestedFace
       : 'ranger'
   const requestedHair =

@@ -275,6 +275,9 @@ async fn announce_seat(
         ));
 }
 
+/// Chair x, z and rotation.
+type SeatPose = (f32, f32, Option<f32>);
+
 /// A guest seated on a chair on our floor within `reach` of us, and that chair's position and rotation.
 /// The broadcast position is where the guest stood when they clicked the chair (the sit never re-sends
 /// a move), so the chair comes from its placement where one is known.
@@ -282,7 +285,7 @@ fn seated_guest<'a>(
     s: &'a SharedState,
     guest_id: &onlinerpg_shared::PlayerId,
     reach: f32,
-) -> Option<(&'a onlinerpg_shared::Player, (f32, f32, Option<f32>))> {
+) -> Option<(&'a onlinerpg_shared::Player, SeatPose)> {
     let me = s.self_player.as_ref()?;
     let p = s.nearby_players.get(guest_id)?;
     if p.object_type.as_deref() != Some(crate::state::SIT_OBJECT_TYPE)

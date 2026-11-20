@@ -442,19 +442,16 @@ describe('female modular starter outfits', () => {
       disposeCharacterSkeletons(modelRoot)
     }
   )
-  it.skipIf(!hasAssets)(
-    'binds every part to one skeleton',
-    async () => {
-      const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
-      const { modelRoot } = createCharacterModelRoot(source.scene)
-      await applyCharacterArmor(modelRoot, armor)
-      const skeletons = new Set(
-        skinnedParts(modelRoot).map((mesh) => mesh.skeleton)
-      )
-      expect(skeletons.size).toBe(1)
-      disposeCharacterSkeletons(modelRoot)
-    }
-  )
+  it.skipIf(!hasAssets)('binds every part to one skeleton', async () => {
+    const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
+    const { modelRoot } = createCharacterModelRoot(source.scene)
+    await applyCharacterArmor(modelRoot, armor)
+    const skeletons = new Set(
+      skinnedParts(modelRoot).map((mesh) => mesh.skeleton)
+    )
+    expect(skeletons.size).toBe(1)
+    disposeCharacterSkeletons(modelRoot)
+  })
   it.skipIf(!hasAssets)(
     'equips all five parts, restores hair and sleeves, and isolates character masks',
     async () => {
