@@ -85,6 +85,7 @@
   "salon.reset": "还原",
   "salon.confirm": "付款并更改",
   "salon.error.too_far": "请再靠近美发师一些。",
+  "salon.error.asleep": "美发师正在睡觉，请白天再来。",
   "salon.error.unsupported": "美发师无法为这个角色改变外貌。",
   "salon.error.unchanged": "没有任何更改。",
   "salon.error.trading": "请先完成交易。",

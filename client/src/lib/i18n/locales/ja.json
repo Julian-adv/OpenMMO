@@ -85,6 +85,7 @@
   "salon.reset": "元に戻す",
   "salon.confirm": "支払って変更",
   "salon.error.too_far": "美容師にもっと近づいてください。",
+  "salon.error.asleep": "美容師は眠っています。昼間にまた来てください。",
   "salon.error.unsupported": "このキャラクターは美容師が手を入れられません。",
   "salon.error.unchanged": "変更がありません。",
   "salon.error.trading": "先に取引を終えてください。",

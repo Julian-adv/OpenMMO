@@ -85,6 +85,7 @@
   "salon.reset": "되돌리기",
   "salon.confirm": "값을 내고 바꾸기",
   "salon.error.too_far": "미용사에게 더 가까이 가세요.",
+  "salon.error.asleep": "미용사가 자고 있습니다. 낮에 다시 오세요.",
   "salon.error.unsupported": "이 캐릭터는 미용사가 손볼 수 없습니다.",
   "salon.error.unchanged": "바뀐 것이 없습니다.",
   "salon.error.trading": "거래를 먼저 마치세요.",

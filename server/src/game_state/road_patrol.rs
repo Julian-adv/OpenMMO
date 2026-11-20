@@ -223,6 +223,12 @@ fn is_guard_captain(npc: &crate::types::Player) -> bool {
 }
 
 /// Whether `npc` is the official NPC registered as `id`.
+/// Why a player cannot deal with a registry NPC.
+pub(super) enum NpcReach {
+    TooFar,
+    Asleep,
+}
+
 pub(super) fn is_registry_npc(npc: &crate::types::Player, id: &str) -> bool {
     npc.is_official_npc
         && npc_defs()
@@ -676,28 +682,36 @@ impl GameState {
     async fn at_guard_captain(&self, player_id: &PlayerId, npc_player_id: &PlayerId) -> bool {
         self.at_registry_npc(player_id, npc_player_id, GUARD_CAPTAIN)
             .await
+            .is_ok()
     }
 
-    /// Whether `npc_player_id` is the registry NPC `id`, awake and within trading reach of `player_id`.
+    /// Whether `npc_player_id` is the registry NPC `id`, within trading reach of `player_id` and awake.
+    /// Sleep is checked after range so it can't be probed from afar.
     pub(super) async fn at_registry_npc(
         &self,
         player_id: &PlayerId,
         npc_player_id: &PlayerId,
         id: &str,
-    ) -> bool {
+    ) -> Result<(), NpcReach> {
         let players = self.players.read().await;
         let (Some(player), Some(npc)) = (players.get(player_id), players.get(npc_player_id)) else {
-            return false;
+            return Err(NpcReach::TooFar);
         };
-        is_registry_npc(npc, id)
+        let in_reach = is_registry_npc(npc, id)
             && reachable_dist_sq(
                 player.position,
                 player.floor_level,
                 npc.position,
                 npc.floor_level,
             )
-            .is_some_and(|dist_sq| dist_sq <= MAX_TRADE_DISTANCE * MAX_TRADE_DISTANCE)
-            && !self.is_npc_asleep(&npc.name)
+            .is_some_and(|dist_sq| dist_sq <= MAX_TRADE_DISTANCE * MAX_TRADE_DISTANCE);
+        if !in_reach {
+            Err(NpcReach::TooFar)
+        } else if self.is_npc_asleep(&npc.name) {
+            Err(NpcReach::Asleep)
+        } else {
+            Ok(())
+        }
     }
 
     fn priced(&self, stacks: &[ImpoundedStack]) -> Vec<ImpoundedItem> {

@@ -85,6 +85,7 @@
   "salon.reset": "Undo",
   "salon.confirm": "Pay and change",
   "salon.error.too_far": "Come closer to the hairdresser.",
+  "salon.error.asleep": "The hairdresser is asleep. Come back during the day.",
   "salon.error.unsupported": "The hairdresser cannot restyle this character.",
   "salon.error.unchanged": "Nothing has changed.",
   "salon.error.trading": "Finish your trade first.",

@@ -11,6 +11,7 @@ const HAIRDRESSER = npcNameById('hairdresser')
 
 export type SalonError =
   | 'too_far'
+  | 'asleep'
   | 'unsupported'
   | 'unchanged'
   | 'trading'

@@ -53,7 +53,7 @@ fn schedule_entry_at(at: &str, action: Option<&str>) -> onlinerpg_shared::schedu
 
 /// Schedule the NPC into bed right now; the server resolves sleep from its
 /// own schedule copy and clock.
-fn put_in_bed(game_state: &GameState, npc_name: &str) {
+pub(super) fn put_in_bed(game_state: &GameState, npc_name: &str) {
     game_state.set_npc_schedule(
         npc_name,
         vec![schedule_entry(onlinerpg_shared::schedule::BED_OBJECT_TYPE)],

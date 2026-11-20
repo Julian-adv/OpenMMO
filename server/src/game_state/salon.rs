@@ -1,5 +1,6 @@
 //! Hair salon: the hairdresser changes a character's face, hair and colours for gold.
 
+use super::road_patrol::NpcReach;
 use super::{auth_db, GameState};
 use crate::auth::AuthService;
 use crate::metrics::GoldSink;
@@ -35,12 +36,12 @@ impl GameState {
         wanted: CharacterAppearance,
         auth: &AuthService,
     ) -> Result<i64, SalonError> {
-        if !self
-            .at_registry_npc(player_id, npc_player_id, HAIRDRESSER)
+        self.at_registry_npc(player_id, npc_player_id, HAIRDRESSER)
             .await
-        {
-            return Err(SalonError::TooFar);
-        }
+            .map_err(|reach| match reach {
+                NpcReach::TooFar => SalonError::TooFar,
+                NpcReach::Asleep => SalonError::Asleep,
+            })?;
         let (current, wanted) = {
             let players = self.players.read().await;
             let player = players.get(player_id).ok_or(SalonError::TooFar)?;

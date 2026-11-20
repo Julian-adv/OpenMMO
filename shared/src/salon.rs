@@ -17,6 +17,7 @@ pub const EYE_COLOR_PRICE: i64 = 2_000;
 #[serde(rename_all = "snake_case")]
 pub enum SalonError {
     TooFar,
+    Asleep,
     Unsupported,
     Unchanged,
     Trading,

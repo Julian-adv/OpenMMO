@@ -113,6 +113,19 @@ async fn nothing_is_charged_when_the_restyle_is_refused() {
         .x = 40.0;
     ask(restyled()).await;
     assert_eq!(result(&mut rx), (0, Some(SalonError::TooFar)));
+    super::trading_tests::put_in_bed(&game, "Odette");
+    ask(restyled()).await;
+    assert_eq!(result(&mut rx), (0, Some(SalonError::TooFar)));
+    game.players
+        .write()
+        .await
+        .get_mut(&client)
+        .unwrap()
+        .position
+        .x = 0.0;
+    ask(restyled()).await;
+    assert_eq!(result(&mut rx), (0, Some(SalonError::Asleep)));
+    game.set_npc_schedule("Odette", Vec::new());
     {
         let mut players = game.players.write().await;
         let player = players.get_mut(&client).unwrap();
