@@ -74,6 +74,14 @@ export function partyChatEntry(
   return { text: message, sender: 'party', name: from, family }
 }
 
+export function shoutChatEntry(
+  from: string,
+  message: string,
+  family: string | null = null
+): ChatEntry {
+  return { text: message, sender: 'shout', name: from, family }
+}
+
 export function familyChatEntry(from: string, message: string): ChatEntry {
   return { text: message, sender: 'family', name: from }
 }

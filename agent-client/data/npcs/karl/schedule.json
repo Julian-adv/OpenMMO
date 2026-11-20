@@ -16,12 +16,11 @@
     },
     {
       "at": "05:15-05:45",
-      "pos": [-1445.37, 1.3, 4752.85],
-      "rotation": 180.0,
+      "pos": [-1452.5, 1.3, 4752.0],
+      "rotation": 90.0,
       "floor_level": 0,
       "label": "eating breakfast at the inn with the day watch",
-      "action": "chair",
-      "object_id": 133
+      "action": "chair"
     },
     {
       "at": "05:45-06:45",
@@ -32,12 +31,11 @@
     },
     {
       "at": "17:00-17:45",
-      "pos": [-1445.37, 1.3, 4752.85],
-      "rotation": 180.0,
+      "pos": [-1452.5, 1.3, 4752.0],
+      "rotation": 90.0,
       "floor_level": 0,
       "label": "eating dinner at the inn with the day watch",
-      "action": "chair",
-      "object_id": 133
+      "action": "chair"
     },
     {
       "at": "17:45-19:15",

@@ -454,7 +454,68 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
     state.lock().await.patrol_reached = 0;
 }
 
+/// Inside the dining room without a seat, free to try for one.
+pub(super) fn awaits_seat(s: &SharedState, entry: &ScheduleEntry) -> bool {
+    entry.seeks_seat()
+        && s.own_chair().is_none()
+        && s.self_player.as_ref().is_some_and(|p| p.health > 0)
+        && s.shares_building(entry.pos[0], entry.pos[2], entry.floor_level)
+        && !s.player_trade_in_progress()
+        && !s.schedule_combat_active()
+        && !matches!(
+            s.move_status,
+            Some(MoveStatus::Moving | MoveStatus::Searching)
+        )
+}
+
+const SEAT_HOLD: std::time::Duration = std::time::Duration::from_secs(30);
+const SIT_REPLY_WAIT: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// Sit on the nearest free dining chair, trying the next when one is lost.
+pub(super) async fn take_free_seat(
+    state: &Arc<Mutex<SharedState>>,
+    entry: &ScheduleEntry,
+    claims: &super::VisitClaims,
+    who: &str,
+) -> bool {
+    let seats = state
+        .lock()
+        .await
+        .free_seats(entry.pos[0], entry.pos[2], entry.floor_level);
+    for chair in seats {
+        let key = || super::ClaimKey::Seat(chair.id, chair.x.to_bits(), chair.z.to_bits());
+        if state.lock().await.seat_taken(&chair) || !claims.try_claim(key(), who, SEAT_HOLD) {
+            continue;
+        }
+        let seat = ScheduleEntry {
+            pos: [chair.x, chair.y, chair.z],
+            rotation: chair.rotation_deg,
+            floor_level: chair.floor_level,
+            action: Some(chair.type_id.clone()),
+            object_id: Some(chair.id),
+            ..Default::default()
+        };
+        execute_schedule_move(state, &seat).await;
+        tokio::time::sleep(SIT_REPLY_WAIT).await;
+        if state.lock().await.own_chair() == Some(chair.id) {
+            info!("[{who}] Took free seat {}", chair.id);
+            return true;
+        }
+        claims.release(&key(), who);
+    }
+    false
+}
+
 pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry: &ScheduleEntry) {
+    // Already inside: `take_free_seat` goes straight to a chair.
+    if entry.seeks_seat()
+        && state
+            .lock()
+            .await
+            .shares_building(entry.pos[0], entry.pos[2], entry.floor_level)
+    {
+        return;
+    }
     let waypoints: &[[f32; 3]] = if entry.patrol.is_some() {
         &[]
     } else {
@@ -1207,12 +1268,32 @@ mod tests {
             elapsed_secs: 0.0,
         });
         s.begin_recital(&["The rain is coming".into()]).unwrap();
+        let piece = |id, type_id: &str, dx: f32| FurniturePlacement {
+            id,
+            type_id: type_id.into(),
+            x: shelter.pos[0] + dx,
+            y: 0.0,
+            z: shelter.pos[2],
+            rotation_deg: 0.0,
+            floor_level: 0,
+            open_doors: 0,
+        };
+        s.world_cache.write().unwrap().sync_furniture(
+            0,
+            0,
+            vec![piece(39, "chair", 0.0), piece(29, "table", 1.2)],
+        );
         let state = Arc::new(Mutex::new(s));
         let active =
             check_schedule_transition(&state, &schedule, (Some(2), None), (Some(5), None), "Signe")
                 .await;
         assert_eq!(active, (Some(5), None));
         assert!(matches!(rx.try_recv(), Ok(ClientMessage::StopInteraction)));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::PlayerFace { .. })
+        ));
+        assert!(take_free_seat(&state, shelter, &Default::default(), "Signe").await);
         assert!(matches!(
             rx.try_recv(),
             Ok(ClientMessage::PlayerFace { .. })
@@ -1225,6 +1306,38 @@ mod tests {
         assert_eq!(s.own_chair(), Some(39));
         assert!(s.refuses_play_command("/play_music"));
         assert!(s.begin_recital(&["An encore".into()]).is_err());
+    }
+
+    #[test]
+    fn free_seats_skip_occupied_chairs_and_chairs_without_a_table() {
+        let (mut s, _rx) = test_state();
+        s.self_player = Some(test_player(0.0, 0.0));
+        let piece = |id, type_id: &str, x: f32| FurniturePlacement {
+            id,
+            type_id: type_id.into(),
+            x,
+            y: 0.0,
+            z: 0.0,
+            rotation_deg: 0.0,
+            floor_level: 0,
+            open_doors: 0,
+        };
+        s.world_cache.write().unwrap().sync_furniture(
+            0,
+            0,
+            vec![
+                piece(1, "chair", 1.0),
+                piece(2, "chair", 3.0),
+                piece(3, "table", 2.0),
+                piece(4, "chair", 8.0),
+            ],
+        );
+        let mut sitter = test_player(1.5, 0.0);
+        sitter.object_type = Some(crate::state::SIT_OBJECT_TYPE.into());
+        sitter.object_id = Some(1);
+        s.nearby_players.insert(sitter.id, sitter);
+        let free: Vec<u32> = s.free_seats(0.0, 0.0, 0).iter().map(|c| c.id).collect();
+        assert_eq!(free, [2]);
     }
 
     #[tokio::test]

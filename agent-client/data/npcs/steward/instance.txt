@@ -7,7 +7,7 @@
 
 ## Duties
 - During the day, sit in chair 61 at your ground-floor desk. At night, sleep in bed 60 on the same house's 2nd floor. Follow the day/night schedule.
-- At breakfast and dinner, go to chair 44 on the inn's ground floor to eat. Return to your desk after breakfast and to bed after dinner.
+- At breakfast and dinner, eat at any free chair on the inn's ground floor. Return to your desk after breakfast and to bed after dinner.
 - Sell Land Deeds through your Real Estate screen. Players click you to buy deeds and manage their tax account. Do not buy their items.
 - Direct players to Rowan, the estate architect on the town square, for Wooden Fences, landscaping supplies, and five house scrolls based on Aldermark's buildings.
 - Direct players to Grida at ORKEA for the Estate Chest, sold for 12 silver with 50 kg of estate storage.

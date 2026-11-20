@@ -567,7 +567,7 @@ async fn a_partial_intermediate_segment_that_got_closer_is_walked_on_from() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn a_partial_intermediate_segment_that_got_no_closer_ends_the_move() {
+async fn a_partial_intermediate_segment_that_did_not_move_ends_the_move() {
     let (state, mut rx) = walker();
     let task = spawn_move(
         &state,
@@ -586,6 +586,48 @@ async fn a_partial_intermediate_segment_that_got_no_closer_ends_the_move() {
         .unwrap()
         .unwrap();
     assert!(rx.try_recv().is_err());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_partial_detour_segment_that_got_no_closer_is_replanned() {
+    use onlinerpg_shared::fence::{Fence, FenceAxis, FenceEdge};
+    let (state, mut rx) = walker();
+    {
+        let s = state.lock().await;
+        let wall: Vec<_> = (-40..40)
+            .map(|z| Fence {
+                edge: FenceEdge {
+                    x: 20,
+                    z,
+                    axis: FenceAxis::Z,
+                },
+                y: 0.0,
+                owner_id: 0,
+            })
+            .collect();
+        let mut world = s.world_cache.write().unwrap();
+        world.update_fences(s.self_player_id.unwrap(), &wall, &[]);
+    }
+    let task = spawn_move(
+        &state,
+        ScheduleEntry {
+            pos: [200.5, 0.0, 0.5],
+            ..Default::default()
+        },
+    );
+    let (first, x, z) = goal(&mut rx).await;
+    let side = z.signum() * 20.0;
+    state
+        .lock()
+        .await
+        .push_event(progress_at(first, 0.5, side, MoveStatus::Partial));
+    let (_, x2, z2) = goal(&mut rx).await;
+    assert!(
+        (x2 - x).hypot(z2 - z) > 1.5,
+        "the stalled leg ({x2}, {z2}) was sent again"
+    );
+    assert!(!task.is_finished());
+    task.abort();
 }
 
 #[tokio::test(start_paused = true)]

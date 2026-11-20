@@ -24,8 +24,7 @@ const MEAL_MAX_AGE: Duration = Duration::from_secs(30 * 60);
 /// chair, so the chair placement must be about that close.
 const CHAIR_NEAR_GUEST_M: f32 = 3.0;
 
-const CHAIR: &str = "chair";
-const TABLE: &str = "table";
+use onlinerpg_shared::meal::{CHAIR, TABLE};
 
 pub(crate) struct MealEntry {
     pub meal: Meal,

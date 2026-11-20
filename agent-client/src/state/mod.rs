@@ -84,7 +84,7 @@ const MAX_RECENT_RESPAWNS: usize = 8;
 const MAX_RECENT_SEATINGS: usize = 8;
 /// The one furniture type the object catalog marks `interaction: "sit"`.
 /// Emotes ride the same interaction field, hence the exact match.
-pub(crate) const SIT_OBJECT_TYPE: &str = "chair";
+pub(crate) const SIT_OBJECT_TYPE: &str = onlinerpg_shared::meal::CHAIR;
 /// Accumulated favor a player can hold with this NPC, in either direction.
 const FAVOR_MIN: i32 = -5;
 const FAVOR_MAX: i32 = 5;
@@ -151,6 +151,8 @@ use onlinerpg_shared::messages::{OutfitGrant, PARTY_INVITE_TTL, PARTY_SUMMON_TTL
 /// matters. Re-exported from the shared crate so the server's event-delivery
 /// radius and the agent's perception radius are guaranteed equal.
 pub(crate) use onlinerpg_shared::EVENT_DELIVERY_RADIUS;
+
+pub(crate) const SMALL_TALK_RADIUS: f32 = 10.0;
 
 /// Eight-way compass word for an offset from the player. North is -z, east
 /// is +x; the diagonal band covers ±22.5° around each diagonal.

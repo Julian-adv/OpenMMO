@@ -17,15 +17,14 @@
     {
       "at": "06:00",
       "pos": [
-        -1446.65,
+        -1452.5,
         1.3,
-        4751.8
+        4752.0
       ],
       "rotation": 90.0,
       "floor_level": 0,
       "label": "eating breakfast on the inn's ground floor until 06:30",
       "action": "chair",
-      "object_id": 46,
       "waypoints": []
     },
     {
@@ -43,15 +42,14 @@
     {
       "at": "18:00",
       "pos": [
-        -1446.65,
+        -1452.5,
         1.3,
-        4751.8
+        4752.0
       ],
       "rotation": 90.0,
       "floor_level": 0,
       "label": "eating dinner on the inn's ground floor until 18:30",
       "action": "chair",
-      "object_id": 46,
       "waypoints": []
     },
     {

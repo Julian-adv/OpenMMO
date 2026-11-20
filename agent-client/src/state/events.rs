@@ -102,6 +102,18 @@ impl SharedState {
                     EventUrgency::Urgent
                 }
             }
+            // A shout carries far: only one naming us wakes us.
+            ServerMessage::ShoutMessage { from, message, .. } => {
+                match self.self_player.as_ref() {
+                    Some(me)
+                        if me.name != *from
+                            && crate::shop_info::chat_mentions(&me.name, message) =>
+                    {
+                        EventUrgency::Urgent
+                    }
+                    _ => EventUrgency::Noise,
+                }
+            }
             // Party chat is addressed to our group, so it wakes us like a
             // whisper; the own-echo Noise rule is the same.
             ServerMessage::PartyChatMessage { from, .. }
@@ -1477,6 +1489,7 @@ impl SharedState {
                 player_id,
                 position,
                 rotation,
+                floor_level,
                 ..
             } => {
                 // Update tracked position for self and nearby players
@@ -1489,6 +1502,7 @@ impl SharedState {
                 }
                 if let Some(p) = self.nearby_players.get_mut(player_id) {
                     p.position = *position;
+                    p.floor_level = *floor_level;
                 }
             }
             ServerMessage::MonsterMoved {
@@ -1624,9 +1638,19 @@ impl SharedState {
             _ => {}
         }
 
+        if let ServerMessage::ChatMessage { player_id, message } = &msg {
+            if !self.hears(player_id, message) {
+                return EventUrgency::Noise;
+            }
+        }
+
         let urgency = self.classify_event(&msg);
         self.remember_conversation(&msg);
-        if matches!(msg, ServerMessage::ChatMessage { .. }) && urgency == EventUrgency::Noise {
+        if matches!(
+            msg,
+            ServerMessage::ChatMessage { .. } | ServerMessage::ShoutMessage { .. }
+        ) && urgency == EventUrgency::Noise
+        {
             return urgency;
         }
 

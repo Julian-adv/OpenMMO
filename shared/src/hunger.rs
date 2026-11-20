@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const SATIATION_MAX: u32 = 1000;
+pub const SHOUT_SATIATION_COST: u32 = 1;
 /// New characters start comfortably fed.
 pub const SATIATION_START: u32 = 700;
 

@@ -29,6 +29,9 @@ pub const TABLE_SURFACE_Y: f32 = 0.761;
 /// Plate radius plus a little margin, kept inside the table edge.
 pub const MEAL_EDGE_INSET_M: f32 = 0.23;
 
+pub const CHAIR: &str = "chair";
+pub const TABLE: &str = "table";
+
 /// A chair belongs to the nearest table within this range (centre to centre).
 pub const CHAIR_TABLE_RADIUS_M: f32 = 2.0;
 

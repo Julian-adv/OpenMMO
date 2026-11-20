@@ -272,6 +272,25 @@ impl super::GameState {
         }
     }
 
+    /// False when there is too little left. An official NPC has no hunger to spend.
+    pub(super) async fn spend_satiation(&self, player_id: &PlayerId, cost: u32) -> bool {
+        let update = {
+            let mut hunger = self.hunger.write().await;
+            let Some(data) = hunger.get_mut(player_id) else {
+                return true;
+            };
+            let Some(left) = data.satiation.checked_sub(cost) else {
+                return false;
+            };
+            data.satiation = left;
+            data.hunger_msg(Instant::now())
+        };
+        self.mark_dirty(player_id).await;
+        self.wake_player_attack(player_id).await;
+        self.send_direct_message(player_id, update).await;
+        true
+    }
+
     /// One kill costs one drain point (× debuff drain), funneled through the
     /// activity path as one movement interval's worth of effort.
     pub(super) async fn drain_hunger_for_kill(&self, player_id: &PlayerId) {

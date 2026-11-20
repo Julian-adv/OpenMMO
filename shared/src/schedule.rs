@@ -143,6 +143,11 @@ impl ScheduleEntry {
         )
     }
 
+    /// A chair entry naming no chair: `pos` is the building's entrance and any free seat inside will do.
+    pub fn seeks_seat(&self) -> bool {
+        self.action.as_deref() == Some(crate::meal::CHAIR) && self.object_id.is_none()
+    }
+
     pub fn is_fishing(&self) -> bool {
         self.action.as_deref() == Some(FISHING_ACTION)
     }

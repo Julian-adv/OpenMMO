@@ -551,9 +551,15 @@ impl WorldCache {
     }
 
     pub fn is_indoors(&self, x: f32, z: f32, floor: u8) -> bool {
+        self.house_at(x, z, floor as i8).is_some()
+    }
+
+    pub fn house_at(&self, x: f32, z: f32, floor: i8) -> Option<&str> {
+        let floor = u8::try_from(floor).ok()?;
         self.houses
             .values()
-            .any(|h| h.room_at(x, z, floor).is_some())
+            .find(|h| h.room_at(x, z, floor).is_some())
+            .map(|h| h.id.as_str())
     }
 
     pub fn add_house(&mut self, house: HouseData) {
@@ -776,6 +782,34 @@ impl WorldCache {
             .flatten()
             .filter(|p| p.id == object_id && p.type_id == type_id && d2(p) <= max_d2)
             .min_by(|a, b| d2(a).total_cmp(&d2(b)))
+    }
+
+    /// Chairs at a table within `radius` of `(x, z)`, in the same building.
+    pub fn dining_chairs_near(
+        &self,
+        x: f32,
+        z: f32,
+        floor: u8,
+        radius: f32,
+    ) -> Vec<FurniturePlacement> {
+        use onlinerpg_shared::meal::{CHAIR_TABLE_RADIUS_M, TABLE};
+        let d2 = |p: &FurniturePlacement, x: f32, z: f32| (p.x - x).powi(2) + (p.z - z).powi(2);
+        let building = self.house_at(x, z, floor as i8);
+        let on_floor = || {
+            self.furniture_placements
+                .values()
+                .flatten()
+                .filter(move |p| p.floor_level == floor)
+        };
+        on_floor()
+            .filter(|c| c.type_id == super::SIT_OBJECT_TYPE && d2(c, x, z) <= radius * radius)
+            .filter(|c| self.house_at(c.x, c.z, floor as i8) == building)
+            .filter(|c| {
+                on_floor()
+                    .any(|t| t.type_id == TABLE && d2(t, c.x, c.z) <= CHAIR_TABLE_RADIUS_M.powi(2))
+            })
+            .cloned()
+            .collect()
     }
 
     fn boards_within<'a>(

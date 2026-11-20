@@ -1931,3 +1931,57 @@ async fn housestyle_restyles_village_houses_in_reach_only() {
         ServerMessage::SystemMessage { message, .. } if message.starts_with("Housestyle: style")
     )));
 }
+
+#[tokio::test]
+async fn a_shout_carries_past_speech_range_and_costs_satiation() {
+    let game_state = make_test_game_state("shout_range");
+    let auth = make_test_auth("shout_range");
+    let speaker = pid("speaker");
+    let far = pid("far");
+    let beyond = pid("beyond");
+    game_state
+        .add_player(make_player("speaker", 0.0, 0.0))
+        .await;
+    game_state.add_player(make_player("far", 90.0, 0.0)).await;
+    game_state
+        .add_player(make_player("beyond", 100.0, 0.0))
+        .await;
+    game_state.register_hunger(&speaker, 1).await;
+    let mut speaker_rx = game_state.register_direct_channel(&speaker).await;
+    let mut far_rx = game_state.register_direct_channel(&far).await;
+    let mut beyond_rx = game_state.register_direct_channel(&beyond).await;
+
+    game_state
+        .send_chat_message(&speaker, "! over here".to_string(), &auth)
+        .await;
+    assert!(matches!(
+        speaker_rx.try_recv(),
+        Ok(ServerMessage::HungerUpdate { satiation: 0, .. })
+    ));
+    for rx in [&mut speaker_rx, &mut far_rx] {
+        match rx.try_recv() {
+            Ok(ServerMessage::ShoutMessage { from, message, .. }) => {
+                assert_eq!((from.as_str(), message.as_str()), ("speaker", "over here"));
+            }
+            other => panic!("expected the shout, got {other:?}"),
+        }
+    }
+    assert!(beyond_rx.try_recv().is_err());
+
+    game_state
+        .send_chat_message(&speaker, "!again".to_string(), &auth)
+        .await;
+    assert!(matches!(
+        speaker_rx.try_recv(),
+        Ok(ServerMessage::SystemMessage { .. })
+    ));
+    assert!(far_rx.try_recv().is_err());
+
+    game_state
+        .send_chat_message(&speaker, "!?".to_string(), &auth)
+        .await;
+    assert!(matches!(
+        speaker_rx.try_recv(),
+        Ok(ServerMessage::ChatMessage { .. })
+    ));
+}

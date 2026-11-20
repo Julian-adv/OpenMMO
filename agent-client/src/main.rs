@@ -481,6 +481,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::ChatMessage { .. } => "ChatMessage",
         ServerMessage::Recital { .. } => "Recital",
         ServerMessage::WhisperMessage { .. } => "WhisperMessage",
+        ServerMessage::ShoutMessage { .. } => "ShoutMessage",
         ServerMessage::PartyChatMessage { .. } => "PartyChatMessage",
         ServerMessage::SystemMessage { .. } => "SystemMessage",
         ServerMessage::GameState { .. } => "GameState",

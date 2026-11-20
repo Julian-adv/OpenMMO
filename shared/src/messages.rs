@@ -1507,6 +1507,15 @@ pub enum ServerMessage {
         #[serde(default)]
         to_family: Option<String>,
     },
+    /// `!` chat, heard out to `SHOUT_RADIUS`. Carries the name like
+    /// `WhisperMessage`: most listeners are outside the speaker's AOI.
+    ShoutMessage {
+        player_id: PlayerId,
+        from: String,
+        #[serde(default)]
+        from_family: Option<String>,
+        message: String,
+    },
     /// Private server reply to the player's own command (`/who`, `/escape`,
     /// whisper errors). Not `ChatMessage`: clients must render it as a system
     /// line, not the player's own speech.
@@ -2815,6 +2824,7 @@ impl ServerMessage {
             | Self::CharacterError { .. }
             | Self::DungeonDiscoveries { .. }
             | Self::WhisperMessage { .. }
+            | Self::ShoutMessage { .. }
             | Self::SystemMessage { .. }
             | Self::OperatorNotice { .. }
             | Self::SongRequested { .. }

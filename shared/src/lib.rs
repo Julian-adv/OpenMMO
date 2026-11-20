@@ -309,7 +309,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v166: `ChangeAppearance`/`AppearanceChangeResult`/`PlayerAppearanceChanged`, the
 /// hair salon.
 /// v167: `SalonError::Asleep`.
-pub const PROTOCOL_VERSION: u32 = 167;
+/// v168: `ShoutMessage` (`!` chat).
+pub const PROTOCOL_VERSION: u32 = 168;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -387,8 +388,8 @@ pub use messages::{
 };
 pub use world::{
     shortest_world_delta_x, wrap_world_x, GameDateTime, NoSpawnZone, Position,
-    EVENT_DELIVERY_RADIUS, MAX_MOVE_TARGET_DISTANCE, PLAYER_MOVE_SPEED, WORLD_MAX_X, WORLD_MIN_X,
-    WORLD_WIDTH_X,
+    EVENT_DELIVERY_RADIUS, MAX_MOVE_TARGET_DISTANCE, PLAYER_MOVE_SPEED, SHOUT_RADIUS, WORLD_MAX_X,
+    WORLD_MIN_X, WORLD_WIDTH_X,
 };
 
 #[cfg(test)]

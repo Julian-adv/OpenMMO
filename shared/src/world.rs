@@ -127,6 +127,9 @@ mod tests {
 /// Radius for world state and nearby effects.
 pub const EVENT_DELIVERY_RADIUS: f32 = 32.0;
 
+/// How far a shout (`!` chat) carries.
+pub const SHOUT_RADIUS: f32 = EVENT_DELIVERY_RADIUS * 3.0;
+
 /// Player walk speed in units/sec. Client prediction, agent-client walks and
 /// the server's authoritative movement simulation must all agree on this.
 pub const PLAYER_MOVE_SPEED: f32 = 3.0;

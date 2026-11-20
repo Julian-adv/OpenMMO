@@ -141,6 +141,8 @@ pub enum ClaimKey {
     Bed(u32),
     Guest(onlinerpg_shared::PlayerId),
     Meal(u64),
+    /// Chair id and position bits.
+    Seat(u32, u32, u32),
 }
 
 /// Process-wide claim board so two maids sharing an inn don't answer the
@@ -264,6 +266,9 @@ async fn announce_seat(
              the rain, or chat quietly; keep your stall and instruments packed away."
                 .to_string(),
         );
+        return;
+    }
+    if entry.seeks_seat() && state.lock().await.own_chair().is_none() {
         return;
     }
     state
@@ -535,6 +540,7 @@ impl<T> Drop for Spawned<T> {
 }
 
 const POST_CHECK_EVERY: Duration = Duration::from_secs(5);
+const SEAT_RETRY_EVERY: Duration = Duration::from_secs(20);
 
 fn running(task: &Option<Spawned<()>>) -> bool {
     task.as_ref().is_some_and(|t| !t.is_finished())
@@ -658,6 +664,8 @@ pub async fn llm_driver(
     // round trip overlaps the walk instead of waiting for arrival.
     let mut visit_walk: Option<Spawned<()>> = None;
     let mut post_check_at = Instant::now() + POST_CHECK_EVERY;
+    let mut seat_check_at = Instant::now();
+    let mut seatless_noted = false;
     // A road-patrol lap walks in the background so the guard can talk on the way.
     let mut patrol_walk: Option<Spawned<()>> = None;
     let mut weapon_checked_at = Instant::now();
@@ -1323,6 +1331,8 @@ pub async fn llm_driver(
                     active_schedule =
                         check_schedule_transition(&state, &schedule, active_schedule, due, &label)
                             .await;
+                    seat_check_at = Instant::now();
+                    seatless_noted = false;
                     sync_tales(&mut tales, &schedule, active_schedule.0, &label);
                     announce_seat(&state, &schedule, active_schedule.0, serve_tables).await;
                 }
@@ -1413,6 +1423,31 @@ pub async fn llm_driver(
                 !running(&visit_walk) && !running(&unload_trip) && !running(&patrol_walk)
             }) {
                 keep_post_facing(&state, entry, &label).await;
+            }
+        }
+
+        // === Meal with no chair named: take a free seat ===
+        if Instant::now() >= seat_check_at {
+            seat_check_at = Instant::now() + POST_CHECK_EVERY;
+            let entry = active_schedule.0.map(|i| &schedule[i]).filter(|_| {
+                attack_target.is_none() && visit_until.is_none() && !running(&visit_walk)
+            });
+            if let Some(entry) = entry {
+                if movement::awaits_seat(&*state.lock().await, entry) {
+                    if movement::take_free_seat(&state, entry, &claims, &label).await {
+                        if entry.condition
+                            != Some(onlinerpg_shared::schedule::ScheduleCondition::Rain)
+                        {
+                            announce_seat(&state, &schedule, active_schedule.0, serve_tables).await;
+                        }
+                    } else {
+                        seat_check_at = Instant::now() + SEAT_RETRY_EVERY;
+                        if !seatless_noted {
+                            seatless_noted = true;
+                            warn!("[{label}] No free seat for {}", entry.display_label());
+                        }
+                    }
+                }
             }
         }
 

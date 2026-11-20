@@ -575,6 +575,90 @@ fn ambient_chat_is_kept_and_wakes_a_routine_turn() {
 }
 
 #[test]
+fn chat_does_not_carry_through_house_walls() {
+    use onlinerpg_shared::housing::RoomType;
+
+    let guest = PlayerId::from(2);
+    let mut s = chat_state();
+    {
+        let mut world = s.world_cache.write().unwrap();
+        for (id, x) in [("chapel", -2.0), ("inn", 20.0)] {
+            world.add_house(house(
+                id,
+                p(x, 0.0, -2.0),
+                vec![room(0, 0, RoomType::default())],
+            ));
+        }
+    }
+    assert_eq!(s.push_event(chat("Miriel!")), EventUrgency::Urgent);
+    assert_eq!(s.pending_chat().len(), 1);
+    s.drain_events();
+
+    for x in [10.0, 21.0] {
+        s.nearby_players.get_mut(&guest).unwrap().position.x = x;
+        assert_eq!(s.push_event(chat("Miriel!")), EventUrgency::Noise, "{x}");
+        assert_eq!(s.pending_chat().len(), 1);
+        assert_eq!(s.pending_event_urgency(), None);
+    }
+
+    s.self_player.as_mut().unwrap().position.x = 10.0;
+    s.nearby_players.get_mut(&guest).unwrap().position.x = 1.0;
+    assert_eq!(s.push_event(chat("Miriel!")), EventUrgency::Noise);
+    assert_eq!(s.pending_chat().len(), 1);
+
+    s.nearby_players.get_mut(&guest).unwrap().position.x = 12.0;
+    assert_eq!(s.push_event(chat("Miriel!")), EventUrgency::Urgent);
+    s.push_event(ServerMessage::ChatMessage {
+        player_id: s.self_player_id.unwrap(),
+        message: "Welcome".into(),
+    });
+    assert_eq!(s.pending_chat().len(), 3);
+}
+
+#[test]
+fn small_talk_carries_ten_metres_and_a_named_line_carries_all_the_way() {
+    let mut s = chat_state();
+    let guest = PlayerId::from(2);
+    s.nearby_players.get_mut(&guest).unwrap().position.x = SMALL_TALK_RADIUS;
+    assert_eq!(s.push_event(chat("Nice day")), EventUrgency::Routine);
+    s.drain_events();
+
+    s.nearby_players.get_mut(&guest).unwrap().position.x = SMALL_TALK_RADIUS + 1.0;
+    assert_eq!(s.push_event(chat("Nice day")), EventUrgency::Noise);
+    assert_eq!(s.pending_chat().len(), 1);
+    assert_eq!(s.pending_event_urgency(), None);
+
+    s.nearby_players.get_mut(&guest).unwrap().position.x = EVENT_DELIVERY_RADIUS;
+    assert_eq!(s.push_event(chat("Miriel, nice day")), EventUrgency::Urgent);
+    assert_eq!(s.pending_chat().len(), 2);
+}
+
+#[test]
+fn a_shout_is_remembered_but_wakes_only_the_one_it_names() {
+    let shout = |from: &str, message: &str| ServerMessage::ShoutMessage {
+        player_id: PlayerId::from(9),
+        from: from.into(),
+        from_family: None,
+        message: message.into(),
+    };
+    let mut s = chat_state();
+    assert_eq!(
+        s.push_event(shout("Far", "anyone there")),
+        EventUrgency::Noise
+    );
+    assert_eq!(s.pending_event_urgency(), None);
+    assert!(s.pending_chat()[0].contains("[Shout] Far: anyone there"));
+    assert_eq!(
+        s.push_event(shout("Far", "Miriel, come")),
+        EventUrgency::Urgent
+    );
+    assert_eq!(
+        s.push_event(shout("Miriel", "Miriel here")),
+        EventUrgency::Noise
+    );
+}
+
+#[test]
 fn addressed_chat_wakes_with_english_or_korean_names() {
     for text in ["MIRIEL, hello", "미리엘님 두 개 주세요", "@Miriel hello"] {
         let mut s = chat_state();

@@ -33,6 +33,10 @@ fn looks_like_monster_id(s: &str) -> bool {
         .is_some_and(|id| !id.is_empty() && id.bytes().all(|b| b.is_ascii_digit()))
 }
 
+/// Covers the gap between a piece and whoever interacts with it, and
+/// disambiguates same-id placements from other regions.
+const RESOLVE_RADIUS: f32 = 3.0;
+
 impl SharedState {
     /// Resolve a visible `move` target by id shape, then by exact name.
     pub fn resolve_move_target(&self, raw: &str) -> Result<MoveTarget, MoveTargetError> {
@@ -396,13 +400,50 @@ impl SharedState {
         x: f32,
         z: f32,
     ) -> Option<(f32, f32, f32)> {
-        // Covers the gap between a piece and whoever interacts with it, and
-        // disambiguates same-id placements from other regions.
-        const RESOLVE_RADIUS: f32 = 3.0;
         let world = self.world_cache.read().unwrap();
         world
             .furniture_placement_near(type_id, object_id, x, z, RESOLVE_RADIUS)
             .map(|p| (p.x, p.z, p.rotation_deg))
+    }
+
+    /// Whether we stand in the building holding `(x, z)`, on `floor`.
+    pub fn shares_building(&self, x: f32, z: f32, floor: u8) -> bool {
+        let Some(me) = self.self_player.as_ref() else {
+            return false;
+        };
+        let world = self.world_cache.read().unwrap();
+        let building = world.house_at(x, z, floor as i8);
+        building.is_some()
+            && me.floor_level == floor as i8
+            && world.house_at(me.position.x, me.position.z, me.floor_level) == building
+    }
+
+    pub fn seat_taken(&self, chair: &FurniturePlacement) -> bool {
+        self.nearby_players.values().any(|p| {
+            p.object_type.as_deref() == Some(SIT_OBJECT_TYPE)
+                && p.object_id == Some(chair.id)
+                && p.floor_level == chair.floor_level as i8
+                && crate::geom::PlanarDelta::to_xz(&p.position, chair.x, chair.z).dist
+                    <= RESOLVE_RADIUS
+        })
+    }
+
+    /// Free dining chairs in the building holding `(x, z)`, nearest to us first.
+    pub fn free_seats(&self, x: f32, z: f32, floor: u8) -> Vec<FurniturePlacement> {
+        const SEARCH_RADIUS: f32 = 12.0;
+        let Some(me) = self.self_player.as_ref() else {
+            return Vec::new();
+        };
+        let mut seats =
+            self.world_cache
+                .read()
+                .unwrap()
+                .dining_chairs_near(x, z, floor, SEARCH_RADIUS);
+        seats.retain(|c| !self.seat_taken(c));
+        let dist =
+            |c: &FurniturePlacement| crate::geom::PlanarDelta::to_xz(&me.position, c.x, c.z).dist;
+        seats.sort_by(|a, b| dist(a).total_cmp(&dist(b)));
+        seats
     }
 
     pub fn walkable_near(&self, x: f32, z: f32, floor: u8) -> (f32, f32) {

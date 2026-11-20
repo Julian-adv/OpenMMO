@@ -248,7 +248,7 @@ async fn walk_inner(
     let mut last_goal: Option<(f32, f32)> = None;
     let mut request_id = None;
     let mut request_is_final = false;
-    let mut request_distance = f32::INFINITY;
+    let mut request_from: Option<(f32, f32)> = None;
     let mut sent_at = Instant::now();
     let mut doors_opened = 0;
     let mut shortcut_checked = false;
@@ -364,11 +364,11 @@ async fn walk_inner(
             }
             return Walked::Arrived;
         }
-        let schedule_failed = schedule
-            && terminal
-            && (request_is_final
-                || (status != Some(MoveStatus::Arrived)
-                    && !leg_gained(request_distance, delta.dist)));
+        let stuck = status != Some(MoveStatus::Arrived)
+            && request_from.is_some_and(|(x, z)| {
+                PlanarDelta::to_xz(&me.position, x, z).dist <= REROUTE_THRESHOLD
+            });
+        let schedule_failed = schedule && terminal && (request_is_final || stuck);
         if !fixed || request_id.is_none() || terminal {
             let mut goal = (target.x, target.z);
             let mut final_goal = true;
@@ -384,7 +384,7 @@ async fn walk_inner(
                 }
             }
             let stalled = terminal && status != Some(MoveStatus::Arrived);
-            if let Some(leg) = last_goal.filter(|_| stalled && request_is_planned && !schedule) {
+            if let Some(leg) = last_goal.filter(|_| stalled && request_is_planned) {
                 long_route.leg_failed(s.world_cache.read().unwrap().passability_cache(), leg);
             }
             let here = (me.position.x, me.position.z);
@@ -428,7 +428,7 @@ async fn walk_inner(
                         request_id = Some(id);
                         *owned_request = Some(id);
                         request_is_final = final_goal;
-                        request_distance = delta.dist;
+                        request_from = Some(here);
                         request_is_planned = planned.is_some();
                     }
                     Err(_) => return Walked::Error,
@@ -443,11 +443,6 @@ async fn walk_inner(
         drop(s);
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-}
-
-/// A leg that stopped short still counts when it ended nearer the target.
-fn leg_gained(distance_at_request: f32, distance_now: f32) -> bool {
-    distance_at_request - distance_now > REROUTE_THRESHOLD
 }
 
 /// A spot within arrival radius can still be the wrong side of a house wall.

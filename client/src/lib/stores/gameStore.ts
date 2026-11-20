@@ -118,6 +118,7 @@ export type ChatSender =
   | 'whisper'
   | 'party'
   | 'family'
+  | 'shout'
 
 export interface ChatEntry {
   text: string

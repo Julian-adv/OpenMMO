@@ -688,6 +688,10 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   distance, prefix "/w " and their name (a [Whisper] event means someone
   whispered to you; answer the same way):
   {"type": "say", "message": "/w PlayerName hello"}
+  A message starting with "!" is shouted: it carries about three times as
+  far, through walls, and costs you a little hunger. Shout only when the
+  words must reach someone out of sight. A [Shout] event is someone's shout
+  from afar; answer only if it names you.
   "/title" lists your titles, "/title N" shows one above your name,
   "/title off" hides it.
   Players speak many languages; answer each message in the language it

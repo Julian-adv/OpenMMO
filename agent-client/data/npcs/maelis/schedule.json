@@ -9,12 +9,11 @@
     },
     {
       "at": "dinner",
-      "pos": [-1444.25, 1.3, 4750.15],
-      "rotation": 270.0,
+      "pos": [-1452.5, 1.3, 4752.0],
+      "rotation": 90.0,
       "floor_level": 0,
       "label": "eating dinner on the inn's ground floor",
-      "action": "chair",
-      "object_id": 43
+      "action": "chair"
     },
     {
       "at": "night",
@@ -27,12 +26,11 @@
     },
     {
       "at": "breakfast",
-      "pos": [-1444.25, 1.3, 4750.15],
-      "rotation": 270.0,
+      "pos": [-1452.5, 1.3, 4752.0],
+      "rotation": 90.0,
       "floor_level": 0,
       "label": "eating breakfast on the inn's ground floor",
-      "action": "chair",
-      "object_id": 43
+      "action": "chair"
     }
   ]
 }

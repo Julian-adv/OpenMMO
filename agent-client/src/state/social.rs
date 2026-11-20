@@ -112,6 +112,25 @@ impl SharedState {
         player_id.to_string()
     }
 
+    /// Speech stays within one house (or outdoors). Small talk reaches `SMALL_TALK_RADIUS`;
+    /// a line naming us, or an untracked speaker, is always heard.
+    pub(super) fn hears(&self, speaker: &PlayerId, message: &str) -> bool {
+        if self.self_player_id.as_ref() == Some(speaker) {
+            return true;
+        }
+        let (Some(me), Some(other)) = (&self.self_player, self.nearby_players.get(speaker)) else {
+            return true;
+        };
+        let same_space = {
+            let world = self.world_cache.read().unwrap();
+            world.house_at(me.position.x, me.position.z, self.self_floor_level)
+                == world.house_at(other.position.x, other.position.z, other.floor_level)
+        };
+        same_space
+            && (me.position.dist_xz_sq(&other.position) <= SMALL_TALK_RADIUS.powi(2)
+                || crate::shop_info::chat_mentions(&me.name, message))
+    }
+
     /// Previously consumed context, oldest first.
     pub fn chat_history(&self) -> &VecDeque<String> {
         &self.chat_history
@@ -126,6 +145,7 @@ impl SharedState {
             msg,
             ServerMessage::ChatMessage { .. }
                 | ServerMessage::WhisperMessage { .. }
+                | ServerMessage::ShoutMessage { .. }
                 | ServerMessage::PartyChatMessage { .. }
                 | ServerMessage::FamilyChatMessage { .. }
                 | ServerMessage::PlayerMusicStarted { .. }

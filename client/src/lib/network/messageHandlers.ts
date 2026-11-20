@@ -286,6 +286,7 @@ import { shortestWrappedDeltaX } from '../terrain/world-wrap'
 import {
   whisperChatEntry,
   partyChatEntry,
+  shoutChatEntry,
   familyChatEntry,
 } from '../chat-format'
 import {
@@ -1208,6 +1209,13 @@ export function handleServerMessage(
       )
       break
     }
+
+    case 'ShoutMessage':
+      addChatMessage(
+        shoutChatEntry(data.from, data.message, data.from_family ?? null)
+      )
+      addChatBubble(data.player_id, data.message)
+      break
 
     case 'PartyChatMessage':
       // No chat bubble — the party channel is private to the party.

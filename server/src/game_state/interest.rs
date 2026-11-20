@@ -463,6 +463,31 @@ impl Interest {
         }
     }
 
+    /// Viewers within `radius` of a point; above ground every storey counts.
+    pub(super) fn viewers_within(
+        &self,
+        position: &Position,
+        floor: i8,
+        radius: f32,
+    ) -> Vec<PlayerId> {
+        let mut area = SubjectArea::point(*position, floor);
+        if floor >= 0 {
+            area.space = Space::Surface;
+        }
+        let mut found = HashSet::new();
+        for cell in area_cells(std::slice::from_ref(&area), radius) {
+            for id in self.viewers.cells.get(&cell).into_iter().flatten() {
+                if self.views.get(id).is_some_and(|view| {
+                    area.space.includes(&view.space)
+                        && view.position.dist_xz_sq(position) <= radius.powi(2)
+                }) {
+                    found.insert(*id);
+                }
+            }
+        }
+        found.into_iter().collect()
+    }
+
     fn send(&mut self, viewer: PlayerId, reset: bool, mut events: Vec<WorldEvent>) {
         if let Some(blocked) = self.blocked_names.get(&viewer) {
             for event in &mut events {

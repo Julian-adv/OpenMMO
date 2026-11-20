@@ -19,12 +19,11 @@
     },
     {
       "at": "18:10-18:40",
-      "pos": [-1451.7, 1.3, 4753.42],
+      "pos": [-1452.5, 1.3, 4752.0],
       "rotation": 90.0,
       "floor_level": 0,
       "label": "eating dinner at the inn before the patrol",
-      "action": "chair",
-      "object_id": 128
+      "action": "chair"
     },
     {
       "at": "18:40-19:00",
@@ -109,12 +108,11 @@
     },
     {
       "at": "05:00-05:45",
-      "pos": [-1451.7, 1.3, 4753.42],
+      "pos": [-1452.5, 1.3, 4752.0],
       "rotation": 90.0,
       "floor_level": 0,
       "label": "eating breakfast at the inn after the patrol",
-      "action": "chair",
-      "object_id": 128
+      "action": "chair"
     }
   ]
 }

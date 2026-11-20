@@ -231,6 +231,12 @@ pub(crate) fn parse_say_command(message: &str) -> Option<&str> {
     strip_command(message, "/s")
 }
 
+/// `!text` is a shout of `text`; bare punctuation ("!", "!?") stays speech.
+pub(crate) fn parse_shout(message: &str) -> Option<&str> {
+    let rest = message.trim_start().strip_prefix('!')?.trim();
+    rest.chars().any(char::is_alphanumeric).then_some(rest)
+}
+
 /// Shared by dispatch and the admin gate; malformed arguments still require admin.
 #[derive(Debug, PartialEq)]
 pub(crate) enum AdminCommand<'a> {
@@ -512,6 +518,11 @@ impl super::GameState {
             return;
         }
 
+        if let Some(shouted) = parse_shout(&message) {
+            self.shout(player_id, shouted.to_string()).await;
+            return;
+        }
+
         self.speak_locally(player_id, message).await;
     }
 
@@ -645,6 +656,53 @@ impl super::GameState {
             message,
         };
         self.send_speech(player_id, len, msg).await;
+    }
+
+    /// `!<message>` — costs satiation and carries `SHOUT_RADIUS`, through
+    /// walls and storeys. Mute and block rules are speech's.
+    async fn shout(&self, player_id: &PlayerId, message: String) {
+        let speaker = {
+            let players = self.players.read().await;
+            players.get(player_id).map(|player| {
+                (
+                    player.name.clone(),
+                    player.family.clone(),
+                    player.position,
+                    player.floor_level,
+                )
+            })
+        };
+        let Some((from, from_family, position, floor)) = speaker else {
+            warn!("Shout from non-existent player: {}", player_id);
+            return;
+        };
+        if self.refuse_if_muted(player_id, &from, "chat").await {
+            return;
+        }
+        if !self
+            .spend_satiation(player_id, onlinerpg_shared::hunger::SHOUT_SATIATION_COST)
+            .await
+        {
+            self.send_system_message(player_id, "Shout: you are too hungry to shout.")
+                .await;
+            return;
+        }
+        // Content stays out of logs like local chat (privacy, F-012).
+        info!(from = %from, len = message.len(), "shout");
+        let listeners =
+            self.interest_lock()
+                .viewers_within(&position, floor, onlinerpg_shared::SHOUT_RADIUS);
+        let recipients = self.unblocked_recipients(player_id, &from, listeners).await;
+        self.send_direct_message_to_players(
+            &recipients,
+            ServerMessage::ShoutMessage {
+                player_id: *player_id,
+                from,
+                from_family,
+                message,
+            },
+        )
+        .await;
     }
 
     /// `/recite <line>` (logged) and `/recite_quiet <line>` (bubble only) —

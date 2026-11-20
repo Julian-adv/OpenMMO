@@ -502,12 +502,15 @@
         class:whisper={entry.sender === 'whisper'}
         class:party={entry.sender === 'party'}
         class:family={entry.sender === 'family'}
+        class:shout={entry.sender === 'shout'}
       >
         {#if entry.name}
           {#if entry.sender === 'party'}
             <span class="party-tag">[{$t('chat.party')}]</span>
           {:else if entry.sender === 'family'}
             <span class="family-tag">[{$t('chat.family')}]</span>
+          {:else if entry.sender === 'shout'}
+            <span class="shout-tag">[{$t('chat.shout')}]</span>
           {/if}
           {@const label = chatEntryNameParts(entry, $locale)}
           <span
@@ -913,6 +916,20 @@
 
   .party-tag {
     color: #7ec8ff;
+    font-weight: 700;
+  }
+
+  .message.shout {
+    color: #f2b3a8;
+  }
+
+  .message.shout .name {
+    color: #ee9282;
+    font-weight: 600;
+  }
+
+  .shout-tag {
+    color: #ee9282;
     font-weight: 700;
   }
 
