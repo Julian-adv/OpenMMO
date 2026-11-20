@@ -6,13 +6,34 @@ import numpy as np
 from PIL import Image
 from scipy.ndimage import gaussian_filter
 
+from lib.glb_accessors import add_accessor, add_view
 from outfits.knight_steel import cuirass_swatch
 
 STEEL, GUNMETAL, EDGE, BRASS, LEATHER, LINING = range(6)
+KINDS = dict(POSITION="VEC3", NORMAL="VEC3", TEXCOORD_0="VEC2", JOINTS_0="VEC4", WEIGHTS_0="VEC4")
 
 
 def unit(a):
     return a / np.maximum(np.linalg.norm(a, axis=-1, keepdims=True), 1e-12)
+
+
+def rigid(joint):
+    return lambda u, v: ([joint, 0, 0, 0], [1, 0, 0, 0])
+
+
+def add_material(doc, data, name, image_names, extra_finishes=()):
+    doc["images"], doc["textures"] = [], []
+    for title, png in zip(image_names, atlas(extra_finishes)):
+        doc["images"].append(dict(name=title, mimeType="image/png", bufferView=add_view(doc, data, png)))
+        doc["textures"].append(dict(source=len(doc["textures"])))
+    doc["materials"] = [
+        dict(
+            name=name,
+            doubleSided=True,
+            pbrMetallicRoughness=dict(baseColorTexture=dict(index=0), metallicRoughnessTexture=dict(index=1)),
+        )
+    ]
+    doc["buffers"] = [dict(byteLength=len(data))]
 
 
 def atlas(extra_finishes=()):
@@ -69,10 +90,19 @@ def atlas(extra_finishes=()):
 class SurfaceMesh:
     def __init__(self, material_count=6):
         self.material_count = material_count
-        self.attrs = {key: [] for key in ["POSITION", "NORMAL", "TEXCOORD_0", "JOINTS_0", "WEIGHTS_0"]}
+        self.attrs = {key: [] for key in KINDS}
         self.faces = []
         self.vertices = 0
         self.triangles = 0
+
+    def primitive(self, doc, data, values=None):
+        values = values or {k: np.concatenate(v) for k, v in self.attrs.items()}
+        attrs = {
+            k: add_accessor(doc, data, v, KINDS[k], 5123 if k == "JOINTS_0" else 5126) for k, v in values.items()
+        }
+        assert self.vertices < 65536
+        indices = add_accessor(doc, data, np.concatenate(self.faces).ravel(), "SCALAR", 5123)
+        return dict(attributes=attrs, indices=indices, material=0)
 
     def append(self, points, normals, uv, faces, material, joints, weights):
         points = np.asarray(points).reshape(-1, 3)
@@ -146,7 +176,7 @@ class SurfaceMesh:
 
         return anchor
 
-    def stud(self, anchor, u, v, radius=0.003, material=BRASS):
+    def stud(self, anchor, u, v, radius, material=BRASS):
         p, n, j, w = anchor(u, v)
         t = unit(np.cross(n, [0, 1, 0] if abs(n[1]) < 0.9 else [1, 0, 0]))
         b = np.cross(n, t)

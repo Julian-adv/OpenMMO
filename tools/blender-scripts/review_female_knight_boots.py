@@ -55,21 +55,6 @@ for obj in imported:
 for obj in imported:
     if obj.type != 'MESH':
         bpy.data.objects.remove(obj, do_unlink=True)
-if any(obj.vertex_groups.get('LeftKneeGuard') for obj in rig.children if obj.type == 'MESH'):
-    bpy.context.view_layer.objects.active = rig
-    bpy.ops.object.mode_set(mode='EDIT')
-    for side in ('Left', 'Right'):
-        shin = rig.data.edit_bones[side + 'Leg']
-        guard = rig.data.edit_bones.new(side + 'KneeGuard')
-        guard.parent = shin.parent
-        guard.head, guard.tail, guard.roll = shin.head.copy(), shin.tail.copy(), shin.roll
-    bpy.ops.object.mode_set(mode='OBJECT')
-    for side in ('Left', 'Right'):
-        constraint = rig.pose.bones[side + 'KneeGuard'].constraints.new('COPY_ROTATION')
-        constraint.target = rig
-        constraint.subtarget = side + 'Leg'
-        constraint.target_space = constraint.owner_space = 'LOCAL'
-        constraint.influence = 0.5
 for track in rig.animation_data.nla_tracks:
     track.mute = True
 rig.animation_data.action = None

@@ -443,29 +443,15 @@ describe('female modular starter outfits', () => {
     }
   )
   it.skipIf(!hasAssets)(
-    'keeps each knee guard halfway through its own knee bend',
+    'binds every part to one skeleton',
     async () => {
       const source = await loadCharacterModel(MODULAR_FEMALE_MODEL_PATH)
       const { modelRoot } = createCharacterModelRoot(source.scene)
       await applyCharacterArmor(modelRoot, armor)
-      const boot = skinnedParts(modelRoot).find(
-        (mesh) => mesh.userData.female_part === 'boots'
-      )!
-      for (const side of ['Left', 'Right']) {
-        const shin = modelRoot.getObjectByName(side + 'Leg')!
-        const guard = boot.skeleton.getBoneByName(side + 'KneeGuard')!
-        expect(guard.parent).toBe(shin.parent)
-        expect(guard).not.toBe(source.scene.getObjectByName(guard.name))
-        const rest = shin.quaternion.clone()
-        shin.rotateX(Math.PI / 2)
-        modelRoot.updateMatrixWorld(true)
-        expect(guard.position.distanceTo(shin.position)).toBeLessThan(1e-6)
-        expect(guard.quaternion.angleTo(rest)).toBeCloseTo(Math.PI / 4)
-        expect(guard.quaternion.angleTo(shin.quaternion)).toBeCloseTo(
-          Math.PI / 4
-        )
-        shin.quaternion.copy(rest)
-      }
+      const skeletons = new Set(
+        skinnedParts(modelRoot).map((mesh) => mesh.skeleton)
+      )
+      expect(skeletons.size).toBe(1)
       disposeCharacterSkeletons(modelRoot)
     }
   )

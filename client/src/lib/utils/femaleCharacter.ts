@@ -129,6 +129,7 @@ export const FEMALE_PARTS = styles
 // All equipped boots share the 30° foot rotation.
 export const FEMALE_BOOTS_PARTS = ['boots']
 export const SHARED_HEEL_GROUND = 'shared_heel'
+export const FEMALE_GROUND_PARTS = [...FEMALE_BOOTS_PARTS, SHARED_HEEL_GROUND]
 // Baked tracks carry [bare, ...boots] values; this property picks one per character.
 export const FEMALE_BOOTS_PROPERTY = 'femaleBoots'
 // glTF allows one channel per node and path, so boots values ship as companion animations.
@@ -329,9 +330,7 @@ function pairFemaleClips(
   const byName = new Map(clips.map((clip) => [clip.name, clip]))
   const companions = new Set(
     clips.flatMap((clip) =>
-      [...FEMALE_BOOTS_PARTS, SHARED_HEEL_GROUND].map((boots) =>
-        femaleBootsClipName(clip.name, boots)
-      )
+      FEMALE_GROUND_PARTS.map((boots) => femaleBootsClipName(clip.name, boots))
     )
   )
   return clips

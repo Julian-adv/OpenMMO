@@ -119,7 +119,7 @@ Three.js 디코더로 비교한 224개 클립의 3,624개 트랙·354,042개 키
   `hair-cheek-coverage-anchors.json`, 피팅 기록의 높이 값)도 1.8배했다. Tripo 원본 좌표 `source`와 삼각형 인덱스인 가림 JSON은 그대로다.
 - 게임용 GLB 23개를 다시 만들어 전환 전과 비교했다. 메시·스킨·역바인드·애니메이션 트랙이 비트 단위로 같고,
   `animations/offhand.glb` 횃불 동작의 Hips 이동만 부동소수 오차(최대 1.19e-7m)만큼 다르다.
-- 미터 기준 도구: 피팅 `fit-female-barbarian-{bracers,helmet,boots}.py`, `fit-female-knight-{boots,gloves,helmet}.py`,
+- 미터 기준 도구: 피팅 `fit-female-barbarian-{bracers,helmet,boots}.py`, `fit-female-knight-{gloves,helmet}.py`,
   `trim-female-barbarian-helmet-hair.py`,
   `outfits/{fit_female_knight_top_surface,repair_sandal_panel,female_barbarian_top_occlusion}.py`,
   Blender `fit_female_knight_{bob,hair}.py`·`fit_female_barbarian_top.py`·`rig-female-knight-{bob,hair}.py`·`review_female_*.py`,

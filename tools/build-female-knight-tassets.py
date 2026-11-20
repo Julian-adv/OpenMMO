@@ -9,17 +9,15 @@ from scipy.spatial.transform import Rotation, Slerp
 
 from lib.glb import read_glb, write_glb
 from lib.glb_accessors import accessor, add_accessor
-from outfits.knight_boot_profile import cuff, leg, rim_offset
-from outfits.knight_plate_surfaces import SurfaceMesh, atlas, STEEL, GUNMETAL, BRASS, LEATHER, LINING
+from outfits.body_shape import smoothstep
+from outfits.knight_boot_profile import cuff, leg, rim_offset, xyz
+from outfits.knight_plate_surfaces import (
+    BRASS, GUNMETAL, LEATHER, LINING, STEEL, SurfaceMesh, add_material, rigid,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
-ITEM = ROOT / "assets/items/female_knight_bottom"
-OUT = ITEM / "reference_v1/fitted_v1"
+OUT = ROOT / "assets/items/female_knight_bottom/reference_v1/fitted_v1"
 lin = np.linspace
-
-
-def xyz(x, y, z):
-    return np.stack(np.broadcast_arrays(x, y, z), axis=-1)
 
 
 def contour(values):
@@ -46,10 +44,6 @@ def shell(side, theta, y, offset=0, leading=None):
     x = lip + (outer(y) - lip) * s
     z = 0.5 * ((front(y) + rear(y)) + (front(y) - rear(y)) * c)
     return xyz(side * (x + offset * s) + midline(y) * s**2, y, z + offset * c)
-
-
-def rigid(joint):
-    return lambda u, v: ([joint, 0, 0, 0], [1, 0, 0, 0])
 
 
 def thigh_bind_transforms(base, data):
@@ -86,17 +80,13 @@ def add_leather_underwear(mesh, base, data, mask, bones):
 
 
 def fit_waist(mesh, start, bones, thigh_bind, front_guard):
-    def ramp(t):
-        t = np.clip(t, 0, 1)
-        return t * t * (3 - 2 * t)
-
     def taper(p):
         x, y, z = p.T
-        front = 0.22 * ramp((y - 1.025) / 0.081)
-        back = 0.27 * ramp((y - 1.069) / 0.084)
+        front = 0.22 * smoothstep((y - 1.025) / 0.081)
+        back = 0.27 * smoothstep((y - 1.069) / 0.084)
         depth = z - 0.010
         factor = np.where(depth > 0, front, back)
-        return xyz(x, y, z - depth * factor * (1 - ramp((abs(x) - 0.035) / 0.086)))
+        return xyz(x, y, z - depth * factor * (1 - smoothstep((abs(x) - 0.035) / 0.086)))
 
     # Fit the belt and its attachments together in the fitting stance.
     transforms = np.tile(np.eye(4), (len(bones), 1, 1))
@@ -136,8 +126,7 @@ def build(mesh, bones, thigh_bind):
 
     def weighted(side, y):
         leg = bones.index(("Left" if side > 0 else "Right") + "UpLeg")
-        t = np.clip((1.098 - y) / 0.172, 0, 1).ravel()
-        t = t * t * (3 - 2 * t)
+        t = smoothstep((1.098 - y) / 0.172).ravel()
         return [hips, leg, 0, 0], np.stack([1 - t, t, 0 * t, 0 * t], axis=-1)
 
     def suspension(side, back):
@@ -145,14 +134,9 @@ def build(mesh, bones, thigh_bind):
 
         def harness_strap(u, v):
             y = top + (end - top) * v + 0.007 * (2 * u - 1) ** 2 * (v**12 - 0.6 * (1 - v) ** 14)
-            x = (0.068 + 0.085 * v if back else 0.064 + 0.038 * v) + (u - 0.5) * (0.020 - 0.003 * v)
-            if back:
-                z = rear(y) - 0.019
-            else:
-                z = np.interp(
-                    y, [0.84, 0.895, 0.96, 1.02, 1.080, 1.14], [0.104, 0.109, 0.115, 0.122, 0.140, 0.123]
-                )
-            z += (-1 if back else 1) * 0.0009 * (1 - (2 * u - 1) ** 2)
+            x = 0.064 + 0.038 * v + (u - 0.5) * (0.020 - 0.003 * v)
+            z = np.interp(y, [0.84, 0.895, 0.96, 1.02, 1.080, 1.14], [0.104, 0.109, 0.115, 0.122, 0.140, 0.123])
+            z += 0.0009 * (1 - (2 * u - 1) ** 2)
             return xyz(side * x, y, z)
 
         thigh_name = ("Left" if side > 0 else "Right") + "UpLeg"
@@ -222,8 +206,7 @@ def build(mesh, bones, thigh_bind):
             angle = 0.12 + (u - 0.5) * 0.19
             tip_height = cuff(angle) - 0.024 + 0.007 * (2 * u - 1)**2
             offset = rim_offset(angle, 0.5) + 0.001
-            blend = np.clip((v - 0.53) / 0.39, 0, 1)
-            blend = blend * blend * (3 - 2 * blend)
+            blend = smoothstep((v - 0.53) / 0.39)
             y = p[..., 1] + (tip_height - harness_strap(u, 1)[..., 1]) * v * blend
             target = leg(side, angle, y, offset)
             return p + (target - p) * np.asarray(blend)[..., None]
@@ -313,8 +296,7 @@ def build(mesh, bones, thigh_bind):
         return blend_hip(plate, waist, (v - 0.52) / 0.48)
 
     def blend_hip(center, hip, t):
-        t = np.clip(t, 0, 1)
-        return center + (hip - center) * (t * t * (3 - 2 * t))[..., None]
+        return center + (hip - center) * smoothstep(t)[..., None]
 
     def back_belt(u, v):
         theta = np.pi * u
@@ -522,41 +504,9 @@ def main():
         scene=base["scene"], scenes=base["scenes"], skins=[dict(skin)],
     )
     data = bytearray()
-    attrs = {
-        k: add_accessor(
-            doc,
-            data,
-            np.concatenate(v),
-            {
-                "POSITION": "VEC3",
-                "NORMAL": "VEC3",
-                "TEXCOORD_0": "VEC2",
-                "JOINTS_0": "VEC4",
-                "WEIGHTS_0": "VEC4",
-            }[k],
-            5123 if k == "JOINTS_0" else 5126,
-        )
-        for k, v in mesh.attrs.items()
-    }
-    assert mesh.vertices < 65536
-    indices = add_accessor(doc, data, np.concatenate(mesh.faces).ravel(), "SCALAR", 5123)
-    doc["meshes"][0]["primitives"] = [dict(attributes=attrs, indices=indices, material=0)]
+    doc["meshes"][0]["primitives"] = [mesh.primitive(doc, data)]
     doc["skins"][0]["inverseBindMatrices"] = add_accessor(doc, data, bind, "MAT4")
-    doc["images"], doc["textures"] = [], []
-    for name, png in zip(["Tasset finish", "Tasset roughness and metalness"], atlas()):
-        data.extend(bytes(-len(data) % 4))
-        doc["images"].append(dict(name=name, mimeType="image/png", bufferView=len(doc["bufferViews"])))
-        doc["textures"].append(dict(source=len(doc["textures"])))
-        doc["bufferViews"].append(dict(buffer=0, byteOffset=len(data), byteLength=len(png)))
-        data.extend(png)
-    doc["materials"] = [
-        dict(
-            name="Steel and saddle leather",
-            doubleSided=True,
-            pbrMetallicRoughness={"baseColorTexture": {"index": 0}, "metallicRoughnessTexture": {"index": 1}},
-        )
-    ]
-    doc["buffers"] = [dict(byteLength=len(data))]
+    add_material(doc, data, "Steel and saddle leather", ["Tasset finish", "Tasset roughness and metalness"])
     OUT.mkdir(exist_ok=True, parents=True)
     write_glb(OUT / "bottom_female_knight.glb", doc, data)
     (OUT / "fitting.json").write_text(

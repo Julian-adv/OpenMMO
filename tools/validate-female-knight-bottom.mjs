@@ -10,6 +10,7 @@ const { panels, harness_triangles } = read(`${directory}/fitting.json`)
 const { server, load } = await headlessThree()
 try {
   const { bindModularPart } = await server.ssrLoadModule('/src/lib/utils/modularCharacter.ts')
+  const { femaleBootsClipName } = await server.ssrLoadModule('/src/lib/utils/femaleCharacter.ts')
   const { scene: body } = await load(`${runtime}/base.glb`)
   const { scene: part } = await load(`${runtime}/bottom.glb`)
   assert.deepEqual(part.userData.body_mask, read(`${directory}/body-occlusion.json`))
@@ -53,7 +54,7 @@ try {
     const { animations } = await load(`${runtime}/animations/${pack}.glb`)
     for (const name of names) {
       const base = animations.find(c => c.name === name)
-      const boots = animations.find(c => c.name === `${name}|femaleBoots:boots`)
+      const boots = animations.find(c => c.name === femaleBootsClipName(name, 'boots'))
       const overrides = new Map(boots.tracks.map(track => [track.name, track]))
       const clip = new AnimationClip(name, base.duration, base.tracks.map(track => overrides.get(track.name) ?? track))
       let maxError = 0, maxMotion = 0

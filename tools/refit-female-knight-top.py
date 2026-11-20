@@ -11,16 +11,14 @@ from scipy.sparse.csgraph import connected_components
 from scipy.sparse.linalg import spsolve
 
 from lib.glb import read_glb, view_bytes, write_glb
-from lib.glb_accessors import accessor, add_accessor
+from lib.glb_accessors import accessor, add_accessor, add_view
+from outfits.body_shape import smoothstep
+from outfits.knight_plate_surfaces import unit
 from outfits.plate_fitting import plate_roughness_map, similarity
 from outfits.rogue_layers import compact_weights
 
 ROOT = Path(__file__).resolve().parents[1]
 ITEM = ROOT / 'assets/items/female_knight_top/tripo_v1'
-
-
-def unit(v):
-    return v / np.maximum(np.linalg.norm(v, axis=1, keepdims=True), 1e-12)
 
 
 def fit_regions(points, faces, uv, metal_map, left, upper_arm):
@@ -65,9 +63,8 @@ def lower_front_rim(position, normal):
         x, y, z = p.T
         across = np.clip((x + 0.0008) / 0.067, -1, 1)
         arch = (1 + np.cos(np.pi * across)) * 0.5
-        front = np.clip((z + 0.008) / 0.038, 0, 1)
         height = np.clip((y - 1.547) / 0.036, 0, 1)
-        return 0.018 * arch * front * front * (3 - 2 * front) * height
+        return 0.018 * arch * smoothstep((z + 0.008) / 0.038) * height
 
     depth = drop(position)
     active = depth > 0
@@ -146,10 +143,7 @@ def main():
         if texture is image:
             data = plate_roughness_map(data)
             texture['mimeType'] = 'image/png'
-        binary.extend(bytes(-len(binary) % 4))
-        texture['bufferView'] = len(fitted['bufferViews'])
-        fitted['bufferViews'].append(dict(buffer=0, byteOffset=len(binary), byteLength=len(data)))
-        binary.extend(data)
+        texture['bufferView'] = add_view(fitted, binary, data)
     fitted['buffers'] = [dict(byteLength=len(binary))]
     out = ITEM / 'fitted_v4'
     out.mkdir(exist_ok=True)
@@ -178,7 +172,6 @@ def main():
     }
     (ROOT / 'doc/assets/modular-female-knight-top-fitting-v4.json').write_text(json.dumps(report, indent=2) + '\n')
     print(json.dumps(report))
-
 
 
 if __name__ == '__main__':

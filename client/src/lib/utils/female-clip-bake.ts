@@ -2,7 +2,7 @@ import * as THREE from 'three'
 import { clone } from 'three/examples/jsm/utils/SkeletonUtils.js'
 import { applyModularFingerPose, skinnedParts } from './modularCharacter'
 import { femaleBootGround, standingMotions } from './female-boot-ground'
-import { FEMALE_BOOTS_PARTS, SHARED_HEEL_GROUND } from './femaleCharacter'
+import { FEMALE_GROUND_PARTS, SHARED_HEEL_GROUND } from './femaleCharacter'
 
 const gripMotions = [
   'idle1',
@@ -37,8 +37,7 @@ export function bakeFemaleClips(
 ): FemaleClipBake[] {
   const rig = clone(scene)
   const meshes = skinnedParts(rig)
-  const groundParts = [...FEMALE_BOOTS_PARTS, SHARED_HEEL_GROUND]
-  const grounds = groundParts.map((part) =>
+  const grounds = FEMALE_GROUND_PARTS.map((part) =>
     femaleBootGround(
       rig,
       meshes.find((mesh) => mesh.userData.female_body)!,
@@ -83,7 +82,7 @@ export function bakeFemaleClips(
       const boots: THREE.KeyframeTrack[] = []
       const standing = new Map<number, Map<string, number[]>>()
       const rotations =
-        groundParts[v] === SHARED_HEEL_GROUND ? [] : ground.offsets
+        FEMALE_GROUND_PARTS[v] === SHARED_HEEL_GROUND ? [] : ground.offsets
       for (const { bone, rotation } of rotations) {
         const name = `${bone.name}.quaternion`
         const source = track(name)
@@ -141,7 +140,7 @@ export function bakeFemaleClips(
         )
       }
       ground.restore()
-      variants[groundParts[v]] = boots
+      variants[FEMALE_GROUND_PARTS[v]] = boots
     }
     mixer.stopAllAction()
     mixer.uncacheClip(raw)

@@ -837,12 +837,9 @@ export async function showFemaleBase(
     unarmed: handPose('idle1'),
     armed: handPose('idle_armed'),
   }
-  // Both before the mixer writes: a ground left applied put last frame's legs back over the animation.
-  const restoreGround = () => {
-    bootGround?.restore()
-  }
   const updateAnimation = (delta: number) => {
-    restoreGround()
+    // Before the mixer writes: a ground left applied put last frame's legs back over the animation.
+    bootGround?.restore()
     mixer.update(delta)
     updateModularPoseCorrectives(model, motion.value)
     if (shield.visible && motion.value !== 'rest') {
@@ -880,7 +877,7 @@ export async function showFemaleBase(
       : motion.selectedOptions[0].textContent
   }
   const play = () => {
-    restoreGround()
+    bootGround?.restore()
     mixer.stopAllAction()
     chair.visible = motion.value === 'sit_idle'
     model.position.y = chair.visible ? femaleSeatOffset : 0
@@ -1120,7 +1117,7 @@ export async function showFemaleBase(
   let knightGlovesEquipped = false
   let sleeveMaskRegistered = false
   const updateGround = () => {
-    restoreGround()
+    bootGround?.restore()
     model.position.y = chair.visible ? femaleSeatOffset : 0
     const ground = bootGround
     if (bootsEquipped && ground) {

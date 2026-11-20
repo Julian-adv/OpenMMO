@@ -31,12 +31,6 @@ try {
   assert.ok(body)
   const skeleton = body.skeleton
   base.scene.updateMatrixWorld(true)
-  const guardJoints = ['Left', 'Right'].flatMap(side => {
-    const shin = skeleton.getBoneByName(side + 'Leg')
-    const guard = boots[0].skeleton.getBoneByName(side + 'KneeGuard')
-    return guard ? [{ guard, shin, rest: shin.quaternion.clone() }] : []
-  })
-  if (directory.includes('/reference_v2/')) assert.equal(guardJoints.length, 2)
   const parts = boots.map(mesh => {
     for (let i = 0; i < 65; i++) {
       assert.equal(mesh.skeleton.bones[i], skeleton.bones[i])
@@ -56,7 +50,7 @@ try {
         assert.ok(w >= 0 && w <= 1)
         const name = mesh.skeleton.bones[skinIndex.getComponent(i, k)].name
         assert.ok(name.startsWith(point.x < 0 ? 'Right' : 'Left'), name)
-        assert.ok(/(UpLeg|Leg|Foot|ToeBase|KneeGuard)$/.test(name), name)
+        assert.ok(/(UpLeg|Leg|Foot|ToeBase)$/.test(name), name)
       }
       assert.ok(Math.abs(sum - 1) < 1e-6)
     }
@@ -80,7 +74,7 @@ try {
   mask.register('boots', coverage)
   mask.setEquipped('boots', true)
   let splitTriangles = 0
-  for (const { point, normal, triangle_indices } of coverage.clip_planes ?? []) {
+  for (const { point, normal, triangle_indices } of coverage.clip_planes) {
     const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(new THREE.Vector3(...normal), new THREE.Vector3(...point))
     for (const triangle of triangle_indices) {
       const kept = [0, 1, 2].filter(k => {
@@ -170,12 +164,6 @@ try {
     let maxRigidStretch = 0, maxFlexibleStretch = 0, maxMotion = 0, minY = Infinity, maxLift = 0, maxForefootSeamGap = 0, maxTransverseSlope = 0, maxSoleTilt = 0
     for (const { time } of sample(clip)) {
       const heelLift = ground.apply(clip.name === 'sit_idle' ? femaleSeatOffset : undefined, clip.name)
-      for (const { guard, shin, rest } of guardJoints) {
-        assert.equal(guard.parent, shin.parent)
-        assert.ok(guard.position.distanceTo(shin.position) < 1e-6)
-        const error = guard.quaternion.angleTo(rest.clone().slerp(shin.quaternion, .5).normalize())
-        assert.ok(error < 1e-5, `${clip.name} ${time}s ${guard.name} midpoint error ${error}`)
-      }
       const lift = clip.name === 'sit_idle' ? femaleSeatOffset : heelLift
       lifts.push({ time, lift,
         hips: base.scene.getObjectByName('Hips').position.toArray(),
@@ -233,7 +221,6 @@ try {
   mask.dispose()
   const report = { date: new Date().toISOString().slice(0, 10), source: { path: partPath, sha256: hash(partPath) },
     body: { path: basePath, sha256: hash(basePath) }, exact_65_bone_bind_compatibility: true,
-    midpoint_knee_guards: guardJoints.length,
     four_normalized_influences: true, no_opposite_leg_weights: true, skin_mask_restores: true,
     forefoot_seam_pairs: forefootSeamCount,
     sole_transverse_pairs: transversePairCount,

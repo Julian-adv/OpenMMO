@@ -64,6 +64,7 @@ try {
       if (length > .0018 && core(a) && core(b)) edges.push([a, b, length])
     }
   assert.ok(edges.length > 100)
+  assert.ok(plateEdges.length > 6000)
   const clips = []
   for (const clip of animations) {
     let plateStretch = 0
@@ -85,7 +86,6 @@ try {
     }
     assert.ok(maximumEdgeRatio < 6, `${clip.name}: garment edge stretched ${maximumEdgeRatio} times`)
     assert.ok(maximumThoraxStretch < .02, `${clip.name}: rigid thorax distorted by ${maximumThoraxStretch}`)
-    assert.ok(plateEdges.length > 6000)
     assert.ok(plateStretch < .0001, `${clip.name}: plate edge distortion ${plateStretch}`)
     clips.push({ name: clip.name, maximum_plate_edge_length_change: plateStretch, samples: 121, maximum_motion: maximumMotion, maximum_thorax_edge_length_change: maximumThoraxStretch, maximum_edge_length_ratio: maximumEdgeRatio })
   }
@@ -94,7 +94,7 @@ try {
     unchanged_rest_shape: true, no_opposite_arm_influence: true, thorax_rigidity_checked_edges: edges.length, clips,
     rigid_plate_edges_checked: plateEdges.length,
     scope: 'Runtime binding and sampled edge lengths of the cuirass and both pauldrons.' }
-  writeFileSync(new URL(`../doc/assets/modular-female-knight-top-animation-v4.json`, import.meta.url), JSON.stringify(report, null, 2) + '\n')
+  writeFileSync(new URL('../doc/assets/modular-female-knight-top-animation-v4.json', import.meta.url), JSON.stringify(report, null, 2) + '\n')
   console.log(JSON.stringify({ ...report, clips: clips.map(c => c.name) }))
 } finally {
   await server.close()

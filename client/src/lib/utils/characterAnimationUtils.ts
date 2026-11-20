@@ -1,6 +1,5 @@
 import * as THREE from 'three'
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
-import { kneeGuardSkeleton } from './kneeGuardSkeleton'
 import { AnimationName } from '../types/animations'
 import { createFrameYielder, yieldTask } from './frameYield'
 import { retargetClipAsync } from './retargetClipAsync'
@@ -80,11 +79,7 @@ export function createCharacterModelRoot(sourceScene: THREE.Object3D): {
     if (shared) {
       const unused = new Set(meshes.map((mesh) => mesh.skeleton))
       unused.delete(shared)
-      for (const mesh of meshes) {
-        const target = kneeGuardSkeleton(shared, mesh.skeleton) ?? shared
-        mesh.bind(target, mesh.bindMatrix.clone())
-        unused.delete(target)
-      }
+      for (const mesh of meshes) mesh.bind(shared, mesh.bindMatrix.clone())
       for (const skeleton of unused) skeleton.dispose()
     }
   }

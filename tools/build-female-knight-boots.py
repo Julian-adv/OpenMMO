@@ -9,13 +9,13 @@ from scipy.interpolate import PchipInterpolator
 
 from lib.glb import read_glb, write_glb
 from lib.glb_accessors import accessor, add_accessor
+from outfits.body_shape import smoothstep
 from outfits.female_boot_pose import heel_pose
 from outfits.knight_boot_profile import cuff, leg, rim_offset, xyz
-from outfits.knight_plate_surfaces import BRASS, GUNMETAL, LEATHER, STEEL, SurfaceMesh, atlas, unit
+from outfits.knight_plate_surfaces import BRASS, GUNMETAL, LEATHER, STEEL, SurfaceMesh, add_material, rigid, unit
 
 ROOT = Path(__file__).resolve().parents[1]
-ITEM = ROOT / "assets/items/female_knight_boots"
-OUT = ITEM / "reference_v2/fitted_v1"
+OUT = ROOT / "assets/items/female_knight_boots/reference_v2/fitted_v1"
 BODY = ROOT / "assets/modular_human_female_01/rig_v1/female-base.glb"
 RED, CLOTH, HEEL, SHOE_STEEL = 6, 7, 8, 9
 FINISHES = [
@@ -35,13 +35,12 @@ def samples(n):
 def add_leg(mesh, side, joints):
     def sheet(fn, nu, nv, angle, mat, bone, thickness=0.0016):
         outward = [side * np.sin(angle), 0, np.cos(angle)]
-        skin = bone if callable(bone) else lambda u, v: ([joints[bone], 0, 0, 0], [1, 0, 0, 0])
+        skin = bone if callable(bone) else rigid(joints[bone])
         return mesh.sheet(fn, samples(nu), samples(nv), outward, mat, skin, thickness)
 
     def knee_weights(u, v):
         y = 0.485 + 0.195 * v
-        t = np.clip((y - 0.532) / 0.097, 0, 1)
-        t = t * t * (3 - 2 * t)
+        t = smoothstep((y - 0.532) / 0.097)
         return [joints["UpLeg"], joints["Leg"], 0, 0], np.stack([t, 1 - t, 0 * t, 0 * t], axis=-1).reshape(
             -1, 4
         )
@@ -152,7 +151,7 @@ def add_leg(mesh, side, joints):
         bulge = (0.012 + 0.013 * np.cos(a)) * np.maximum(0, 1 - np.abs(t) ** 1.35)
         return tilt_guard(leg(side, a, y, 0.018 + bulge))
 
-    shield = sheet(poleyn, 19, 7, 0, STEEL, "KneeGuard")
+    shield = sheet(poleyn, 19, 7, 0, STEEL, "Leg")
     for u in (0.13, 0.87):
         mesh.stud(shield, u, 0.50, 0.0036)
 
@@ -167,7 +166,7 @@ def add_leg(mesh, side, joints):
             p = leg(side, a, y, 0.014 + 0.014 * (1 - t * t) * np.sin(pi * u) + 0.008 * (1 - u))
             return tilt_guard(p + xyz(side * flank * 0.010, 0, 0.008))
 
-        wing_anchor = sheet(wing, 9, 7, flank * pi / 2, STEEL, "KneeGuard")
+        wing_anchor = sheet(wing, 9, 7, flank * pi / 2, STEEL, "Leg")
         for u, v in [(0.40, 0.08), (0.40, 0.92), (0.14, 0.50), (0.88, 0.50)]:
             mesh.stud(wing_anchor, u, v, 0.0030)
 
@@ -226,8 +225,6 @@ def smooth_counter_normals(mesh, shell, facing):
 
 
 def add_shoe(mesh, side, foot):
-    rigid = lambda u, v: ([foot, 0, 0, 0], [1, 0, 0, 0])
-
     def cx(z):
         return 0.243 + 0.18 * (z + 0.045)
 
@@ -238,7 +235,7 @@ def add_shoe(mesh, side, foot):
         return xyz(side * (cx(z) + (width + offset) * np.sin(a)), base + (top - base) * c + offset * c, z)
 
     def sheet(fn, n, m, out, mat, thick=0.0012):
-        return mesh.sheet(fn, samples(n), samples(m), out, mat, rigid, thick)
+        return mesh.sheet(fn, samples(n), samples(m), out, mat, rigid(foot), thick)
 
     def sole_z(v):
         return last[0, 0] + (last[-1, 0] - last[0, 0]) * v
@@ -456,14 +453,13 @@ def add_shoe(mesh, side, foot):
         seat_width = np.where(seat_z < end, end_width * np.sqrt(1 - rear_curve**2), seat_width)
         breast = np.clip((seat_z - seat_shoulder) / (seat_front - seat_shoulder), 0, 1)
         seat_width *= np.sqrt(1 - breast**2)
-        flare = np.clip((v - 0.65) / 0.35, 0, 1)
-        flare = flare**2 * (3 - 2 * flare)
+        flare = smoothstep((v - 0.65) / 0.35)
         x = width * np.sin(a) * (1 - flare) + np.sign(np.sin(a)) * seat_width * flare
         h = v + v**5 * (1 - v)
         return xyz(side * (cx(z) + x), FLOOR + (seat - FLOOR) * h, z)
 
     mesh.sheet(
-        heelwall, samples(17), np.unique(np.r_[samples(12), levels, 0.945, 0.990]), [0, 0, 1], HEEL, rigid, 0
+        heelwall, samples(17), np.unique(np.r_[samples(12), levels, 0.945, 0.990]), [0, 0, 1], HEEL, rigid(foot), 0
     )
 
     def heel_tip(u, v):
@@ -493,25 +489,12 @@ def build():
     doc["scenes"][0]["extras"]["heel_pose"] = dict(pose, body_sha256=body_hash)
     names = [doc["nodes"][n]["name"] for n in doc["skins"][0]["joints"]]
     bind = accessor(doc, template, doc["skins"][0]["inverseBindMatrices"])
-    skin_joints = doc["skins"][0]["joints"]
-    shin_indices = [names.index(side + "Leg") for side in ("Left", "Right")]
-    for shin_index in shin_indices:
-        shin = doc["nodes"][skin_joints[shin_index]]
-        side = shin["name"][:-3]
-        name = side + "KneeGuard"
-        node = dict(name=name, translation=shin["translation"], rotation=shin["rotation"])
-        doc["nodes"][skin_joints[names.index(side + "UpLeg")]]["children"].append(len(doc["nodes"]))
-        skin_joints.append(len(doc["nodes"]))
-        doc["nodes"].append(node)
-        names.append(name)
-    bind = np.concatenate((bind, bind[shin_indices]))
-    deform = np.concatenate((deform, deform[shin_indices]))
     data = bytearray()
     doc.update(bufferViews=[], accessors=[])
     count = 0
     for i, (side, prefix) in enumerate([(-1, "Right"), (1, "Left")]):
         mesh = SurfaceMesh(6 + len(FINISHES))
-        joints = {s: names.index(prefix + s) for s in ("UpLeg", "Leg", "Foot", "KneeGuard")}
+        joints = {s: names.index(prefix + s) for s in ("UpLeg", "Leg", "Foot")}
         add_leg(mesh, side, joints)
         add_shoe(mesh, side, joints["Foot"])
         values = {k: np.concatenate(v) for k, v in mesh.attrs.items()}
@@ -519,38 +502,13 @@ def build():
         homogeneous = np.c_[values["POSITION"], np.ones(mesh.vertices)]
         values["POSITION"] = np.linalg.solve(skin, homogeneous[..., None])[:, :3, 0]
         values["NORMAL"] = unit(np.einsum("nji,nj->ni", skin[:, :3, :3], values["NORMAL"]))
-        widths = {
-            "POSITION": "VEC3",
-            "NORMAL": "VEC3",
-            "TEXCOORD_0": "VEC2",
-            "JOINTS_0": "VEC4",
-            "WEIGHTS_0": "VEC4",
-        }
-        attrs = {
-            k: add_accessor(doc, data, v, widths[k], 5123 if k == "JOINTS_0" else 5126)
-            for k, v in values.items()
-        }
-        assert mesh.vertices < 65536
-        idx = add_accessor(doc, data, np.concatenate(mesh.faces).ravel(), "SCALAR", 5123)
-        doc["meshes"][i]["primitives"] = [dict(attributes=attrs, indices=idx, material=0)]
+        doc["meshes"][i]["primitives"] = [mesh.primitive(doc, data, values)]
         count += mesh.triangles
 
     doc["skins"][0]["inverseBindMatrices"] = add_accessor(doc, data, bind, "MAT4")
-    doc["images"], doc["textures"] = [], []
-    for title, png in zip(["Plate and leather", "Roughness and metalness"], atlas(FINISHES)):
-        data.extend(bytes(-len(data) % 4))
-        doc["images"].append(dict(name=title, mimeType="image/png", bufferView=len(doc["bufferViews"])))
-        doc["textures"].append(dict(source=len(doc["textures"])))
-        doc["bufferViews"].append(dict(buffer=0, byteOffset=len(data), byteLength=len(png)))
-        data.extend(png)
-    doc["materials"] = [
-        dict(
-            name="Plate, leather and oxblood sole",
-            doubleSided=True,
-            pbrMetallicRoughness=dict(baseColorTexture=dict(index=0), metallicRoughnessTexture=dict(index=1)),
-        )
-    ]
-    doc["buffers"] = [dict(byteLength=len(data))]
+    add_material(
+        doc, data, "Plate, leather and oxblood sole", ["Plate and leather", "Roughness and metalness"], FINISHES
+    )
     OUT.mkdir(exist_ok=True, parents=True)
     write_glb(OUT / "boots_female_knight.glb", doc, data)
     body_mesh = body["meshes"][0]["primitives"][0]
