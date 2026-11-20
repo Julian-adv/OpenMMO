@@ -113,8 +113,10 @@
   }[] = []
   const invalidColor = new THREE.Color('#ef5b5b')
   const firePosition = new THREE.Vector3()
+  const lightPosition = new THREE.Vector3()
   let fire: FireParticles | null = null
   let fireOffset: THREE.Vector3 | null = null
+  const lightOffset = new THREE.Vector3()
   let torchFire = false
   let signText: THREE.Mesh | null = null
   let renderedSignText: string | undefined
@@ -127,13 +129,13 @@
 
   export function getFirePositions() {
     return fire && !torchFire && ghost?.visible && group.visible
-      ? [firePosition]
+      ? [lightPosition]
       : []
   }
 
   export function getTorchPositions() {
     return fire && torchFire && ghost?.visible && group.visible
-      ? [firePosition]
+      ? [lightPosition]
       : []
   }
 
@@ -372,6 +374,8 @@
             model.fire.y,
             model.fire.z
           )
+          const light = model.fireLight ?? model.fire
+          lightOffset.set(light.x, light.y, light.z)
           fire.group.visible = false
           group.add(fire.group)
         }
@@ -522,6 +526,10 @@
           .applyEuler(ghost.rotation)
           .add(ghost.position)
         fire.setOrigin(firePosition)
+        lightPosition
+          .copy(lightOffset)
+          .applyEuler(ghost.rotation)
+          .add(ghost.position)
         fire.update(delta, get(camera))
       }
     }

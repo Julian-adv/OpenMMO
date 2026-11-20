@@ -432,16 +432,17 @@
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const fireSystems = new Map<
     number,
-    { system: FireParticles; pos: THREE.Vector3 }
+    { system: FireParticles; light: THREE.Vector3 }
   >()
   /** Currently visible fire systems, refreshed by syncFires(); update() only
    *  ticks these so paused (detached) systems cost nothing per frame. */
   const _activeFires: FireParticles[] = []
-  /** World positions of visible flames, refreshed by syncFires(): log-bed
+  /** World light positions of visible flames, refreshed by syncFires(): log-bed
    *  fires (hearths) take the unified light, torches feed the glow pool. */
   const firePositions: THREE.Vector3[] = []
   const torchPositions: THREE.Vector3[] = []
   const _placementPos = new THREE.Vector3()
+  const _fireOrigin = new THREE.Vector3()
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
   const _seenFires = new Set<number>()
 
@@ -475,13 +476,14 @@
         const system = isTorch
           ? new TorchFireParticles()
           : new CampfireFireParticles()
-        entry = { system, pos: new THREE.Vector3() }
+        entry = { system, light: new THREE.Vector3() }
         fireSystems.set(p.id, entry)
       }
       if (!entry.system.group.parent) fireRoot.add(entry.system.group)
-      entry.system.setOrigin(fireWorldPos(p, fire, entry.pos))
+      entry.system.setOrigin(fireWorldPos(p, fire, _fireOrigin))
       _activeFires.push(entry.system)
-      ;(isTorch ? torchPositions : firePositions).push(entry.pos)
+      fireWorldPos(p, def.fireLight ?? fire, entry.light)
+      ;(isTorch ? torchPositions : firePositions).push(entry.light)
     }
     for (const [id, entry] of fireSystems) {
       if (_seenFires.has(id)) continue

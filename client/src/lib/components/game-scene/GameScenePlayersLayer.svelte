@@ -120,7 +120,7 @@
     wallTorchPositions?: () => THREE.Vector3[]
     /** Per-frame provider of the dungeon floor's crystal glow positions. */
     crystalGlowPositions?: () => THREE.Vector3[]
-    /** World positions of burning hearth flames (placed furniture). */
+    /** World light positions of burning hearths (placed furniture). */
     hearthFirePositions?: () => THREE.Vector3[]
     /** Flame world-positions of wall torches placed in houses. */
     houseTorchPositions?: () => THREE.Vector3[]
@@ -406,9 +406,6 @@
   const CAMPFIRE_LIGHT_RANGE_SQ = CAMPFIRE_LIGHT_RANGE * CAMPFIRE_LIGHT_RANGE
   /** A fire throws more light than a torch in hand. */
   const CAMPFIRE_INTENSITY_SCALE = 1.25
-  /** A hearth's log bed sits inside the arch; its light hovers a little above
-   *  and in front of the bed so the shadow light isn't buried in stone. */
-  const HEARTH_LIGHT_HEIGHT = 0.4
   const _fireLightTmp = new THREE.Vector3()
 
   /** Light position of the closest burning fire (campfire or hearth) within
@@ -437,7 +434,7 @@
       if (dist < bestDist) {
         bestDist = dist
         found = true
-        _fireLightTmp.set(fire.x, fire.y + HEARTH_LIGHT_HEIGHT, fire.z)
+        _fireLightTmp.copy(fire)
       }
     }
     return found ? _fireLightTmp : null

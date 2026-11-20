@@ -211,8 +211,10 @@ export interface ObjectDef {
    *  `tools/measure-furniture-footprints.mjs` to generate the footprint table;
    *  runtime solidity/collision is decided in shared Rust from that table. */
   solid?: boolean
-  /** Local origin of a burning flame (fire particles + light), e.g. a hearth's log bed. */
+  /** Local origin of a burning flame, e.g. a hearth's log bed. */
   fire?: Position
+  /** Local origin of the flame's light; defaults to `fire`. */
+  fireLight?: Position
   /** Flame shape; a torch tip vs the default log-bed fire. */
   fireKind?: 'torch'
   /** Name of the model's material that reflects what stands in front of it. */

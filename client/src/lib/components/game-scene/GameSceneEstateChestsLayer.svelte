@@ -87,7 +87,7 @@
     moving: boolean
     visual: THREE.Group
     fire?: FireParticles
-    firePosition?: THREE.Vector3
+    lightPosition?: THREE.Vector3
     torch: boolean
     materials: THREE.Material[]
   }
@@ -208,14 +208,12 @@
       entry.fire = entry.torch
         ? new TorchFireParticles()
         : new CampfireFireParticles()
-      entry.firePosition = new THREE.Vector3(
-        model.fire.x,
-        model.fire.y,
-        model.fire.z
-      )
-        .applyEuler(visual.rotation)
-        .add(visual.position)
-      entry.fire.setOrigin(entry.firePosition)
+      const toWorld = (p: { x: number; y: number; z: number }) =>
+        new THREE.Vector3(p.x, p.y, p.z)
+          .applyEuler(visual.rotation)
+          .add(visual.position)
+      entry.fire.setOrigin(toWorld(model.fire))
+      entry.lightPosition = toWorld(model.fireLight ?? model.fire)
       group.add(entry.fire.group)
     }
     visual.traverse((object) => {
@@ -272,9 +270,9 @@
     firePositions.length = 0
     torchPositions.length = 0
     for (const entry of entries.values()) {
-      if (!entry.fire || !entry.firePosition) continue
+      if (!entry.fire || !entry.lightPosition) continue
       fires.push(entry.fire)
-      ;(entry.torch ? torchPositions : firePositions).push(entry.firePosition)
+      ;(entry.torch ? torchPositions : firePositions).push(entry.lightPosition)
     }
   }
 
