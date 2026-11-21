@@ -254,6 +254,8 @@ pub struct SharedState {
     pub self_temp_health: u32,
     /// Earned title ids (doc/TITLES.md); the shown one rides `self_player.title`.
     pub self_titles: Vec<String>,
+    /// Our teleport bookmarks (doc/TELEPORTATION.md).
+    pub bookmarks: Vec<onlinerpg_shared::bookmark::Bookmark>,
     /// Our own hunger (satiation, band) from `HungerUpdate`; stays None for
     /// exempt NPCs.
     pub self_hunger: Option<(u32, onlinerpg_shared::hunger::HungerState)>,
@@ -552,6 +554,7 @@ impl SharedState {
             self_mana: None,
             self_temp_health: 0,
             self_titles: Vec::new(),
+            bookmarks: Vec::new(),
             self_hunger: None,
             self_carry_mult: 1.0,
             slipped_award: None,

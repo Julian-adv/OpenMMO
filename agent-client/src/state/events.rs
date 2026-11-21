@@ -181,6 +181,7 @@ impl SharedState {
 
             // State-only: tracked on SharedState, shown in the world state.
             ServerMessage::GoldUpdate { .. }
+            | ServerMessage::Bookmarks { .. }
             | ServerMessage::ManaUpdate { .. }
             | ServerMessage::TempHealthUpdate { .. }
             | ServerMessage::AbilityCooldowns { .. }
@@ -227,7 +228,10 @@ impl SharedState {
             | ServerMessage::PlayerAppearanceChanged { .. }
             | ServerMessage::PlayerFamilyChanged { .. }
             | ServerMessage::TitleEarned { .. }
-            | ServerMessage::PlayerTitles { .. } => EventUrgency::Routine,
+            | ServerMessage::PlayerTitles { .. }
+            // Feedback on our own request.
+            | ServerMessage::BookmarkRefused { .. }
+            | ServerMessage::BlessResult { .. } => EventUrgency::Routine,
 
             // Being relocated invalidates our walk targets and floor
             // assumptions; someone else being relocated does not.
@@ -965,6 +969,7 @@ impl SharedState {
                     me.family = family.clone();
                 }
             }
+            ServerMessage::Bookmarks { bookmarks } => self.bookmarks = bookmarks.clone(),
             ServerMessage::PlayerTitles { titles, active } => {
                 self.self_titles = titles.clone();
                 if let Some(me) = self.self_player.as_mut() {

@@ -516,6 +516,10 @@ Use the readiness status above. Wait for server success or failure feedback."#,
                 list.join("; ")
             ));
         }
+        if !self.bookmarks.is_empty() {
+            let names: Vec<&str> = self.bookmarks.iter().map(|b| b.name.as_str()).collect();
+            lines.push(format!("Your teleport bookmarks: {}", names.join("; ")));
+        }
         // Data only — what to do with the list is the role template's call
         // (bard.txt: prefer something fresh, unless a listener asks again).
         if self.plays_music && !self.recent_songs.is_empty() {

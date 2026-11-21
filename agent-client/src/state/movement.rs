@@ -349,6 +349,15 @@ impl SharedState {
         self.relocations = self.relocations.wrapping_add(1);
     }
 
+    /// A bookmark's id by its name, matched as the server stores names.
+    pub fn bookmark_id(&self, name: &str) -> Option<i64> {
+        let name = onlinerpg_shared::bookmark::clean_name(name)?;
+        self.bookmarks
+            .iter()
+            .find(|bookmark| bookmark.name.eq_ignore_ascii_case(&name))
+            .map(|bookmark| bookmark.id)
+    }
+
     pub fn teleport_pending(&self) -> bool {
         self.teleport_pending_until
             .is_some_and(|until| tokio::time::Instant::now() < until)

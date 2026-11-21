@@ -101,6 +101,15 @@ impl SharedState {
             .any(|i| i.item_def_id == item_def_id)
     }
 
+    /// Unlocked plain teleport scrolls in the bag: what the blesser will take.
+    pub fn plain_teleport_scrolls(&self) -> u32 {
+        self.self_bag
+            .iter()
+            .filter(|item| item.item_def_id == onlinerpg_shared::bookmark::SCROLL && !item.locked)
+            .map(|item| item.quantity)
+            .sum()
+    }
+
     /// Find the item the agent named among the ones we carry, and where it
     /// sits. Matching is forgiving about the exact id (see
     /// `item_defs::resolve_named`) but never reaches past what we hold.

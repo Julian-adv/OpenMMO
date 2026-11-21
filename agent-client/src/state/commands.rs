@@ -64,7 +64,8 @@ impl SharedState {
         from_action: bool,
     ) -> anyhow::Result<()> {
         let teleporting = match &msg {
-            ClientMessage::UseItem { instance_id } => self
+            ClientMessage::UseItem { instance_id }
+            | ClientMessage::TeleportToBookmark { instance_id, .. } => self
                 .self_bag
                 .iter()
                 .find(|item| item.instance_id == *instance_id)

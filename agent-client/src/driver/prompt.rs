@@ -860,6 +860,44 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             if *accepted { "GRANTED" } else { "REJECTED" }
         )),
         ServerMessage::MergerRiteCue { cue } => Some(format!("[Rite] {cue}")),
+        ServerMessage::BookmarkRefused { error } => {
+            use onlinerpg_shared::bookmark::BookmarkError as E;
+            let why = match error {
+                E::Name => "a bookmark name is 1 to 24 characters",
+                E::Duplicate => "you already have a bookmark with that name",
+                E::Full => "your bookmarks are full; delete one first",
+                E::NotSurface => "only the surface can be bookmarked",
+                E::NoLanding => "there is nowhere to stand there (indoors, water or a wall)",
+                E::Owned => "that is someone else's estate",
+                E::Combat => "you cannot aim a teleport while fighting; the scroll was kept",
+                E::Unknown => "that bookmark no longer exists; the scroll was kept",
+                E::NoControl => "only a blessed scroll can be aimed; the scroll was kept",
+                E::Failed => "try again in a moment",
+            };
+            Some(format!("[BookmarkFailed] {why}."))
+        }
+        ServerMessage::BlessResult {
+            blessed,
+            error: None,
+        } => Some(format!(
+            "[Bless] Maelis blessed {blessed} scroll(s); they are now {}.",
+            onlinerpg_shared::bookmark::BLESSED_SCROLL
+        )),
+        ServerMessage::BlessResult {
+            error: Some(error), ..
+        } => {
+            use onlinerpg_shared::bookmark::BlessError as E;
+            let why = match error {
+                E::TooFar => "you are not close enough to Maelis",
+                E::Asleep => "Maelis is asleep",
+                E::OffDuty => "Maelis blesses scrolls only at the chapel lectern by day",
+                E::NoScrolls => "you do not carry that many plain Scrolls of Teleportation",
+                E::Trading => "finish your trade first",
+                E::NotEnoughGold => "you cannot afford it",
+                E::Failed => "try again in a moment",
+            };
+            Some(format!("[BlessFailed] {why}."))
+        }
         ServerMessage::WatchOffered {
             sergeant,
             departs_minute,

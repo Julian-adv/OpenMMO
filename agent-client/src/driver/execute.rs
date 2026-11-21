@@ -1261,8 +1261,48 @@ pub(super) async fn handle_response(
             continue;
         }
 
+        if let AgentAction::DeleteBookmark { name } = action {
+            let mut s = state.lock().await;
+            let Some(id) = s.bookmark_id(name) else {
+                s.push_agent_event(format!(
+                    "[BookmarkFailed] You have no bookmark called '{name}'."
+                ));
+                continue;
+            };
+            let cmd = onlinerpg_shared::ClientMessage::DeleteBookmark { id };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send delete_bookmark: {e}");
+            }
+            continue;
+        }
+
+        if let AgentAction::BlessScrolls { qty } = action {
+            let blesser = onlinerpg_shared::family::MERGER_OFFICIANT;
+            let Some((npc_player_id, _)) =
+                reach_merchant(state, "BlessFailed", Some(blesser), None).await
+            else {
+                continue;
+            };
+            let mut s = state.lock().await;
+            let quantity = qty.unwrap_or_else(|| s.plain_teleport_scrolls());
+            if quantity == 0 {
+                s.push_agent_event(
+                    "[BlessFailed] You carry no plain Scroll of Teleportation.".to_string(),
+                );
+                continue;
+            }
+            let cmd = onlinerpg_shared::ClientMessage::BlessScrolls {
+                npc_player_id,
+                quantity,
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send bless_scrolls: {e}");
+            }
+            continue;
+        }
+
         // Worn gear comes off; other items are equipped or consumed.
-        if let AgentAction::Use { item } = action {
+        if let AgentAction::Use { item, bookmark } = action {
             let mut s = state.lock().await;
             let Some((def_id, placed)) = s.find_carried(item) else {
                 warn!("use: nothing carried matching '{item}'");
@@ -1277,6 +1317,17 @@ pub(super) async fn handle_response(
                     let def = crate::item_defs::get(&def_id);
                     if def.is_some_and(|d| d.equip_slot.is_some()) {
                         onlinerpg_shared::ClientMessage::EquipItem { instance_id }
+                    } else if let Some(name) = bookmark {
+                        let Some(bookmark_id) = s.bookmark_id(name) else {
+                            s.push_agent_event(format!(
+                                "[UseFailed] You have no bookmark called '{name}'; {def_id} was not read."
+                            ));
+                            continue;
+                        };
+                        onlinerpg_shared::ClientMessage::TeleportToBookmark {
+                            instance_id,
+                            bookmark_id,
+                        }
                     } else if def.is_some_and(|d| d.is_consumable()) {
                         onlinerpg_shared::ClientMessage::UseItem { instance_id }
                     } else {
@@ -2808,6 +2859,7 @@ mod tests {
             &state,
             &AgentAction::Use {
                 item: "torch".to_string(),
+                bookmark: None,
             },
             mark,
         )

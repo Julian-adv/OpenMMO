@@ -443,6 +443,20 @@ pub(super) enum AgentAction {
             alias = "target"
         )]
         item: String,
+        /// Aim a teleport scroll at one of our bookmarks, by name.
+        #[serde(default, alias = "destination")]
+        bookmark: Option<String>,
+    },
+    /// Bookmark the spot we stand on as a teleport destination.
+    #[serde(rename = "bookmark", alias = "save_bookmark")]
+    Bookmark { name: String },
+    #[serde(rename = "delete_bookmark", alias = "remove_bookmark")]
+    DeleteBookmark { name: String },
+    /// Pay the blesser beside us to bless plain teleport scrolls.
+    #[serde(rename = "bless_scrolls", alias = "bless")]
+    BlessScrolls {
+        #[serde(default, alias = "amount", alias = "count", alias = "quantity")]
+        qty: Option<u32>,
     },
     /// Walk to an item on the ground and pick it up into the bag. Mirrors
     /// the web client's click-to-pick-up. `item` is the instance id shown
@@ -666,9 +680,8 @@ impl Roles {
             "offer_deal" | "open_trade" => Some(self.trader),
             "offer_pledge" | "offer_blessing" => Some(self.officiant),
             "open_impound" | "watch_shift" => Some(self.guard_captain),
-            "watch_work" | "watch_accept" | "watch_rack" | "clear_road" | "shovel_snow" => {
-                Some(self.adventurer)
-            }
+            "watch_work" | "watch_accept" | "watch_rack" | "clear_road" | "shovel_snow"
+            | "bookmark" | "delete_bookmark" | "bless_scrolls" => Some(self.adventurer),
             "offer_outfit" | "gift_outfit" => Some(self.outfitter),
             "serve" => Some(self.inn_staff),
             "recite" => Some(self.bard),
@@ -872,6 +885,23 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   {"type": "use", "target": "torch"}
   Teleport scrolls wait for completion and discard the remaining position-dependent
   actions in this reply. Plan your next move from the refreshed world state."#,
+    },
+    ActionSpec {
+        names: &["bookmark", "delete_bookmark"],
+        aliases: &["save_bookmark", "remove_bookmark"],
+        doc: r#"- Bookmark the surface spot you stand on as a teleport destination. Not
+  indoors, in dungeons or on another's estate:
+  {"type": "bookmark", "name": "mine entrance"}
+  {"type": "delete_bookmark", "name": "mine entrance"}
+  A plain Scroll of Teleportation lands at random. To go to a bookmark, use a
+  blessed one and add "bookmark": "mine entrance". Not while fighting."#,
+    },
+    ActionSpec {
+        names: &["bless_scrolls"],
+        aliases: &["bless"],
+        doc: r#"- Pay Maelis, at the chapel lectern by day, to bless your plain Scrolls of
+  Teleportation (all of them if you give no qty). You walk up to her first:
+  {"type": "bless_scrolls", "qty": 2}"#,
     },
     ActionSpec {
         names: &["pickup"],
@@ -1351,6 +1381,7 @@ impl AgentAction {
             | Self::FamilyChestDeposit { .. }
             | Self::FamilyChestWithdraw { .. }
             | Self::Sell { .. }
+            | Self::BlessScrolls { .. }
             | Self::Buy { .. }
             | Self::Buyback { .. }
             | Self::Fish { .. }
@@ -1413,6 +1444,8 @@ impl AgentAction {
             | Self::Serve { .. }
             | Self::DeclineTrade
             | Self::Use { .. }
+            | Self::Bookmark { .. }
+            | Self::DeleteBookmark { .. }
             | Self::Drop { .. }
             | Self::Reroll
             | Self::Wait => false,
@@ -1513,6 +1546,7 @@ impl AgentAction {
                     | Self::BuyFromPlayer { .. }
                     | Self::SellToPlayer { .. }
                     | Self::Use { .. }
+                    | Self::Bookmark { .. }
                     | Self::Drop { .. }
                     // Tipping is gated on standing within 5m of the hat.
                     | Self::TipHat { .. }
@@ -1600,6 +1634,9 @@ impl AgentAction {
             | Self::Serve { .. }
             | Self::DeclineTrade
             | Self::Use { .. }
+            | Self::Bookmark { .. }
+            | Self::DeleteBookmark { .. }
+            | Self::BlessScrolls { .. }
             | Self::Drop { .. }
             | Self::Reroll => false,
         }
@@ -1670,6 +1707,9 @@ impl AgentAction {
             Self::DeclineTrade => "decline_trade",
             Self::PartySay { .. } => "party_say",
             Self::Use { .. } => "use",
+            Self::Bookmark { .. } => "bookmark",
+            Self::DeleteBookmark { .. } => "delete_bookmark",
+            Self::BlessScrolls { .. } => "bless_scrolls",
             Self::Pickup { .. } => "pickup",
             Self::Sell { .. } => "sell",
             Self::Buy { .. } => "buy",
@@ -2285,6 +2325,10 @@ pub(super) fn action_to_command(
         AgentAction::OfferOutfit { .. } | AgentAction::GiftOutfit { .. } => None,
         // Needs the bag and worn gear from SharedState; likewise handled there.
         AgentAction::Use { .. } => None,
+        AgentAction::Bookmark { name } => {
+            Some(onlinerpg_shared::ClientMessage::SaveBookmark { name: name.clone() })
+        }
+        AgentAction::DeleteBookmark { .. } | AgentAction::BlessScrolls { .. } => None,
         AgentAction::Sell { .. } => None,
         AgentAction::Buy { .. } => None,
         AgentAction::Drop { .. } => None,
@@ -2895,11 +2939,29 @@ mod tests {
             r#"{"actions": [{"type": "use_item", "item_def_id": "torch"}]}"#,
             r#"{"actions": [{"type": "equip", "name": "torch"}]}"#,
         ] {
-            let AgentAction::Use { item } = parse_single_action(json) else {
+            let AgentAction::Use { item, .. } = parse_single_action(json) else {
                 panic!("expected Use for {json}");
             };
             assert_eq!(item, "torch");
         }
+    }
+
+    #[test]
+    fn an_aimed_use_names_its_bookmark_and_a_save_is_sent_directly() {
+        let AgentAction::Use { item, bookmark } = parse_single_action(
+            r#"{"actions": [{"type": "use", "target": "blessed_scroll_of_teleportation", "bookmark": "mine"}]}"#,
+        ) else {
+            panic!("expected Use");
+        };
+        assert_eq!(
+            (item.as_str(), bookmark.as_deref()),
+            ("blessed_scroll_of_teleportation", Some("mine"))
+        );
+        let save = parse_single_action(r#"{"actions": [{"type": "bookmark", "name": "mine"}]}"#);
+        assert!(matches!(
+            action_to_command(&save, None),
+            Some(onlinerpg_shared::ClientMessage::SaveBookmark { name }) if name == "mine"
+        ));
     }
 
     #[test]
@@ -3692,6 +3754,7 @@ mod tests {
             },
             AgentAction::Use {
                 item: "torch".to_string(),
+                bookmark: None,
             },
             AgentAction::PartyLeave,
         ] {
