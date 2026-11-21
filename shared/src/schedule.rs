@@ -11,6 +11,8 @@ pub const FISHING_ACTION: &str = "fishing";
 pub const CAMPFIRE_MEAL_ACTION: &str = "campfire_meal";
 pub const CAMPFIRE_ACTION: &str = "campfire";
 const MEAL_DURATION_HOURS: f64 = 0.5;
+/// After the latest sunset of the year and the merchants' dinner.
+const MEETING_START_MINUTE: u32 = 19 * 60 + 30;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct WaypointActivity {
@@ -75,7 +77,7 @@ pub enum ScheduleCondition {
     Recurring {
         minute: u32,
     },
-    /// After sunset on Serin's dark day (doc/PRICING.md).
+    /// From 19:30 on Serin's dark day (doc/PRICING.md).
     Meeting,
     Rain,
 }
@@ -334,14 +336,11 @@ pub fn resolve_active_schedule(
                 (Some(_), Some(gm)) => gm >= *em,
                 _ => false,
             },
-            // Sunset is always between noon and midnight.
             ScheduleCondition::Meeting => {
                 is_serin_dark_day == Some(true)
-                    && matches!(
-                        period,
-                        Some(SchedulePeriod::Night | SchedulePeriod::Breakfast)
-                    )
-                    && game_hour.is_some_and(|h| h >= 12)
+                    && game_hour
+                        .zip(game_minute)
+                        .is_some_and(|(h, m)| h * 60 + m >= MEETING_START_MINUTE)
             }
         };
 
@@ -437,6 +436,7 @@ mod tests {
             resolve_active_schedule(&schedule, Some(period), Some(hour), Some(0), Some(dark)).0
         };
         assert_eq!(resolve(SchedulePeriod::Night, 20, true), Some(2));
+        assert_eq!(resolve(SchedulePeriod::Night, 19, true), Some(1));
         assert_eq!(resolve(SchedulePeriod::Night, 20, false), Some(1));
         assert_eq!(resolve(SchedulePeriod::Day, 15, true), Some(0));
         assert_eq!(resolve(SchedulePeriod::Night, 3, true), Some(1));
