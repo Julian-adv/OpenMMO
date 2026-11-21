@@ -22,6 +22,7 @@ import { resetInventoryStore } from './inventoryStore'
 import { resetLandClaimPreview } from './landClaimStore'
 import { resetSkillsStore } from './skillsStore'
 import { resetDaggerSkill } from './daggerSkillStore'
+import { resetPotionCooldown } from './potionCooldownStore'
 import { resetPartyStores } from './partyStore'
 import { resetFriendStores } from './friendStore'
 import { resetFamilyStores } from './familyStore'
@@ -237,6 +238,7 @@ export const resetGameStore = () => {
   manaState.set(null)
   tempHealth.set(0)
   resetDaggerSkill()
+  resetPotionCooldown()
   resetLandClaimPreview()
   gameStore.set({
     ...initialGameState,

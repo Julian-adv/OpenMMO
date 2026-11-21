@@ -646,6 +646,7 @@
   "server.fullHealth": "You are already at full health",
   "server.tooFull": "You are too full to eat another bite",
   "server.drinkDefeated": "You can't drink while defeated",
+  "server.drinkCooldown": "You can't drink another potion yet",
   "server.readCombat": "You can't read this while in combat",
   "server.talismanAlive": "The talisman only stirs for the fallen",
   "server.campfire": "You light a campfire.",

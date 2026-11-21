@@ -87,6 +87,10 @@ pub(super) static PLAYER_RANGED_IMPACT_DELAY: LazyLock<Duration> = LazyLock::new
 pub(super) static PLAYER_ATTACK_INTERVAL_MS: LazyLock<u64> =
     LazyLock::new(|| anim_delay_ms("player_attack_interval"));
 
+/// Shared by every healing potion tier (doc/COMBAT.md).
+pub(super) static HEALING_POTION_COOLDOWN_MS: LazyLock<u64> =
+    LazyLock::new(|| anim_delay_ms("healing_potion_cooldown"));
+
 // Hand-measured length of the ChestOpen clip in chest_animated.glb (re-measure
 // if the GLB is re-exported): how long treasure-chest loot is withheld before
 // bursting out, so the lid is open by the time the drops exist.

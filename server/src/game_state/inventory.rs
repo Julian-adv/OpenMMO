@@ -1423,31 +1423,38 @@ impl super::GameState {
     }
 
     /// Drink a healing potion: roll its dice and restore HP up to the cap.
-    /// Refuses (keeping the potion) if the player is defeated or already full.
+    /// Refuses (keeping the potion) if the player is defeated, already full,
+    /// or drank within the shared cooldown.
     async fn use_healing_item(&self, player_id: &PlayerId, instance_id: u64, heal_dice: &str) {
-        {
+        let refusal = {
             let players = self.players.read().await;
             let Some(player) = players.get(player_id) else {
                 return;
             };
             if player.health == 0 {
-                drop(players);
-                self.send_system_message(
-                    player_id,
-                    localized("server.drinkDefeated", "You can't drink while defeated"),
-                )
-                .await;
-                return;
+                Some(localized(
+                    "server.drinkDefeated",
+                    "You can't drink while defeated",
+                ))
+            } else if player.health >= player.max_health {
+                Some(localized(
+                    "server.fullHealth",
+                    "You are already at full health",
+                ))
+            } else if Self::now_ms().saturating_sub(player.drank_at)
+                < *super::combat::HEALING_POTION_COOLDOWN_MS
+            {
+                Some(localized(
+                    "server.drinkCooldown",
+                    "You can't drink another potion yet",
+                ))
+            } else {
+                None
             }
-            if player.health >= player.max_health {
-                drop(players);
-                self.send_system_message(
-                    player_id,
-                    localized("server.fullHealth", "You are already at full health"),
-                )
-                .await;
-                return;
-            }
+        };
+        if let Some(message) = refusal {
+            self.send_system_message(player_id, message).await;
+            return;
         }
 
         self.consume_one_and_sync(player_id, instance_id).await;

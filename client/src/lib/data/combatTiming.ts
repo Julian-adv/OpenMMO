@@ -24,6 +24,9 @@ export const MINING_SWING_IMPACT_MS = animTiming.mining_swing_impact.delayMs
 export const SWORD_MISS_DELAY_MS = animTiming.sword_miss.delayMs
 // The whoosh (and the splash CAST_MS after it) waits out the cast clip's wind-up.
 export const FISHING_CAST_SWING_DELAY_MS = animTiming.fishing_cast_swing.delayMs
+// Shared by every healing potion tier; the server refuses a sooner drink.
+export const HEALING_POTION_COOLDOWN_MS =
+  animTiming.healing_potion_cooldown.delayMs
 
 // Melee reach, matching shared/src/reach.rs. Shared by the combat controller
 // and the click-to-attack arrival check so the two never drift apart.

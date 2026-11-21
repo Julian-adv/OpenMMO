@@ -24,8 +24,9 @@
   } from '../stores/abilityStore'
   import { skillTooltip } from '../actions/skillTooltip'
   import { inventoryStore } from '../stores/inventoryStore'
-  import { getItemDef } from '../data/itemDefs'
+  import { getItemDef, isHealingPotion } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
+  import { potionCooldownRemaining } from '../stores/potionCooldownStore'
   import {
     quickslots,
     QUICKSLOT_COUNT,
@@ -127,6 +128,12 @@
     useSlot(index)
   }
 
+  function cooldownLabel(remaining: number) {
+    return remaining <= 1000
+      ? (Math.ceil(remaining / 100) / 10).toFixed(1)
+      : String(Math.ceil(remaining / 1000))
+  }
+
   // The 1-based key label shown on each slot (last slot is "0").
   function keyLabel(index: number): string {
     return index === 9 ? '0' : String(index + 1)
@@ -192,19 +199,23 @@
           draggable="false"
         />
         {#if remaining > 0}<span class="skill-cooldown"
-            >{remaining < 1000
-              ? (Math.ceil(remaining / 100) / 10).toFixed(1)
-              : Math.ceil(remaining / 1000)}</span
+            >{cooldownLabel(remaining)}</span
           >
         {:else if pending}<span class="skill-cooldown">…</span>{/if}
       {:else if entry}
+        {@const potionWait = isHealingPotion(entry.def)
+          ? $potionCooldownRemaining
+          : 0}
         <img
           class="item-icon"
-          class:depleted={entry.qty === 0}
+          class:depleted={entry.qty === 0 || potionWait > 0}
           src="/items/{entry.def.icon}"
           alt=""
           draggable="false"
         />
+        {#if potionWait > 0}<span class="skill-cooldown"
+            >{cooldownLabel(potionWait)}</span
+          >{/if}
         {#if entry.enchant !== null && entry.enchant > 0}
           <span class="item-enchant">+{entry.enchant}</span>
         {/if}

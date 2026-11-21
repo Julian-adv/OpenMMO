@@ -169,6 +169,10 @@ regeneration_amount = max(1, 1 + floor(Level / 5) + con_mod)
 
 - 구현: [server/src/game_state/combat.rs](../server/src/game_state/combat.rs) (`tick_regeneration`)
 
+### 회복 물약 재사용 대기
+
+회복 물약은 등급과 무관하게 재사용 대기 1초를 함께 쓴다(`data-src/player_anim_timing.csv`의 `healing_potion_cooldown`). 대기 중에 마시면 서버가 거절하고 물약은 남는다. 초당 회복량은 기본 15, 상급 30, 최상급 60이 상한이다. 웹 클라이언트는 대기 중인 요청을 보내지 않고 퀵슬롯에 남은 시간을 표시한다. 배경은 [돌의 정원 설계](STONE_GARDEN.md)의 "물약 재사용 대기" 절.
+
 ---
 
 ## 전투 공식
