@@ -1,6 +1,14 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { type DanceCandidate, IN_STEP_MS, joinableDancers } from './danceJoin'
-import { JOIN_DANCE_MAX_RISE_M, JOIN_DANCE_RANGE_M } from './stores/emoteStore'
+import {
+  join_dance_max_rise_m,
+  join_dance_range_m,
+} from './wasm/onlinerpg_shared'
+
+vi.mock('./wasm/onlinerpg_shared', () => ({
+  join_dance_range_m: () => 5,
+  join_dance_max_rise_m: () => 2,
+}))
 
 const ME = 1
 const HERE = { x: 0, y: 0, z: 0 }
@@ -37,7 +45,7 @@ describe('joinableDancers', () => {
         dancer(2, 3),
         dancer(3, 2),
         dancer(4, 1, { anim: 'clap' }),
-        dancer(5, JOIN_DANCE_RANGE_M + 0.1),
+        dancer(5, join_dance_range_m() + 0.1),
       ])
     ).toEqual([3, 2])
   })
@@ -61,7 +69,7 @@ describe('joinableDancers', () => {
       dancer(4, 1, { petrified: true }),
       dancer(5, 1, { floor: 1 }),
       dancer(6, 1, {
-        position: { x: 1, y: JOIN_DANCE_MAX_RISE_M + 0.1, z: 0 },
+        position: { x: 1, y: join_dance_max_rise_m() + 0.1, z: 0 },
       }),
     ]
     expect(offers(skipped)).toEqual([])

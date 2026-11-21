@@ -406,7 +406,7 @@ async fn other_actions_stop_auto_attacks_without_a_stop_request() {
             }
             "interaction" => {
                 game.set_player_interaction(&id, Some("excited".into()), None)
-                    .await
+                    .await;
             }
             "inspection" => {
                 game.use_targeted_ability(

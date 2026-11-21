@@ -593,16 +593,10 @@ impl super::GameState {
                 .await;
             return;
         }
-        self.set_player_interaction(player_id, Some(name.to_string()), None)
-            .await;
-        // A loop keeps a beat every viewer seeks to, starting now.
-        if super::dance::is_looping_emote(name)
-            && self
-                .players
-                .read()
-                .await
-                .get(player_id)
-                .is_some_and(|p| p.object_type.as_deref() == Some(name))
+        if self
+            .set_player_interaction(player_id, Some(name.to_string()), None)
+            .await
+            && super::dance::is_looping_emote(name)
         {
             self.start_dance_beat(player_id, Instant::now()).await;
         }

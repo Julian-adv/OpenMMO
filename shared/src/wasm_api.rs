@@ -238,6 +238,16 @@ pub fn max_cast_distance_m() -> f32 {
     crate::fishing::MAX_CAST_DISTANCE_METERS
 }
 
+#[wasm_bindgen]
+pub fn join_dance_range_m() -> f32 {
+    crate::messages::JOIN_DANCE_RANGE_M
+}
+
+#[wasm_bindgen]
+pub fn join_dance_max_rise_m() -> f32 {
+    crate::messages::JOIN_DANCE_MAX_RISE_M
+}
+
 // --- Passability cache (WASM global state) ---
 
 thread_local! {

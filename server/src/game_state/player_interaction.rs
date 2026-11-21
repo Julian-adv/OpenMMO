@@ -8,6 +8,8 @@ use onlinerpg_shared::pathfinding::{self, PassabilityCache};
 use onlinerpg_shared::{shortest_world_delta_x, wrap_world_x, WORLD_WIDTH_X};
 use std::{collections::HashMap, sync::OnceLock};
 
+const BODY_RADIUS: f32 = 0.31;
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CatalogInteraction {
@@ -92,10 +94,13 @@ pub(super) fn clear_segment(
         return false;
     }
     let (lo_x, hi_x) = (
-        from.x.min(from.x + dx) - 0.31,
-        from.x.max(from.x + dx) + 0.31,
+        from.x.min(from.x + dx) - BODY_RADIUS,
+        from.x.max(from.x + dx) + BODY_RADIUS,
     );
-    let (lo_z, hi_z) = (from.z.min(to.z) - 0.31, from.z.max(to.z) + 0.31);
+    let (lo_z, hi_z) = (
+        from.z.min(to.z) - BODY_RADIUS,
+        from.z.max(to.z) + BODY_RADIUS,
+    );
     let near: Vec<_> = cache
         .values()
         .filter(|entry| {
@@ -117,7 +122,7 @@ pub(super) fn clear_segment(
             near.iter().copied(),
             wrap_world_x(from.x + dx * t),
             from.z + dz * t,
-            0.31,
+            BODY_RADIUS,
             floor,
             Some(from.y + (to.y - from.y) * t),
         )
@@ -224,7 +229,7 @@ impl GameState {
                 &self.passability_read(),
                 to.x,
                 to.z,
-                0.31,
+                BODY_RADIUS,
                 floor,
                 Some(to.y),
             )
@@ -272,9 +277,9 @@ impl GameState {
         player_id: &PlayerId,
         object_type: Option<String>,
         object_id: Option<u32>,
-    ) {
+    ) -> bool {
         self.apply_player_interaction(player_id, object_type, object_id, None)
-            .await;
+            .await
     }
 
     /// [`Self::set_player_interaction`], first moving the player to a
@@ -289,11 +294,11 @@ impl GameState {
         if object_type.is_some() && stand.is_none() {
             self.bump_action_version(player_id).await;
         }
-        let destinations: Vec<Position> = stand.iter().map(|stand| stand.spot).collect();
+        let destinations = stand.map_or(&[][..], |stand| std::slice::from_ref(&stand.spot));
         let Some(mut movement) = self
             .lock_player_movement(
                 *player_id,
-                &destinations,
+                destinations,
                 INTERACTION_RANGE + 0.5,
                 true,
                 None,

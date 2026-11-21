@@ -248,7 +248,7 @@
     LOOPING_EMOTE_ANIMS,
     MUSIC_EMOTE_ANIM,
   } from '../stores/emoteStore'
-  import { danceBeatTime } from '../stores/danceBeatStore'
+  import { danceAnchors, danceBeatTime } from '../stores/danceBeatStore'
   import { billboardScale, billboardZoomT } from '../utils/billboardScale'
 
   interface Props {
@@ -260,8 +260,8 @@
     interactionAnim?: string
     catchPresentation?: FishingCatch
     interactionCounter?: number
-    /** `performance.now()` at which this player's looping emote beat began. */
-    danceAnchorMs?: number
+    /** Key into `danceAnchors`. */
+    danceBeatId?: number
     mount?: MountKind | null
     interactOffsetY?: number
     attackCounter?: number
@@ -326,7 +326,7 @@
     interactionAnim,
     catchPresentation,
     interactionCounter,
-    danceAnchorMs,
+    danceBeatId,
     mount = null,
     interactOffsetY = 0,
     attackCounter,
@@ -1606,19 +1606,22 @@
       )
   }
 
-  /** Seek a looping emote to its shared beat; run every frame too, so a long
-   *  frame or hidden tab cannot leave it behind. */
-  function seekDanceBeat() {
-    if (!currentAction || danceAnchorMs === undefined) return
-    const clip = currentAction.getClip()
-    if (!LOOPING_EMOTE_ANIMS.has(clip.name)) return
-    currentAction.time = danceBeatTime(danceAnchorMs, clip.duration)
-  }
+  let beatClip: THREE.AnimationClip | null = null
+  let beatClipLoops = false
 
-  $effect(() => {
-    if (danceAnchorMs === undefined) return
-    untrack(seekDanceBeat)
-  })
+  /** Run every frame, so a long frame or hidden tab cannot fall behind. */
+  function seekDanceBeat() {
+    if (!currentAction || danceBeatId === undefined) return
+    const clip = currentAction.getClip()
+    if (clip !== beatClip) {
+      beatClip = clip
+      beatClipLoops = LOOPING_EMOTE_ANIMS.has(clip.name)
+    }
+    if (!beatClipLoops) return
+    const anchor = danceAnchors.get(danceBeatId)
+    if (anchor !== undefined)
+      currentAction.time = danceBeatTime(anchor, clip.duration)
+  }
 
   function startAction(
     clip: THREE.AnimationClip,

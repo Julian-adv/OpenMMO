@@ -1,8 +1,8 @@
+import { JOINABLE_DANCE_ANIMS } from './stores/emoteStore'
 import {
-  JOIN_DANCE_MAX_RISE_M,
-  JOIN_DANCE_RANGE_M,
-  JOINABLE_DANCE_ANIMS,
-} from './stores/emoteStore'
+  join_dance_max_rise_m,
+  join_dance_range_m,
+} from './wasm/onlinerpg_shared'
 import { shortestWrappedDeltaX } from './terrain/world-wrap'
 
 /** Beats closer than this, in ms, belong to one group. Generous, since a
@@ -51,13 +51,14 @@ export function joinableDancers(
 ): DanceOffer[] {
   if (floor < 0) return []
   const myBeat = beats.get(meId)
-  const reachSq = JOIN_DANCE_RANGE_M * JOIN_DANCE_RANGE_M
+  const reachSq = join_dance_range_m() ** 2
+  const maxRise = join_dance_max_rise_m()
   const offers: (DanceOffer & { distanceSq: number })[] = []
   for (const candidate of candidates) {
     if (
       !isJoinableDancer(candidate) ||
       candidate.floor !== floor ||
-      Math.abs(candidate.position.y - position.y) > JOIN_DANCE_MAX_RISE_M
+      Math.abs(candidate.position.y - position.y) > maxRise
     )
       continue
     const beat = beats.get(candidate.id)

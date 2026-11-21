@@ -58,11 +58,6 @@ export const LOOPING_EMOTE_ANIMS = new Set([
  *  `shared/src/messages.rs` — the server validates `JoinDance` against it. */
 export const JOINABLE_DANCE_ANIMS = new Set(['twist', 'macarena', 'chicken'])
 
-/** Mirror `JOIN_DANCE_RANGE_M` and `JOIN_DANCE_MAX_RISE_M`, so the prompt
- *  shows only where the server would accept the join. */
-export const JOIN_DANCE_RANGE_M = 5
-export const JOIN_DANCE_MAX_RISE_M = 2
-
 /** Clip names the admin `/anim <clip>` debug command has requested this
  *  session. Client-local: the command never reaches the server, so any clip
  *  in any pack can be eyeballed. Kept out of the emote sets — the predicates
