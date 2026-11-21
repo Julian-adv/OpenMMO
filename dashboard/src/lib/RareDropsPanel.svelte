@@ -37,7 +37,7 @@
               <td class="num">{perTenThousandKills(item.expected_kill_drops, item.kills) ?? '—'}개</td>
               <td class="num">
                 <strong>{formatCount(item.kill_drops + item.other_drops)}개</strong>
-                <span class="sub">처치 {formatCount(item.kill_drops)} · 상자·통 {formatCount(item.other_drops)}</span>
+                <span class="sub">처치 {formatCount(item.kill_drops)} · 그 외 {formatCount(item.other_drops)}</span>
               </td>
               <td class="num">
                 <strong>{formatCount(totalHoldings(item.holdings))}개</strong>
