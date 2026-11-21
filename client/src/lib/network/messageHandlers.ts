@@ -150,7 +150,7 @@ import {
   resetEstateStorage,
   stopEstateChestMode,
 } from '../stores/estateStorageStore'
-import { inventoryVisible } from '../stores/debugStore'
+import { characterPanelVisible, inventoryVisible } from '../stores/debugStore'
 import {
   landClaimDialog,
   applyLandClaimPreview,
@@ -2116,6 +2116,7 @@ export function handleServerMessage(
       })
       break
     case 'WatchRackState':
+      if (!get(watchRack)) characterPanelVisible.set(true)
       watchRack.set({
         objectId: data.object_id,
         onRack: data.on_rack ?? [],
