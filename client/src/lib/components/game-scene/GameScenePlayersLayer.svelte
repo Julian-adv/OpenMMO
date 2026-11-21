@@ -794,6 +794,7 @@
       catchPresentation={localCatch}
       interactionAnim={effectiveInteractionAnim}
       interactionCounter={effectiveInteractionCounter}
+      danceBeatId={currentPlayer.id}
       interactOffsetY={currentPlayerState.interactOffsetY}
       attackCounter={currentPlayerState.attackCounter}
       hitCounter={currentPlayer.hitCounter}
@@ -865,6 +866,7 @@
             : remotePlayer.interactionAnim}
           catchPresentation={visible ? caught : undefined}
           interactionCounter={remotePlayer.interactionCounter}
+          danceBeatId={player.id}
           interactOffsetY={remotePlayer.interactOffsetY}
           attackCounter={remotePlayer.attackCounter}
           hitCounter={remotePlayerManager.hitCounters.get(player.id)}

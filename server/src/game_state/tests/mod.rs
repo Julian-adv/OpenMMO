@@ -26,6 +26,7 @@ mod chat_tests;
 mod combat_audit_tests;
 mod combat_logout_tests;
 mod combat_tests;
+mod dance_tests;
 mod dungeon_tests;
 mod enchant_tests;
 mod estate_storage_tests;

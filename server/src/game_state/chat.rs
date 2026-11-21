@@ -406,6 +406,11 @@ impl super::GameState {
             return;
         }
 
+        if let Some(name) = strip_command(&message, "/join_dance") {
+            self.join_dance_named(player_id, name).await;
+            return;
+        }
+
         if let Some(args) = strip_command(&message, "/title") {
             self.handle_title_command(player_id, args, Some(auth)).await;
             return;
@@ -588,8 +593,13 @@ impl super::GameState {
                 .await;
             return;
         }
-        self.set_player_interaction(player_id, Some(name.to_string()), None)
-            .await;
+        if self
+            .set_player_interaction(player_id, Some(name.to_string()), None)
+            .await
+            && super::dance::is_looping_emote(name)
+        {
+            self.start_dance_beat(player_id, Instant::now()).await;
+        }
     }
 
     /// An instrument anywhere in the inventory — bag or hands — is what

@@ -54,6 +54,10 @@ export const LOOPING_EMOTE_ANIMS = new Set([
   'weight_shift',
 ])
 
+/** Dances a nearby player can join in step. Must match `JOINABLE_DANCES` in
+ *  `shared/src/messages.rs` — the server validates `JoinDance` against it. */
+export const JOINABLE_DANCE_ANIMS = new Set(['twist', 'macarena', 'chicken'])
+
 /** Clip names the admin `/anim <clip>` debug command has requested this
  *  session. Client-local: the command never reaches the server, so any clip
  *  in any pack can be eyeballed. Kept out of the emote sets — the predicates

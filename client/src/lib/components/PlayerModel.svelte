@@ -245,8 +245,10 @@
     ROAR_ANIMATION,
     HELD_EMOTE_ANIMS,
     isSelfEndingEmote,
+    LOOPING_EMOTE_ANIMS,
     MUSIC_EMOTE_ANIM,
   } from '../stores/emoteStore'
+  import { danceAnchors, danceBeatTime } from '../stores/danceBeatStore'
   import { billboardScale, billboardZoomT } from '../utils/billboardScale'
 
   interface Props {
@@ -258,6 +260,8 @@
     interactionAnim?: string
     catchPresentation?: FishingCatch
     interactionCounter?: number
+    /** Key into `danceAnchors`. */
+    danceBeatId?: number
     mount?: MountKind | null
     interactOffsetY?: number
     attackCounter?: number
@@ -322,6 +326,7 @@
     interactionAnim,
     catchPresentation,
     interactionCounter,
+    danceBeatId,
     mount = null,
     interactOffsetY = 0,
     attackCounter,
@@ -1584,6 +1589,7 @@
       interactionAnim !== FishingAnimationName.IDLE &&
       !HELD_EMOTE_ANIMS.has(interactionAnim ?? '')
     startAction(clip, playOnce)
+    seekDanceBeat()
     if (clip === enchantClip) {
       if (armorEnchant) armorEnchantAction = currentAction
       else enchantAction = currentAction
@@ -1598,6 +1604,23 @@
         currentAction.getClip().duration,
         Math.max(0, seconds)
       )
+  }
+
+  let beatClip: THREE.AnimationClip | null = null
+  let beatClipLoops = false
+
+  /** Run every frame, so a long frame or hidden tab cannot fall behind. */
+  function seekDanceBeat() {
+    if (!currentAction || danceBeatId === undefined) return
+    const clip = currentAction.getClip()
+    if (clip !== beatClip) {
+      beatClip = clip
+      beatClipLoops = LOOPING_EMOTE_ANIMS.has(clip.name)
+    }
+    if (!beatClipLoops) return
+    const anchor = danceAnchors.get(danceBeatId)
+    if (anchor !== undefined)
+      currentAction.time = danceBeatTime(anchor, clip.duration)
   }
 
   function startAction(
@@ -2171,6 +2194,7 @@
     // Update mixer with provided deltaTime
     if (currentAction) {
       mixer.update(petrified ? 0 : deltaTime)
+      if (!petrified && currentTS >= 1) seekDanceBeat()
       if (excavationTool?.visible) {
         applyExcavationGrip(excavationGrip)
       }

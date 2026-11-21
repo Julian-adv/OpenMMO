@@ -2312,6 +2312,7 @@ impl super::GameState {
         self.record_field_raid_death(player_id).await;
         self.clear_player_movement(player_id, "death").await;
         self.cancel_concentration_if_active(player_id).await;
+        self.end_dance_beat(player_id).await;
         self.cancel_food_regeneration(player_id).await;
         self.clear_debuffs(player_id).await;
         self.clear_buffs(player_id).await;

@@ -12,6 +12,7 @@ import {
   HELD_EMOTE_ANIMS,
   isEmoteAnim,
   isSelfEndingEmote,
+  JOINABLE_DANCE_ANIMS,
   LOOPING_EMOTE_ANIMS,
   MUSIC_EMOTE_ANIM,
   ONE_SHOT_EMOTE_ANIMS,
@@ -60,6 +61,15 @@ describe('emote panel metadata', () => {
     expect(new Set(rustEmoteList('LOOPING_EMOTES'))).toEqual(
       LOOPING_EMOTE_ANIMS
     )
+  })
+
+  it('mirrors JOINABLE_DANCES from shared/src/messages.rs', () => {
+    expect(new Set(rustEmoteList('JOINABLE_DANCES'))).toEqual(
+      JOINABLE_DANCE_ANIMS
+    )
+    for (const dance of JOINABLE_DANCE_ANIMS) {
+      expect(LOOPING_EMOTE_ANIMS.has(dance), dance).toBe(true)
+    }
   })
 
   it('derives one labelled entry per accepted emote', () => {
