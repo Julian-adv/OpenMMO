@@ -131,6 +131,9 @@ h2 { font-size: 16px; font-weight: 600; letter-spacing: -.5px; margin: 0; }
 h3 { margin: 1px 0 6px; font-size: 11px; font-weight: 600; color: #60796c; }
 .metric-note p { margin: 0; color: #8b9a91; font-size: 11px; line-height: 1.9; max-width: 440px; word-break: keep-all; }
 .site-footer { border-top: 1px solid #e3eae5; padding: 23px 0 27px; display: flex; justify-content: space-between; gap: 15px; color: #a0ada5; font-size: 10px; }
+.scroll-top-button { position: fixed; right: 24px; bottom: 24px; z-index: 10; display: grid; place-items: center; width: 44px; height: 44px; border: 1px solid #dde5e0; border-radius: 12px; background: white; color: #167b6c; box-shadow: 0 4px 14px #2b433522; }
+.scroll-top-button:hover { background: #edf4f0; }
+.scroll-top-button svg { width: 20px; height: 20px; }
 .site-footer strong { font-weight: 500; margin-left: 2px; }
 @media (min-width: 1600px) { main { padding-top: 64px; } }
 @media (max-width: 800px) {
@@ -180,5 +183,6 @@ h3 { margin: 1px 0 6px; font-size: 11px; font-weight: 600; color: #60796c; }
   .site-footer { font-size: 9px; }
   .site-footer > span:last-child { max-width: 160px; text-align: right; }
   .error-banner { font-size: 11px; padding: 10px; }
+  .scroll-top-button { right: 16px; bottom: 16px; width: 40px; height: 40px; }
 }
 @media (prefers-reduced-motion: reduce) { .spinning { animation: none; } }
