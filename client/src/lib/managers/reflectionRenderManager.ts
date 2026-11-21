@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { RenderTarget, type WebGPURenderer } from 'three/webgpu'
+import { renderKeepingLights } from '../utils/deferredShaderBuild'
 
 type Color4 = THREE.Color & { a: number }
 
@@ -115,7 +116,7 @@ export class ReflectionRenderManager {
       this.scene.background = null
       this.renderer.setClearColor(0x000000, 0)
       this.renderer.setRenderTarget(this.target)
-      this.renderer.render(this.scene, this.reflCam)
+      renderKeepingLights(this.renderer, this.scene, this.reflCam)
     } finally {
       this.renderer.setRenderTarget(prev)
       this.renderer.setClearColor(this._savedClearColor, savedClearAlpha)
@@ -138,7 +139,7 @@ export class ReflectionRenderManager {
     // Render with scene hidden to produce only the clear color
     const savedVisible = this.scene.visible
     this.scene.visible = false
-    this.renderer.render(this.scene, this.reflCam)
+    renderKeepingLights(this.renderer, this.scene, this.reflCam)
     this.scene.visible = savedVisible
     this.renderer.setRenderTarget(prev)
     this.renderer.setClearColor(this._savedClearColor, savedClearAlpha)

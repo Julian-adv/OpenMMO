@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { RenderTarget, type WebGPURenderer } from 'three/webgpu'
+import { renderKeepingLights } from '../utils/deferredShaderBuild'
 
 /**
  * Renders the scene (without water) to a downscaled render target
@@ -53,7 +54,7 @@ export class RefractionRenderManager {
 
     const currentRenderTarget = this.renderer.getRenderTarget()
     this.renderer.setRenderTarget(this.target)
-    this.renderer.render(this.scene, this.camera)
+    renderKeepingLights(this.renderer, this.scene, this.camera)
     this.renderer.setRenderTarget(currentRenderTarget)
 
     // Restore water visibility
@@ -67,7 +68,7 @@ export class RefractionRenderManager {
     this.renderer.setRenderTarget(this.target)
     const savedVisible = this.scene.visible
     this.scene.visible = false
-    this.renderer.render(this.scene, this.camera!)
+    renderKeepingLights(this.renderer, this.scene, this.camera!)
     this.scene.visible = savedVisible
     this.renderer.setRenderTarget(currentRenderTarget)
   }

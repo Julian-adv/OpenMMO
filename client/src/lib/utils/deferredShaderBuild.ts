@@ -1,3 +1,4 @@
+import type { Camera, Scene } from 'three'
 import { RenderObjectRefreshType, type WebGPURenderer } from 'three/webgpu'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -86,4 +87,20 @@ export function deferShaderBuilds(
         this._nodes.updateAfter(renderObject)
     }
   }
+}
+
+/**
+ * Render a secondary pass, then restore the scene's light list. Deferred
+ * builds read it when they resume and cached shaders without hidden lights.
+ */
+export function renderKeepingLights(
+  renderer: WebGPURenderer,
+  scene: Scene,
+  camera: Camera
+): void {
+  const lights = (renderer as any).lighting.getNode(scene)
+  // A pass through the main camera refills the very array the node holds.
+  const kept = lights.getLights().slice()
+  renderer.render(scene, camera)
+  lights.setLights(kept)
 }
