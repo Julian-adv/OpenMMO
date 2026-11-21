@@ -5,7 +5,7 @@ export const itemSinkLabels = { item_purchase: '상인 구매', item_buyback: '�
 
 export type GoldSinkEntry = GoldRankingEntry & ({ sink: keyof typeof itemSinkLabels, item_def_id: string, npc_id?: never } |
   { sink: 'npc_outfit', npc_id: string, item_def_id?: never } |
-  { sink: 'stall_tax' | 'land_tax' | 'land_recovery', item_def_id?: never, npc_id?: never })
+  { sink: 'stall_tax' | 'land_tax' | 'land_recovery' | 'salon', item_def_id?: never, npc_id?: never })
 
 export type GoldSinks = GoldRanking<GoldSinkEntry>
 
@@ -21,7 +21,7 @@ export function parseGoldSinks(value: unknown, hours: GoldHours): GoldSinks {
     ? named(entry.item_def_id) && entry.npc_id === undefined
     : entry.sink === 'npc_outfit'
       ? named(entry.npc_id) && entry.item_def_id === undefined
-      : ['stall_tax', 'land_tax', 'land_recovery'].includes(entry.sink)
+      : ['stall_tax', 'land_tax', 'land_recovery', 'salon'].includes(entry.sink)
         && entry.item_def_id === undefined && entry.npc_id === undefined)) {
     throw new Error('Invalid gold sinks response')
   }
