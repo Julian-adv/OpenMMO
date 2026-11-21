@@ -348,4 +348,10 @@ export function isUsable(
   return def.consumable === true || def.useAction !== undefined
 }
 
+export function isHealingPotion(
+  def: Pick<ItemDefinition, 'category'>
+): boolean {
+  return def.category === 'healing_potion'
+}
+
 export default itemDefs

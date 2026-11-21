@@ -5,6 +5,7 @@
     compareStats,
     displayName,
     getItemDef,
+    isHealingPotion,
     itemDescription,
     statLabels,
     type ItemDefinition,
@@ -116,7 +117,7 @@
       {/if}
     {:else if def.ammoKind && def.dice}
       <span>{$t('item.damage', { value: `+${def.dice}` })}</span>
-    {:else if def.category === 'healing_potion' && def.dice}
+    {:else if isHealingPotion(def) && def.dice}
       <span>{$t('item.heals', { value: def.dice })}</span>
     {/if}
     {#each statLabels(def, enchant, $locale) as label (label)}

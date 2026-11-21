@@ -646,6 +646,7 @@
   "server.fullHealth": "이미 체력이 가득 찼습니다",
   "server.tooFull": "너무 배불러서 더 먹을 수 없습니다",
   "server.drinkDefeated": "쓰러진 상태에서는 마실 수 없습니다",
+  "server.drinkCooldown": "아직 물약을 다시 마실 수 없습니다",
   "server.readCombat": "전투 중에는 읽을 수 없습니다",
   "server.talismanAlive": "쓰러져야 부적이 반응합니다",
   "server.campfire": "모닥불을 피웠습니다.",

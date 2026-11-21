@@ -278,6 +278,39 @@ async fn dropping_bag_items_and_equipment_updates_gear_and_torch_together() {
 }
 
 #[tokio::test]
+async fn healing_potions_share_a_cooldown() {
+    let game = make_test_game_state("potion_cooldown");
+    let id = pid("drinker");
+    game.add_player(make_player("drinker", 0.0, 0.0)).await;
+    {
+        let mut players = game.players.write().await;
+        let player = players.get_mut(&id).unwrap();
+        player.max_health = 500;
+        player.health = 1;
+    }
+    game.inventories.write().await.insert(
+        id,
+        PlayerInventory {
+            bag: vec![
+                bag_item(20, "healing_potion", 1),
+                bag_item(21, "greater_healing_potion", 1),
+            ],
+            ..Default::default()
+        },
+    );
+
+    game.use_item(&id, 20).await;
+    game.use_item(&id, 21).await;
+    let bag = game.get_player_inventory(&id).await.unwrap().bag;
+    assert_eq!(bag.len(), 1);
+    assert_eq!(bag[0].item_def_id, "greater_healing_potion");
+
+    game.players.write().await.get_mut(&id).unwrap().drank_at = 0;
+    game.use_item(&id, 21).await;
+    assert!(game.get_player_inventory(&id).await.unwrap().bag.is_empty());
+}
+
+#[tokio::test]
 async fn invalid_equipment_drops_leave_the_whole_batch_untouched() {
     for invalid in [vec![(21, 2)], vec![(21, 1), (21, 1)], vec![(99, 1)]] {
         let game = make_test_game_state("invalid_equipment_drop");

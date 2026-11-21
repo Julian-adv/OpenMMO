@@ -646,6 +646,7 @@
   "server.fullHealth": "体力はすでに満タンです",
   "server.tooFull": "満腹でこれ以上食べられません",
   "server.drinkDefeated": "倒れている間は飲めません",
+  "server.drinkCooldown": "まだ次のポーションは飲めません",
   "server.readCombat": "戦闘中は読めません",
   "server.talismanAlive": "護符は倒れた者にのみ応えます",
   "server.campfire": "焚き火を起こしました。",

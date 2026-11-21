@@ -1,4 +1,5 @@
-import { derived, get, writable } from 'svelte/store'
+import { get, writable } from 'svelte/store'
+import { deadlineClock } from './deadlineClock'
 
 export const daggerSkillState = writable({
   queued: false,
@@ -6,19 +7,9 @@ export const daggerSkillState = writable({
 })
 export const daggerSkillCasts = writable(new Map<number, number>())
 
-export const daggerSkillClock = derived(
+export const daggerSkillClock = deadlineClock(
   daggerSkillState,
-  (state, set) => {
-    set(Date.now())
-    if (state.cooldownUntil <= Date.now()) return
-    const timer = setInterval(() => {
-      const now = Date.now()
-      set(now)
-      if (state.cooldownUntil <= now) clearInterval(timer)
-    }, 100)
-    return () => clearInterval(timer)
-  },
-  Date.now()
+  (state) => state.cooldownUntil
 )
 
 export function queueDaggerSkill(now = Date.now()) {

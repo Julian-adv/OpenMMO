@@ -22,7 +22,8 @@ import {
 } from '../stores/gameStore'
 import { get } from 'svelte/store'
 import { inventoryStore } from '../stores/inventoryStore'
-import { getItemDef } from '../data/itemDefs'
+import { getItemDef, isHealingPotion } from '../data/itemDefs'
+import { claimPotionCooldown } from '../stores/potionCooldownStore'
 import { currentDungeonDepth } from '../stores/dungeonStore'
 import { playerVisualFloorLevel } from '../stores/housingStore'
 import {
@@ -824,7 +825,14 @@ class NetworkManager {
     const item = get(inventoryStore).bag.find(
       (entry) => entry.instance_id === instanceId
     )
-    const category = item && getItemDef(item.item_def_id)?.category
+    const def = item && getItemDef(item.item_def_id)
+    const category = def?.category
+    if (def && isHealingPotion(def)) {
+      // A drink the server would refuse for health must not start the timer.
+      const me = get(gameStore).currentPlayer
+      const wounded = !!me && me.health > 0 && me.health < me.maxHealth
+      if (wounded && !claimPotionCooldown()) return
+    }
     if (
       category === 'teleport_scroll' ||
       category === 'return_scroll' ||

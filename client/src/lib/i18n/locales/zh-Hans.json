@@ -646,6 +646,7 @@
   "server.fullHealth": "生命值已满",
   "server.tooFull": "太饱了，无法继续进食",
   "server.drinkDefeated": "倒下时无法饮用",
+  "server.drinkCooldown": "还不能再喝药水",
   "server.readCombat": "战斗中无法阅读",
   "server.talismanAlive": "护符只会回应倒下的人",
   "server.campfire": "你点燃了篝火。",
