@@ -111,6 +111,9 @@ pub struct ScheduleEntry {
     pub tales: bool,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub shelter_from_rain: bool,
+    /// A chair to sit in, not a meal seat.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub seat_only: bool,
     /// Optional patrol route: waypoints to visit before going to `pos`.
     #[serde(default)]
     pub waypoints: Vec<[f32; 3]>,

@@ -257,7 +257,7 @@ async fn announce_seat(
     let Some(entry) = active.map(|i| &schedule[i]) else {
         return;
     };
-    if entry.action.as_deref() != Some(crate::state::SIT_OBJECT_TYPE) {
+    if entry.action.as_deref() != Some(crate::state::SIT_OBJECT_TYPE) || entry.seat_only {
         return;
     }
     if entry.condition == Some(onlinerpg_shared::schedule::ScheduleCondition::Rain) {

@@ -17,6 +17,17 @@
     },
     {
       "at": "night",
+      "pos": [-1421.3, 2.0, 4801.8],
+      "rotation": 180.0,
+      "floor_level": 0,
+      "label": "seated at the desk in the small rectory behind the chapel",
+      "action": "chair",
+      "object_id": 124,
+      "seat_only": true,
+      "cue": "You have sat down at your rectory desk. Murmur one prayer aloud."
+    },
+    {
+      "at": "22:00-04:00",
       "pos": [-1418.9, 1.95, 4802.6],
       "rotation": 0.0,
       "floor_level": 0,
