@@ -639,6 +639,7 @@ impl GameState {
             let item = altar_reward.filter(|_| Some(character) == raid.summoner);
             if let Some(item) = item {
                 self.award_item(&player_id, item).await;
+                self.record_item_drops(&[item.to_owned()], false);
             }
             info!(
                 "Field raid {}: #{} {} dealt {damage}, tokens {tokens:?}, item {item:?}",

@@ -11,6 +11,7 @@ export interface RareDropItem {
   world_drop: { chance: number, low_level_chance: number | null, low_level_max_level: number | null } | null
   monster_drops: { monster_type: string, name: string, chance: number }[]
   chest_drops: { dungeon: string, chance: number }[]
+  raid_rewards: string[]
   kills: number
   expected_kill_drops: number
   kill_drops: number
@@ -40,6 +41,7 @@ function validItem(item: RareDropItem): boolean {
     && item.monster_drops.every((drop) => drop && text(drop.monster_type) && text(drop.name) && chance(drop.chance))
     && Array.isArray(item.chest_drops)
     && item.chest_drops.every((drop) => drop && text(drop.dungeon) && chance(drop.chance))
+    && Array.isArray(item.raid_rewards) && item.raid_rewards.every(text)
     && count(item.kills) && count(item.kill_drops) && count(item.other_drops)
     && typeof item.expected_kill_drops === 'number' && Number.isFinite(item.expected_kill_drops) && item.expected_kill_drops >= 0
     && !!holdings && [holdings.inventory, holdings.npc_inventory, holdings.storage, holdings.ground].every(count)
@@ -80,5 +82,6 @@ export function describeChances(item: RareDropItem): string[] {
   for (const drop of item.monster_drops) byChance.set(drop.chance, [...(byChance.get(drop.chance) ?? []), drop.name])
   for (const [value, names] of byChance) lines.push(`${names.join('·')} ${formatChance(value)}`)
   for (const drop of item.chest_drops) lines.push(`${drop.dungeon} 보물 상자 ${formatChance(drop.chance)}`)
+  for (const boss of item.raid_rewards) lines.push(`${boss} 토벌 소환자 보상`)
   return lines
 }

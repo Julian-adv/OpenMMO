@@ -3,7 +3,7 @@ use axum::{extract::State, response::Response};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-const TRACKED_ITEMS: [&str; 8] = [
+const TRACKED_ITEMS: [&str; 9] = [
     "scroll_of_enchant_weapon",
     "scroll_of_enchant_armor",
     "stethoscope",
@@ -12,6 +12,7 @@ const TRACKED_ITEMS: [&str; 8] = [
     "shadowfang",
     "foreman_pickaxe",
     "miner_harness",
+    "helm_of_brilliance",
 ];
 
 /// Counts keyed by hour, waiting for the next save.
@@ -74,11 +75,13 @@ struct RareDropItem {
     monster_drops: Vec<MonsterDropChance>,
     /// Final-floor dungeon chests; the signature drop is 1.0.
     chest_drops: Vec<ChestDropChance>,
+    /// Field bosses whose raid summoner receives this item.
+    raid_rewards: Vec<String>,
     /// Kills that could roll this item.
     kills: u64,
     expected_kill_drops: f64,
     kill_drops: u64,
-    /// Drops from treasure chests, barrels and crates.
+    /// Drops from treasure chests, barrels, crates and raid rewards.
     other_drops: u64,
     holdings: ItemHoldings,
 }
@@ -135,6 +138,17 @@ pub(super) async fn rare_drops(State(state): State<MetricsState>) -> Response {
                             })
                         })
                         .collect();
+                    let raid_rewards = onlinerpg_shared::field_boss::field_boss_defs()
+                        .iter()
+                        .filter(|boss| {
+                            boss.altar.as_ref().and_then(|a| a.reward.as_deref()) == Some(id)
+                        })
+                        .map(|boss| {
+                            monsters
+                                .get(&boss.monster)
+                                .map_or_else(|| boss.monster.clone(), |m| m.name.clone())
+                        })
+                        .collect();
                     let mut kills = 0;
                     let mut expected_kill_drops = 0.0;
                     for (monster_type, level, count) in &stored.kills {
@@ -166,6 +180,7 @@ pub(super) async fn rare_drops(State(state): State<MetricsState>) -> Response {
                         }),
                         monster_drops,
                         chest_drops,
+                        raid_rewards,
                         kills,
                         expected_kill_drops,
                         kill_drops,
@@ -273,5 +288,13 @@ mod tests {
         assert_eq!(fang.chest_drops.len(), 1);
         assert_eq!(fang.chest_drops[0].dungeon, "Shadow Guild");
         assert_eq!(fang.chest_drops[0].chance, 0.2);
+
+        let helm = data
+            .items
+            .iter()
+            .find(|item| item.item_def_id == "helm_of_brilliance")
+            .unwrap();
+        assert_eq!(helm.raid_rewards.len(), 1);
+        assert!(helm.world_drop.is_none() && helm.chest_drops.is_empty());
     }
 }
