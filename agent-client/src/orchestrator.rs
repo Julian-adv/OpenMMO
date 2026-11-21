@@ -1003,6 +1003,9 @@ fn roll_fits_class(a: &CharacterAttributes, class: &CharacterClass, gender: Gend
 /// Optional: agents run fine on the shared prompt alone.
 const USER_PROMPT_FILE: &str = "data/user_prompt.txt";
 
+/// Who the registry NPCs are to each other; players' agents never get it.
+const TOWNSFOLK_FILE: &str = "data/townsfolk.txt";
+
 /// The songs a bard may call up, straight from the registry so the prompt
 /// cannot drift from what `/play_music` will resolve.
 fn songbook_prompt() -> String {
@@ -1042,6 +1045,14 @@ fn build_system_prompt(npc: &NpcConfig) -> anyhow::Result<String> {
         .iter()
         .map(|path| driver::load_system_prompt(path, &roles))
         .collect::<anyhow::Result<Vec<_>>>()?;
+
+    if npc
+        .character_name
+        .as_deref()
+        .is_some_and(crate::shop_info::is_townsperson)
+    {
+        parts.push(driver::load_system_prompt(TOWNSFOLK_FILE, &roles)?);
+    }
 
     // Resident wishlists are added per turn.
     if let Some(shop) = npc
@@ -1235,6 +1246,23 @@ pub(crate) mod tests {
         assert!(prompt.contains(r#""type": "offer_pledge""#), "{prompt}");
         assert!(!prompt.contains("open_trade") && !prompt.contains("offer_deal"));
         assert!(!prompt.contains("{{"), "{prompt}");
+    }
+
+    #[test]
+    fn only_registry_npcs_are_introduced_to_the_townsfolk() {
+        let prompt_of = |toml: &str| {
+            let npc: NpcConfig = toml::from_str(toml).unwrap();
+            build_system_prompt(&npc).unwrap()
+        };
+        for name in ["Cocoly", "Maelis"] {
+            let prompt = prompt_of(&format!(
+                "character_name = '{name}'\ninstance_prompt = 'data/npcs/{}/instance.txt'",
+                name.to_lowercase()
+            ));
+            assert!(prompt.contains("## The People of Aldermark"), "{name}");
+        }
+        let prompt = prompt_of("character_name = 'Jake'");
+        assert!(!prompt.contains("## The People of Aldermark"));
     }
 
     #[test]

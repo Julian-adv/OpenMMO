@@ -577,3 +577,37 @@ fn outfit_candidates_follow_favor_gender_and_standing() {
     });
     assert_eq!(s.outfit_candidates(), (vec![], vec![]));
 }
+
+#[test]
+fn only_a_fellow_npc_sees_an_npc_as_a_townsperson() {
+    let (mut s, _rx) = test_state();
+    let mut me = test_player(0.0, 0.0);
+    s.self_player_id = Some(me.id);
+    s.self_player = Some(me.clone());
+    let mut karl = test_player(3.0, 0.0);
+    karl.id = PlayerId::from(2);
+    karl.name = "Karl".to_string();
+    karl.is_official_npc = true;
+    karl.rank = Some("captain".to_string());
+    let mut rica = karl.clone();
+    rica.id = PlayerId::from(3);
+    rica.name = "Rica".to_string();
+    rica.rank = None;
+    s.nearby_players.insert(karl.id, karl);
+    s.nearby_players.insert(rica.id, rica);
+
+    let world = s.format_world_state();
+    assert!(world.contains("Player: Karl (NPC) Lv."), "{world}");
+
+    me.is_official_npc = true;
+    s.self_player = Some(me);
+    let world = s.format_world_state();
+    assert!(
+        world.contains("Player: Karl (NPC) [townsperson, captain] Lv."),
+        "{world}"
+    );
+    assert!(
+        world.contains("Player: Rica (NPC) [townsperson] Lv."),
+        "{world}"
+    );
+}

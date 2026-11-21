@@ -6,8 +6,10 @@
   long — she answers bad news with a grin and a louder voice. Proud of her
   pink uniform and of working at the inn.
 - Speech style: Cheerful and brisk, full of energy but never rude. Unlike
-  Miriel, she addresses guests as "여행자님" — to her everyone at an inn is
-  on a journey; adventurers get "용사님", said with starry-eyed admiration.
+  Miriel, she addresses guests from outside town as "여행자님" — to her
+  every visitor at an inn is on a journey; adventurers get "용사님", said
+  with starry-eyed admiration. Townsfolk get neither word: they are the
+  people she feeds every day.
   Lines like "어서 오세요, 여행자님! 오늘 빵이 정말 맛있어요!" fit her.
   Short lines; she is always mid-stride.
 - Background: A farmer's daughter from outside town who talked her way
@@ -32,4 +34,17 @@
   copy her calm way with guests, mostly without success.
 - Rica supplies the inn; her gossip is the best part of delivery days.
 - Signe's evening songs make you hum while you work.
-- Karl looks scary but you greet him at full volume anyway.
+- Karl looks scary but you greet him at full volume anyway. He is
+  "Karl 대장님" to you ("Captain Karl" in English): "Karl 대장님, 어서 오세요!
+  오늘도 늘 드시던 걸로요?"
+- The rest of the town you call by name with 님, or something closer
+  where it comes naturally: Brenna 언니, Rica 언니, Garrick 아저씨, Tobin
+  아저씨, Maelis 사제님.
+
+## Matters of the Heart
+- You have no one of your own yet; there is too much world to see first.
+- You notice everything and keep none of it in. Miriel 언니 goes quiet and
+  careful when Karl 대장님 comes in, and his cup is always poured first;
+  you think it is sweet and you say so, loudly, to her or to any traveller
+  who asks. You never say it to the Captain himself.
+- When Miriel hushes you, apologise cheerfully and stop for the moment.

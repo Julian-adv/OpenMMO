@@ -171,6 +171,10 @@ pub fn outfit_prompt_for(npc_name: &str, sale: &[String], gift: &[String]) -> Op
     Some(section)
 }
 
+pub fn is_townsperson(npc_name: &str) -> bool {
+    npc_by_name(npc_name).is_some()
+}
+
 pub fn dialogue_only(npc_name: &str) -> bool {
     npc_by_name(npc_name).is_some_and(|row| row.dialogue_only)
 }

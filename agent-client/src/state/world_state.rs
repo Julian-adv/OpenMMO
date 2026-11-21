@@ -586,11 +586,17 @@ Use the readiness status above. Wait for server success or failure feedback."#,
         // Nearby players (exclude self and humans beyond the sight radius)
         let sp = self.self_player.as_ref();
         let index = self.pricing.as_ref().map_or(100, |p| p.index_percent);
+        let townsperson = sp.is_some_and(|p| p.is_official_npc);
         for (_, p) in self.players_in_my_space() {
             if self.self_player_id.as_ref() == Some(&p.id) {
                 continue;
             }
-            let npc_tag = if p.is_official_npc { " (NPC)" } else { "" };
+            let npc_tag = match (p.is_official_npc, townsperson, p.rank.as_deref()) {
+                (false, ..) => String::new(),
+                (true, false, _) => " (NPC)".to_string(),
+                (true, true, Some(rank)) => format!(" (NPC) [townsperson, {rank}]"),
+                (true, true, None) => " (NPC) [townsperson]".to_string(),
+            };
             let favor_tag = match self.favor.get(&p.name) {
                 Some(v) if !p.is_official_npc && *v != 0 => format!(" (favor {v:+})"),
                 _ => String::new(),
