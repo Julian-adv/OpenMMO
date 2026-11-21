@@ -100,7 +100,11 @@
   let summary = $derived(summarize(history?.samples ?? []))
   const count = (value: number | null | undefined) => value == null ? '—' : value.toLocaleString('ko-KR')
   const refresh = () => { resources.forEach((resource) => resource.refresh()) }
+  let scrollY = $state(0)
+  const scrollToTop = () => window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' })
 </script>
+
+<svelte:window bind:scrollY />
 
 <svelte:head>
   <title>월드 현황 · OpenMMO Pulse</title>
@@ -273,3 +277,9 @@
   </section>
   <footer class="site-footer"><span>OpenMMO <strong>Pulse</strong></span><span>작은 순간들이 모여, 하나의 월드가 됩니다.</span></footer>
 </main>
+
+{#if scrollY > 400}
+  <button class="scroll-top-button" onclick={scrollToTop} aria-label="맨 위로" title="맨 위로">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 19V5m-6 6 6-6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" /></svg>
+  </button>
+{/if}
