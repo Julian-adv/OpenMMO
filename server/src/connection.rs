@@ -939,6 +939,12 @@ async fn handle_client_message(
             }
         }
 
+        ClientMessage::JoinDance { target_id } => {
+            if let Some(id) = &state.require_in_game("join dance") {
+                game_state.join_dance(id, &target_id).await;
+            }
+        }
+
         ClientMessage::Heartbeat => {
             state.last_heartbeat = std::time::Instant::now();
         }

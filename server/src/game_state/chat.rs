@@ -406,6 +406,11 @@ impl super::GameState {
             return;
         }
 
+        if let Some(name) = strip_command(&message, "/join_dance") {
+            self.join_dance_named(player_id, name).await;
+            return;
+        }
+
         if let Some(args) = strip_command(&message, "/title") {
             self.handle_title_command(player_id, args, Some(auth)).await;
             return;
@@ -590,6 +595,17 @@ impl super::GameState {
         }
         self.set_player_interaction(player_id, Some(name.to_string()), None)
             .await;
+        // A loop keeps a beat every viewer seeks to, starting now.
+        if super::dance::is_looping_emote(name)
+            && self
+                .players
+                .read()
+                .await
+                .get(player_id)
+                .is_some_and(|p| p.object_type.as_deref() == Some(name))
+        {
+            self.start_dance_beat(player_id, Instant::now()).await;
+        }
     }
 
     /// An instrument anywhere in the inventory — bag or hands — is what

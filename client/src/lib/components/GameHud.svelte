@@ -23,6 +23,7 @@
   import FishingPrompt from './FishingPrompt.svelte'
   import ChargeTargetPrompt from './ChargeTargetPrompt.svelte'
   import WatchDutyChip from './WatchDutyChip.svelte'
+  import DanceJoinPrompt from './DanceJoinPrompt.svelte'
   import TradeOfferToast from './TradeOfferToast.svelte'
   import OutfitOfferToast from './OutfitOfferToast.svelte'
   import PartyInviteToast from './PartyInviteToast.svelte'
@@ -299,6 +300,7 @@
     <FishingPrompt />
     <ChargeTargetPrompt />
     <WatchDutyChip />
+    <DanceJoinPrompt />
   {/if}
 
   {#if !$mapEditorMode}

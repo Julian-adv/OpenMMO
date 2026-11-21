@@ -1689,6 +1689,19 @@ async fn assert_emote_broadcast(tag: &str, emote: &str) {
             }
             other => panic!("Expected the {emote} pose, got {other:?}"),
         }
+        // A loop also starts a beat every viewer seeks the clip to.
+        if onlinerpg_shared::messages::LOOPING_EMOTES.contains(&emote) {
+            match rx.try_recv() {
+                Ok(ServerMessage::PlayerDanceSync {
+                    player_id,
+                    elapsed_secs,
+                }) => {
+                    assert_eq!(player_id, performer_id);
+                    assert!(elapsed_secs < 0.5, "a fresh loop starts at its top");
+                }
+                other => panic!("Expected the {emote} beat, got {other:?}"),
+            }
+        }
         assert!(rx.try_recv().is_err());
     }
 }
@@ -1766,8 +1779,9 @@ async fn an_unknown_emote_lists_the_available_ones() {
     assert!(listener_rx.try_recv().is_err());
 }
 
-/// A looping emote is stored and broadcast like a one-shot one; only clients
-/// treat it differently (loop until the dancer moves or presses Escape).
+/// A looping emote is stored and broadcast like a one-shot one, plus the beat
+/// its viewers seek the loop to; clients loop it until the dancer moves or
+/// presses Escape.
 #[tokio::test]
 async fn a_dance_emote_stores_the_pose_like_any_other() {
     assert_emote_broadcast("emote_dance", "macarena").await;

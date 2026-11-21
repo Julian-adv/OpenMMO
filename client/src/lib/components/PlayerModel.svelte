@@ -245,8 +245,10 @@
     ROAR_ANIMATION,
     HELD_EMOTE_ANIMS,
     isSelfEndingEmote,
+    LOOPING_EMOTE_ANIMS,
     MUSIC_EMOTE_ANIM,
   } from '../stores/emoteStore'
+  import { danceBeatTime } from '../stores/danceBeatStore'
   import { billboardScale, billboardZoomT } from '../utils/billboardScale'
 
   interface Props {
@@ -258,6 +260,8 @@
     interactionAnim?: string
     catchPresentation?: FishingCatch
     interactionCounter?: number
+    /** `performance.now()` at which this player's looping emote beat began. */
+    danceAnchorMs?: number
     mount?: MountKind | null
     interactOffsetY?: number
     attackCounter?: number
@@ -322,6 +326,7 @@
     interactionAnim,
     catchPresentation,
     interactionCounter,
+    danceAnchorMs,
     mount = null,
     interactOffsetY = 0,
     attackCounter,
@@ -1584,6 +1589,7 @@
       interactionAnim !== FishingAnimationName.IDLE &&
       !HELD_EMOTE_ANIMS.has(interactionAnim ?? '')
     startAction(clip, playOnce)
+    seekDanceBeat()
     if (clip === enchantClip) {
       if (armorEnchant) armorEnchantAction = currentAction
       else enchantAction = currentAction
@@ -1599,6 +1605,20 @@
         Math.max(0, seconds)
       )
   }
+
+  /** Seek a looping emote to its shared beat; run every frame too, so a long
+   *  frame or hidden tab cannot leave it behind. */
+  function seekDanceBeat() {
+    if (!currentAction || danceAnchorMs === undefined) return
+    const clip = currentAction.getClip()
+    if (!LOOPING_EMOTE_ANIMS.has(clip.name)) return
+    currentAction.time = danceBeatTime(danceAnchorMs, clip.duration)
+  }
+
+  $effect(() => {
+    if (danceAnchorMs === undefined) return
+    untrack(seekDanceBeat)
+  })
 
   function startAction(
     clip: THREE.AnimationClip,
@@ -2171,6 +2191,7 @@
     // Update mixer with provided deltaTime
     if (currentAction) {
       mixer.update(petrified ? 0 : deltaTime)
+      if (!petrified && currentTS >= 1) seekDanceBeat()
       if (excavationTool?.visible) {
         applyExcavationGrip(excavationGrip)
       }

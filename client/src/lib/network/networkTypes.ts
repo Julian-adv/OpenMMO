@@ -218,6 +218,7 @@ export type ClientMessage =
   | 'FishingStop'
   | 'StartInstrument'
   | { InstrumentNotes: { events: InstrumentNoteWireEvent[] } }
+  | { JoinDance: { target_id: number } }
   | { PlayerTradeRequest: { target_name: string } }
   | { OpenStall: { stall_id: number } }
   | 'CloseStall'
