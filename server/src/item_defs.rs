@@ -29,6 +29,8 @@ pub enum ItemEffect {
     CarryCapacity(u8),
     /// Slows satiation drain while equipped (doc/HUNGER.md).
     Sustenance,
+    /// Lets a teleport scroll go to a bookmark (doc/TELEPORTATION.md).
+    TeleportControl,
 }
 
 impl ItemEffect {
@@ -62,6 +64,7 @@ impl ItemEffect {
             "sustenance" => Some(ItemEffect::Sustenance),
             "light" => Some(ItemEffect::Light),
             "invisibility" => Some(ItemEffect::Invisibility),
+            "teleportcontrol" => Some(ItemEffect::TeleportControl),
             _ => None,
         }
     }

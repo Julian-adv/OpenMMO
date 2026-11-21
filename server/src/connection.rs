@@ -1256,6 +1256,43 @@ async fn handle_client_message(
                     .await;
             }
         }
+        ClientMessage::SaveBookmark { name } => {
+            if let Some(id) = &state.player_id {
+                game_state.save_bookmark(id, name, auth_service).await;
+            }
+        }
+        ClientMessage::RenameBookmark { id: bookmark, name } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .rename_bookmark(id, bookmark, name, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::DeleteBookmark { id: bookmark } => {
+            if let Some(id) = &state.player_id {
+                game_state.delete_bookmark(id, bookmark, auth_service).await;
+            }
+        }
+        ClientMessage::TeleportToBookmark {
+            instance_id,
+            bookmark_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .request_bookmark_teleport(*id, instance_id, bookmark_id, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::BlessScrolls {
+            npc_player_id,
+            quantity,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .bless_scrolls(id, &npc_player_id, quantity, auth_service)
+                    .await;
+            }
+        }
         ClientMessage::ChangeAppearance {
             npc_player_id,
             appearance,
@@ -1825,6 +1862,12 @@ async fn handle_client_message(
         ClientMessage::InspectFamilyEmblem { player_name } => {
             if let Some(id) = &state.require_in_game("inspect family emblem") {
                 game_state.show_family_emblem(id, player_name).await;
+            }
+        }
+
+        ClientMessage::OfferBlessing { target_player_id } => {
+            if let Some(id) = &state.require_in_game("offer blessing") {
+                game_state.offer_blessing(id, &target_player_id).await;
             }
         }
 

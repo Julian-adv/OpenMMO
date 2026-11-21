@@ -36,6 +36,7 @@ import { dungeonManager } from './managers/dungeonManager'
 import { chatChannel } from './stores/chatChannelStore'
 import { partyRoster } from './stores/partyStore'
 import { familyInfo } from './stores/familyStore'
+import { openBookmarks } from './stores/bookmarkStore'
 import { queueMergerCelebration } from './stores/mergerCelebrationStore'
 import { EMOTE_LIST } from './emote-meta'
 import { DEBUG_ANIM_NAMES, emoteRequest } from './stores/emoteStore'
@@ -168,6 +169,10 @@ const COMMANDS: Record<string, Command> = {
         sender: 'system',
       })
     },
+  },
+  '/bookmark': {
+    desc: 'command.help.bookmark',
+    run: () => openBookmarks(),
   },
   '/join_dance': { desc: 'command.help.join_dance' },
   // Debug clips are resolved locally from animation packs.

@@ -865,6 +865,27 @@ pub enum ClientMessage {
     UseItem {
         instance_id: u64,
     },
+    /// Bookmark where the character stands (doc/TELEPORTATION.md).
+    SaveBookmark {
+        name: String,
+    },
+    RenameBookmark {
+        id: i64,
+        name: String,
+    },
+    DeleteBookmark {
+        id: i64,
+    },
+    /// Read a teleport scroll toward a bookmark instead of a random spot.
+    TeleportToBookmark {
+        instance_id: u64,
+        bookmark_id: i64,
+    },
+    /// Pay the blesser to turn plain teleport scrolls into blessed ones.
+    BlessScrolls {
+        npc_player_id: PlayerId,
+        quantity: u32,
+    },
     UseLandDocument {
         instance_id: u64,
         tile_x: i32,
@@ -1329,6 +1350,11 @@ pub enum ClientMessage {
     OfferMergerPledge {
         target_player_id: PlayerId,
     },
+    /// NPC-only: the blesser opens the blessing window for a nearby player,
+    /// the spoken way into `BlessScrolls`.
+    OfferBlessing {
+        target_player_id: PlayerId,
+    },
     /// NPC-only: the guard captain opens the reclaim window for a nearby
     /// player, the spoken way into `ImpoundQuery`.
     OfferImpound {
@@ -1420,6 +1446,9 @@ impl ClientMessage {
             | PickupItem { .. }
             | PickupNearbyItems
             | UseItem { .. }
+            | SaveBookmark { .. }
+            | TeleportToBookmark { .. }
+            | BlessScrolls { .. }
             | UseLandDocument { .. }
             | EditFence { .. }
             | PatrolSweep { .. }
@@ -2097,6 +2126,19 @@ pub enum ServerMessage {
         titles: Vec<String>,
         active: Option<String>,
     },
+    /// The character's bookmarks, on entry and after every change.
+    Bookmarks {
+        bookmarks: Vec<crate::bookmark::Bookmark>,
+    },
+    /// Why a bookmark request or a chosen-destination teleport was refused.
+    BookmarkRefused {
+        error: crate::bookmark::BookmarkError,
+    },
+    /// `blessed` scrolls were paid for at `bookmark::BLESSING_PRICE` each.
+    BlessResult {
+        blessed: u32,
+        error: Option<crate::bookmark::BlessError>,
+    },
     /// The client asked to use a cape dye and may open its colour picker:
     /// there is a cape on to dye and the dye is in the bag. The server keeps
     /// no pending state — `DyeCape` re-checks everything.
@@ -2535,6 +2577,10 @@ pub enum ServerMessage {
     },
     /// Direct to a family head: the officiant holds out the pledge form.
     MergerPledgeOffered,
+    /// Direct to a player: the blesser opens the blessing window.
+    BlessingOffered {
+        npc_player_id: PlayerId,
+    },
     /// Direct to a player: the guard captain opens the reclaim window.
     ImpoundOffered {
         npc_player_id: PlayerId,
@@ -3078,6 +3124,9 @@ impl ServerMessage {
             | Self::TitleEarned { .. }
             | Self::PlayerTitles { .. }
             | Self::InvisibilityChanged { .. }
+            | Self::Bookmarks { .. }
+            | Self::BookmarkRefused { .. }
+            | Self::BlessResult { .. }
             | Self::CapeDyePrompt { .. }
             | Self::LandClaimPrompt { .. }
             | Self::LandscapingMode { .. }
@@ -3133,6 +3182,7 @@ impl ServerMessage {
             | Self::FurnitureSelectionNotice { .. }
             | Self::MergerRiteCue { .. }
             | Self::MergerPledgeOffered
+            | Self::BlessingOffered { .. }
             | Self::ImpoundOffered { .. }
             | Self::WatchOffered { .. }
             | Self::WatchVerdict { .. }

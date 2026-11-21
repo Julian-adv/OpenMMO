@@ -5,7 +5,9 @@ use onlinerpg_shared::{
         dungeon_cache_key, floor_level_for_passability, passability_floor_for_level, world_to_cell,
         GRID,
     },
-    pathfinding::{get_floor_y_base, is_cell_sealed, is_circle_blocked_on_floor},
+    pathfinding::{
+        get_floor_y_base, is_cell_sealed, is_circle_blocked_on_floor, is_on_building_floor,
+    },
     wrap_world_x, Position, ServerMessage, TeleportPhase,
 };
 use rand::{rngs::StdRng, Rng, SeedableRng};
@@ -129,13 +131,28 @@ impl GameState {
         {
             return false;
         }
-        let Some((origin, rotation, origin_floor, name)) = self.player_pose(player_id).await else {
+        let Some((origin, ..)) = self.player_pose(player_id).await else {
             return false;
         };
         let Some((destination, floor_level)) = self.random_teleport_destination(&origin, rng).await
         else {
             self.send_system_message(player_id, "No safe place to teleport was found.")
                 .await;
+            return false;
+        };
+        self.read_teleport_scroll(player_id, instance_id, destination, floor_level)
+            .await
+    }
+
+    /// Spend the scroll and move its reader to an already chosen landing.
+    pub(super) async fn read_teleport_scroll(
+        &self,
+        player_id: &PlayerId,
+        instance_id: u64,
+        destination: Position,
+        floor_level: i8,
+    ) -> bool {
+        let Some((origin, rotation, origin_floor, name)) = self.player_pose(player_id).await else {
             return false;
         };
         if self
@@ -315,10 +332,11 @@ impl GameState {
         None
     }
 
+    /// Dry, level, unblocked ground outside every building.
     pub(super) async fn teleport_surface_landing(&self, x: f32, z: f32) -> Option<Position> {
         {
             let cache = self.passability_read();
-            if get_floor_y_base(&cache, x, z, 0).is_some()
+            if is_on_building_floor(&cache, x, z, 0)
                 || is_circle_blocked_on_floor(&cache, x, z, ARRIVAL_RADIUS, 0, None)
             {
                 return None;

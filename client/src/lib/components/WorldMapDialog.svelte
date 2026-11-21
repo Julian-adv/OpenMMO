@@ -63,6 +63,8 @@
 </script>
 
 <script lang="ts">
+  import { openBookmarks } from '../stores/bookmarkStore'
+  import { formatDistance } from '../utils/formatDistance'
   import { locale, t, translate } from '../i18n'
   import { placeName } from '../i18n/places'
   import { SvelteMap } from 'svelte/reactivity'
@@ -166,11 +168,9 @@
         { x: playerX, z: playerZ },
         $travelDestination
       )
-      const label =
-        distance >= 1000
-          ? `${(distance / 1000).toFixed(1)} km`
-          : `${Math.ceil(distance)} m`
-      return $t('map.travelRemainingHint', { distance: label })
+      return $t('map.travelRemainingHint', {
+        distance: formatDistance(distance),
+      })
     }
     return canTravel ? $t('map.travelStartHint') : $t('map.travelOutdoorsHint')
   })
@@ -1009,6 +1009,20 @@
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <rect x="3.5" y="3.5" width="17" height="17" rx="1"></rect>
             <path d="M12 3.5v17M3.5 12h17"></path>
+          </svg></button
+        >
+        <button
+          type="button"
+          class="ctrl-btn center-btn"
+          onclick={() => {
+            close()
+            openBookmarks()
+          }}
+          title={$t('bookmark.title')}
+          aria-label={$t('bookmark.title')}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M7 3.5h10v17l-5-4-5 4z"></path>
           </svg></button
         >
       </div>

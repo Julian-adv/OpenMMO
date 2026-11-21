@@ -3,6 +3,8 @@
   "apple.name": "蘋果",
   "beer.description": "從旅館酒桶倒出的泡沫麥酒，裝在木杯裡。在旅館餐桌供應。",
   "beer.name": "啤酒",
+  "blessed_scroll_of_teleportation.description": "在教堂受過祝福的傳送卷軸。閱讀後可傳送到已標記的地點，不限距離。若未選擇標記，則與普通卷軸一樣隨機傳送。",
+  "blessed_scroll_of_teleportation.name": "受祝福的傳送卷軸",
   "bow.description": "層疊紫杉木製成的反曲弓，比起臂力更需要穩定的雙手。",
   "bow.name": "弓",
   "bread.description": "剛出爐的麵包。",

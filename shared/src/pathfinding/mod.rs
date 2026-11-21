@@ -32,6 +32,7 @@ pub use query::segment_touches_box;
 pub use query::{
     attack_line_blocked, attack_line_blocked_in, blocking_entry_for_mover, get_floor_at_position,
     get_floor_y_base, in_stairwell_span, is_cardinal_move_blocked, is_cell_sealed,
+    is_on_building_floor,
     is_cell_under_furniture, is_circle_blocked_by_passability, is_circle_blocked_on_floor,
     is_doorway, is_movement_blocked, is_movement_blocked_for_mover, leg_touches_stairwell,
     ranged_attack_line_blocked, snap_goal_into_floor, start_floor_at, storey_ground_y,

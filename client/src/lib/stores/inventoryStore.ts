@@ -38,11 +38,14 @@ export const equippedArmor = derived(
 )
 export const itemLockMode = writable(false)
 
-/** Units of `itemDefId` in the bag. */
-export const bagItemCount = (itemDefId: string) =>
+/** Units of `itemDefId` in the bag; `unlockedOnly` skips locked stacks. */
+export const bagItemCount = (itemDefId: string, unlockedOnly = false) =>
   derived(inventoryStore, (inv) =>
     inv.bag
-      .filter((item) => item.item_def_id === itemDefId)
+      .filter(
+        (item) =>
+          item.item_def_id === itemDefId && !(unlockedOnly && item.locked)
+      )
       .reduce((sum, item) => sum + item.quantity, 0)
   )
 

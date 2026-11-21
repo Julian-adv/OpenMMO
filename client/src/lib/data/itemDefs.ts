@@ -148,14 +148,24 @@ export function itemDescription(
   return itemText(def.id, 'description', def.description, language)
 }
 
+function idsWithEffect(effect: string) {
+  return new Set(
+    Object.values(itemDefs)
+      .filter((def) =>
+        def.effects?.split(';').some((token) => token.trim() === effect)
+      )
+      .map((def) => def.id)
+  )
+}
+
 // Read every frame for every visible player, so resolve the tokens once.
-const LIGHT_ITEM_IDS = new Set(
-  Object.values(itemDefs)
-    .filter((def) =>
-      def.effects?.split(';').some((token) => token.trim() === 'light')
-    )
-    .map((def) => def.id)
-)
+const LIGHT_ITEM_IDS = idsWithEffect('light')
+const TELEPORT_CONTROL_IDS = idsWithEffect('teleportcontrol')
+
+/** Lets a teleport scroll be aimed at a bookmark, as the scroll itself or worn. */
+export function controlsTeleport(itemDefId: string): boolean {
+  return TELEPORT_CONTROL_IDS.has(itemDefId)
+}
 
 export function givesLight(itemDefId: string | null | undefined): boolean {
   return LIGHT_ITEM_IDS.has(itemDefId ?? '')
@@ -293,6 +303,8 @@ export function statLabels(
       lines.push(translate('item.light', {}, language))
     else if (token === 'invisibility')
       lines.push(translate('item.invisibility', {}, language))
+    else if (token === 'teleportcontrol')
+      lines.push(translate('item.teleportControl', {}, language))
     else lines.push(token)
   }
   return lines

@@ -124,6 +124,7 @@ pub enum GoldSink {
     LandRecovery,
     NpcOutfit { npc_id: String },
     Salon,
+    Blessing,
 }
 
 impl GoldSink {
@@ -137,6 +138,7 @@ impl GoldSink {
             Self::LandRecovery => ("land_recovery", ""),
             Self::NpcOutfit { npc_id } => ("npc_outfit", npc_id),
             Self::Salon => ("salon", ""),
+            Self::Blessing => ("blessing", ""),
         }
     }
 }

@@ -56,6 +56,9 @@
   import WatchRackWindow from './WatchRackWindow.svelte'
   import SalonDialog from './SalonDialog.svelte'
   import { impoundSession } from '../stores/impoundStore'
+  import BookmarkDialog from './BookmarkDialog.svelte'
+  import BlessDialog from './BlessDialog.svelte'
+  import { blessSession, bookmarkDialog } from '../stores/bookmarkStore'
   import { salonSession } from '../stores/salonStore'
   import { altarOffering } from '../stores/altarStore'
   import NoticeBoardPanel from './NoticeBoardPanel.svelte'
@@ -556,6 +559,14 @@
 
 {#if $impoundSession}
   <ImpoundDialog />
+{/if}
+
+{#if $bookmarkDialog}
+  <BookmarkDialog />
+{/if}
+
+{#if $blessSession}
+  <BlessDialog />
 {/if}
 
 <WatchOfferDialog />

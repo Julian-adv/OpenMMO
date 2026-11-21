@@ -735,6 +735,7 @@ pub(super) async fn handle_response(
         }
 
         if let AgentAction::OfferPledge { player }
+        | AgentAction::OfferBlessing { player }
         | AgentAction::OpenImpound { player }
         | AgentAction::WatchShift { player } = action
         {
@@ -743,6 +744,9 @@ pub(super) async fn handle_response(
                 s.push_agent_event(match action {
                     AgentAction::OfferPledge { .. } => format!(
                         "[Rite] No one named '{player}' is nearby; no pledge form was handed over."
+                    ),
+                    AgentAction::OfferBlessing { .. } => format!(
+                        "[Rite] No one named '{player}' is nearby; no blessing window was opened."
                     ),
                     AgentAction::OpenImpound { .. } => format!(
                         "[Impound] No one named '{player}' is nearby; no reclaim window was opened."
@@ -756,6 +760,9 @@ pub(super) async fn handle_response(
             let cmd = match action {
                 AgentAction::OfferPledge { .. } => {
                     onlinerpg_shared::ClientMessage::OfferMergerPledge { target_player_id }
+                }
+                AgentAction::OfferBlessing { .. } => {
+                    onlinerpg_shared::ClientMessage::OfferBlessing { target_player_id }
                 }
                 AgentAction::OpenImpound { .. } => {
                     onlinerpg_shared::ClientMessage::OfferImpound { target_player_id }

@@ -1,5 +1,7 @@
 #[path = "auth_bans.rs"]
 mod bans;
+#[path = "auth_bookmarks.rs"]
+mod bookmarks;
 #[path = "auth_characters.rs"]
 mod characters;
 #[path = "auth_dungeon_history.rs"]

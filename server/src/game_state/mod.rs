@@ -218,6 +218,8 @@ mod estate_storage;
 pub(crate) use estate_storage::EstateFurnitureMove;
 mod battle_hymn;
 mod bed_rest;
+mod blessing;
+mod bookmarks;
 mod fence;
 mod field_raid;
 pub(crate) use field_raid::FIELD_RAID_TICK;
@@ -713,6 +715,13 @@ impl GameState {
 
     pub fn is_npc_asleep(&self, npc_name: &str) -> bool {
         self.with_active_npc_schedule(npc_name, ScheduleEntry::is_sleeping)
+            .unwrap_or(false)
+    }
+
+    /// Whether the NPC's schedule has it using something (a seat, a bed)
+    /// rather than standing at its post.
+    pub fn is_npc_occupied(&self, npc_name: &str) -> bool {
+        self.with_active_npc_schedule(npc_name, |entry| entry.action.is_some())
             .unwrap_or(false)
     }
 

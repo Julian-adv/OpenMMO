@@ -1,0 +1,94 @@
+/* Centred HUD dialogs in the bag panel's look. */
+.hud-dialog-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+.hud-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  box-sizing: border-box;
+  max-width: calc(100vw - 32px);
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  background: rgba(6, 10, 14, 0.88);
+  backdrop-filter: blur(4px);
+  color: #e6edf3;
+  font-family: 'Noto Sans KR', sans-serif;
+  font-size: 12px;
+  pointer-events: auto;
+}
+.hud-dialog .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+.hud-dialog .panel-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: #f0c040;
+}
+.hud-dialog .close-btn {
+  padding: 0 2px;
+  border: none;
+  background: none;
+  color: #9fb2c3;
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
+}
+.hud-dialog .close-btn:hover {
+  color: #fff;
+}
+.hud-dialog p {
+  margin: 0;
+}
+.hud-dialog .hint {
+  color: #9fb2c3;
+}
+.hud-dialog .error {
+  color: #f0a08c;
+}
+.hud-dialog .actions {
+  display: flex;
+  justify-content: flex-end;
+}
+.hud-dialog .btn {
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: none;
+  color: #9fb2c3;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.hud-dialog .btn.large {
+  padding: 6px 16px;
+  font-size: 12px;
+}
+.hud-dialog .btn:hover:not(:disabled) {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+.hud-dialog .btn.primary {
+  border-color: rgba(240, 192, 64, 0.5);
+  color: #f0c040;
+}
+.hud-dialog .btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

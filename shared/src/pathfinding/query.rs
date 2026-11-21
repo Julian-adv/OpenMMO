@@ -822,6 +822,22 @@ pub fn snap_goal_into_floor(
     nearest.map_or((x, z), |(_, p)| p)
 }
 
+/// Whether a building storey covers the point. Furniture, fences and a
+/// dungeon's surface shell are collision hulls, not floors.
+pub fn is_on_building_floor(cache: &PassabilityCache, x: f32, z: f32, floor_level: u8) -> bool {
+    cache.values().any(|rp| {
+        rp.is_ground
+            && x >= rp.min_x
+            && x <= rp.max_x
+            && z >= rp.min_z
+            && z <= rp.max_z
+            && rp.floors.iter().any(|floor| {
+                floor.floor_level == floor_level
+                    && grid_world_bounds(rp, floor).contains(x, z, 0.0)
+            })
+    })
+}
+
 /// Get the yBase for a given floor level at a world position.
 pub fn get_floor_y_base(cache: &PassabilityCache, x: f32, z: f32, floor_level: u8) -> Option<f32> {
     for rp in cache.values() {

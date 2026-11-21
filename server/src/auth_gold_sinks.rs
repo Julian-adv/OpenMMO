@@ -112,6 +112,7 @@ impl AuthService {
                 "land_tax" => GoldSink::LandTax,
                 "land_recovery" => GoldSink::LandRecovery,
                 "salon" => GoldSink::Salon,
+                "blessing" => GoldSink::Blessing,
                 "npc_outfit" => GoldSink::NpcOutfit {
                     npc_id: item_def_id,
                 },
@@ -125,6 +126,7 @@ impl AuthService {
                 GoldSink::LandTax => "토지세".into(),
                 GoldSink::LandRecovery => "토지 체납 복구 비용".into(),
                 GoldSink::Salon => "미장원 외형 변경".into(),
+                GoldSink::Blessing => "순간이동 주문서 축복".into(),
                 GoldSink::NpcOutfit { npc_id } => format!("{npc_id}의 옷 한 벌"),
                 GoldSink::ItemPurchase { item_def_id }
                 | GoldSink::ItemBuyback { item_def_id }

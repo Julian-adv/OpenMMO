@@ -5,6 +5,7 @@
 //! type now lives.
 
 pub mod ability;
+pub mod bookmark;
 pub mod bridge;
 pub mod celestial;
 pub mod character;
@@ -315,7 +316,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `WatchRackOpen`/`WatchRackState`/`WatchRackMove`/`WatchRackSettle`, `WatchShiftQuit`,
 /// `WatchToolUse` and `WatchDuty`.
 /// v170: `JoinDance` and `PlayerDanceSync`: join a nearby dance in step.
-pub const PROTOCOL_VERSION: u32 = 170;
+pub const PROTOCOL_VERSION: u32 = 171;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

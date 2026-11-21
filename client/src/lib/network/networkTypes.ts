@@ -357,6 +357,11 @@ export type ClientMessage =
   | { PickupItem: { instance_id: number } }
   | 'PickupNearbyItems'
   | { UseItem: { instance_id: number } }
+  | { SaveBookmark: { name: string } }
+  | { RenameBookmark: { id: number; name: string } }
+  | { DeleteBookmark: { id: number } }
+  | { TeleportToBookmark: { instance_id: number; bookmark_id: number } }
+  | { BlessScrolls: { npc_player_id: number; quantity: number } }
   | {
       PlaceHouse: {
         instance_id: number

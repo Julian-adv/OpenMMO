@@ -483,7 +483,7 @@ impl super::GameState {
             .write()
             .await
             .get_mut(player_id)
-            .and_then(|inv| hold_by_def(&mut inv.bag, FAMILY_STAMP_ITEM, stamps));
+            .and_then(|inv| hold_by_def(&mut inv.bag, FAMILY_STAMP_ITEM, stamps, true));
         let Some(hold) = hold else {
             self.family_note(
                 player_id,
@@ -1015,7 +1015,7 @@ impl super::GameState {
     }
 
     /// Tell the officiant what just happened; her client turns it into a line.
-    async fn rite_cue(&self, officiant: &PlayerId, cue: String) {
+    pub(super) async fn rite_cue(&self, officiant: &PlayerId, cue: String) {
         self.send_direct_message(officiant, ServerMessage::MergerRiteCue { cue })
             .await;
     }

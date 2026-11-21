@@ -3,6 +3,8 @@
   "apple.name": "リンゴ",
   "beer.description": "宿の樽から注いだ泡立つエールの木製ジョッキ。宿の食卓で提供されます。",
   "beer.name": "ビール",
+  "blessed_scroll_of_teleportation.description": "教会で祝福された転移の巻物。読むと、ブックマークした場所へ距離を問わず転移します。ブックマークを選ばなければ通常の巻物と同じくランダムに転移します。",
+  "blessed_scroll_of_teleportation.name": "祝福された転移の巻物",
   "bow.description": "イチイを重ねたリカーブボウ。腕力よりも安定した手元が物をいいます。",
   "bow.name": "弓",
   "bread.description": "焼きたてのパン。",

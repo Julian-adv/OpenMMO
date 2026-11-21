@@ -22,7 +22,12 @@ import {
 } from '../stores/gameStore'
 import { get } from 'svelte/store'
 import { inventoryStore } from '../stores/inventoryStore'
-import { getItemDef, isHealingPotion } from '../data/itemDefs'
+import { controlsTeleport, getItemDef, isHealingPotion } from '../data/itemDefs'
+import {
+  bookmarks,
+  openBookmarks,
+  resetBookmarks,
+} from '../stores/bookmarkStore'
 import { claimPotionCooldown } from '../stores/potionCooldownStore'
 import { currentDungeonDepth } from '../stores/dungeonStore'
 import { playerVisualFloorLevel } from '../stores/housingStore'
@@ -383,6 +388,7 @@ class NetworkManager {
       // Refresh the friend roster and presence after rejoining.
       resetFriendStores()
       resetFamilyStores()
+      resetBookmarks()
       // Disconnect cancels any open trade.
       resetPlayerTrade()
       this.connect()
@@ -833,17 +839,58 @@ class NetworkManager {
       const wounded = !!me && me.health > 0 && me.health < me.maxHealth
       if (wounded && !claimPotionCooldown()) return
     }
+    if (def && category === 'teleport_scroll' && this.aimsTeleport(def.id)) {
+      openBookmarks(instanceId)
+      return
+    }
     if (
       category === 'teleport_scroll' ||
       category === 'return_scroll' ||
       category === 'estate_return_scroll'
     ) {
-      this.sendWithTeleportDeparture({
-        UseItem: { instance_id: instanceId },
-      })
+      this.sendTeleportScroll(instanceId)
       return
     }
     this.sendMessage({ UseItem: { instance_id: instanceId } })
+  }
+
+  /** Whether reading this teleport scroll offers the bookmark list first. */
+  private aimsTeleport(scrollDefId: string) {
+    if (get(bookmarks).length === 0) return false
+    const worn = Object.values(get(inventoryStore).equipped)
+    return (
+      controlsTeleport(scrollDefId) ||
+      worn.some((item) => !!item && controlsTeleport(item.item_def_id))
+    )
+  }
+
+  /** Reads a teleport or return scroll with no destination chosen. */
+  sendTeleportScroll(instanceId: number) {
+    this.sendWithTeleportDeparture({ UseItem: { instance_id: instanceId } })
+  }
+
+  sendTeleportToBookmark(instanceId: number, bookmarkId: number) {
+    this.sendWithTeleportDeparture({
+      TeleportToBookmark: { instance_id: instanceId, bookmark_id: bookmarkId },
+    })
+  }
+
+  sendSaveBookmark(name: string) {
+    this.sendMessage({ SaveBookmark: { name } })
+  }
+
+  sendRenameBookmark(id: number, name: string) {
+    this.sendMessage({ RenameBookmark: { id, name } })
+  }
+
+  sendDeleteBookmark(id: number) {
+    this.sendMessage({ DeleteBookmark: { id } })
+  }
+
+  sendBlessScrolls(npcPlayerId: number, quantity: number) {
+    this.sendMessage({
+      BlessScrolls: { npc_player_id: npcPlayerId, quantity },
+    })
   }
 
   private sendWithTeleportDeparture(message: ClientMessage) {

@@ -793,6 +793,22 @@ pub fn land_claim_min_level() -> u32 {
     crate::land::LAND_CLAIM_MIN_LEVEL
 }
 
+/// Copper the blesser charges per teleport scroll.
+#[wasm_bindgen]
+pub fn blessing_price() -> u32 {
+    crate::bookmark::BLESSING_PRICE as u32
+}
+
+#[wasm_bindgen]
+pub fn max_bookmarks() -> usize {
+    crate::bookmark::MAX_BOOKMARKS
+}
+
+#[wasm_bindgen]
+pub fn max_bookmark_name_chars() -> usize {
+    crate::bookmark::MAX_NAME_CHARS
+}
+
 #[wasm_bindgen]
 pub fn announcement_max_chars() -> usize {
     crate::messages::ANNOUNCEMENT_MAX_CHARS

@@ -132,6 +132,12 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    /// Open the scroll blessing window for a nearby player (the officiant only).
+    #[serde(rename = "offer_blessing")]
+    OfferBlessing {
+        #[serde(alias = "target", alias = "player_name", alias = "target_player")]
+        player: String,
+    },
     /// Offer a nearby regular our spare outfit for sale (outfit NPCs only).
     #[serde(rename = "offer_outfit")]
     OfferOutfit {
@@ -658,7 +664,7 @@ impl Roles {
     fn teaches(&self, action: &str) -> Option<bool> {
         match action {
             "offer_deal" | "open_trade" => Some(self.trader),
-            "offer_pledge" => Some(self.officiant),
+            "offer_pledge" | "offer_blessing" => Some(self.officiant),
             "open_impound" | "watch_shift" => Some(self.guard_captain),
             "watch_work" | "watch_accept" | "watch_rack" | "clear_road" | "shovel_snow" => {
                 Some(self.adventurer)
@@ -957,6 +963,13 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         doc: r#"- Open the merger pledge form on a nearby family
   head's screen when they ask in words to merge families:
   {"type": "offer_pledge", "target": "darkcocoa"}"#,
+    },
+    ActionSpec {
+        names: &["offer_blessing"],
+        aliases: &[],
+        doc: r#"- Open the scroll blessing window on a nearby player's
+  screen when they ask in words to have teleport scrolls blessed:
+  {"type": "offer_blessing", "target": "darkcocoa"}"#,
     },
     ActionSpec {
         names: &["offer_outfit", "gift_outfit"],
@@ -1365,6 +1378,7 @@ impl AgentAction {
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
             | Self::OfferPledge { .. }
+            | Self::OfferBlessing { .. }
             | Self::OfferOutfit { .. }
             | Self::GiftOutfit { .. }
             | Self::OpenImpound { .. }
@@ -1550,6 +1564,7 @@ impl AgentAction {
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
             | Self::OfferPledge { .. }
+            | Self::OfferBlessing { .. }
             | Self::OfferOutfit { .. }
             | Self::GiftOutfit { .. }
             | Self::OpenImpound { .. }
@@ -1608,6 +1623,7 @@ impl AgentAction {
             Self::OfferDeal { .. } => "offer_deal",
             Self::OpenTrade { .. } => "open_trade",
             Self::OfferPledge { .. } => "offer_pledge",
+            Self::OfferBlessing { .. } => "offer_blessing",
             Self::OpenImpound { .. } => "open_impound",
             Self::WatchShift { .. } => "watch_shift",
             Self::WatchWork => "watch_work",
@@ -2254,6 +2270,7 @@ pub(super) fn action_to_command(
         AgentAction::OfferDeal { .. } => None,
         AgentAction::OpenTrade { .. } => None,
         AgentAction::OfferPledge { .. } => None,
+        AgentAction::OfferBlessing { .. } => None,
         AgentAction::OpenImpound { .. } => None,
         AgentAction::WatchShift { .. }
         | AgentAction::WatchWork

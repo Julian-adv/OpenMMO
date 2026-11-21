@@ -231,6 +231,12 @@ import { applyImpoundState, openImpound } from '../stores/impoundStore'
 import { watchDuty, watchOffer, watchRack } from '../stores/watchDutyStore'
 import { applySalonResult, openSalonFromChair } from '../stores/salonStore'
 import {
+  applyBlessResult,
+  applyBookmarks,
+  openBlessing,
+  refuseBookmark,
+} from '../stores/bookmarkStore'
+import {
   applyFamilyState,
   familyStorageLog,
   mergerPledgeOpen,
@@ -2015,6 +2021,18 @@ export function handleServerMessage(
       applySalonResult(data)
       break
 
+    case 'Bookmarks':
+      applyBookmarks(data.bookmarks)
+      break
+
+    case 'BookmarkRefused':
+      refuseBookmark(data.error)
+      break
+
+    case 'BlessResult':
+      applyBlessResult(data)
+      break
+
     case 'PlayerFamilyChanged': {
       updatePlayer(data.player_id, { family: data.family ?? null })
       break
@@ -2592,6 +2610,10 @@ export function handleServerMessage(
 
     case 'MergerPledgeOffered':
       mergerPledgeOpen.set(true)
+      break
+
+    case 'BlessingOffered':
+      openBlessing(data.npc_player_id)
       break
 
     case 'FamilyEmblemShown':

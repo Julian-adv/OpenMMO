@@ -365,11 +365,17 @@ pub(super) async fn enter_game(
             auth.load_blocked_names(character_id)?,
             auth.load_friends(character_id)?,
             human.then(|| auth.load_npc_outfits(&account)),
+            human.then(|| auth.bookmarks(character_id)).transpose()?,
         ))
     })
     .await
     {
-        Ok((blocked, friends, outfits)) => {
+        Ok((blocked, friends, outfits, bookmarks)) => {
+            if let Some(bookmarks) = bookmarks {
+                game_state
+                    .send_direct_message(&id, ServerMessage::Bookmarks { bookmarks })
+                    .await;
+            }
             game_state.set_player_blocks(&id, blocked).await;
             game_state.set_player_friends(&id, friends).await;
             match outfits {

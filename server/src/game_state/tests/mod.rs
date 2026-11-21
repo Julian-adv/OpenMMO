@@ -19,6 +19,7 @@ mod ability_tests;
 mod ambient_spawn_tests;
 mod auto_attack_tests;
 mod bed_rest_tests;
+mod bookmark_tests;
 mod cape_dye_tests;
 mod cape_texture_tests;
 mod character_deletion_tests;

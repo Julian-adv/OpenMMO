@@ -3,6 +3,8 @@
   "apple.name": "사과",
   "beer.description": "여관 술통에서 따른 거품 가득한 에일 한 잔. 여관 식탁에서 제공됩니다.",
   "beer.name": "맥주",
+  "blessed_scroll_of_teleportation.description": "성당에서 축복받은 순간이동 주문서. 읽으면 북마크해 둔 곳으로 거리에 상관없이 이동합니다. 북마크를 고르지 않으면 일반 주문서처럼 무작위로 이동합니다.",
+  "blessed_scroll_of_teleportation.name": "축복받은 순간이동 주문서",
   "bow.description": "주목을 겹쳐 만든 리커브 활. 강한 팔보다 흔들림 없는 손이 중요합니다.",
   "bow.name": "활",
   "bread.description": "갓 구운 빵.",

@@ -3,6 +3,8 @@
   "apple.name": "苹果",
   "beer.description": "从旅馆酒桶倒出的泡沫麦酒，装在木杯里。在旅馆餐桌供应。",
   "beer.name": "啤酒",
+  "blessed_scroll_of_teleportation.description": "在教堂受过祝福的传送卷轴。阅读后可传送到已标记的地点，不限距离。若未选择标记，则与普通卷轴一样随机传送。",
+  "blessed_scroll_of_teleportation.name": "受祝福的传送卷轴",
   "bow.description": "层叠紫杉木制成的反曲弓，比起臂力更需要稳定的双手。",
   "bow.name": "弓",
   "bread.description": "刚出炉的面包。",

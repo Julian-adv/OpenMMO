@@ -407,10 +407,14 @@ pub(super) fn hold_by_def(
     bag: &mut Vec<ItemInstance>,
     item_def_id: &str,
     count: u32,
+    allow_locked: bool,
 ) -> Option<BagHold> {
     let mut remaining = count;
     let mut lines = Vec::new();
-    for item in bag.iter().filter(|item| item.item_def_id == item_def_id) {
+    for item in bag
+        .iter()
+        .filter(|item| item.item_def_id == item_def_id && (allow_locked || !item.locked))
+    {
         let take = item.quantity.min(remaining);
         if take > 0 {
             lines.push((item.instance_id, take));

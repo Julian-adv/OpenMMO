@@ -1,6 +1,7 @@
 <script lang="ts">
   import { t } from '../i18n'
   import { tick } from 'svelte'
+  import QuantityStepper, { clampQuantity } from './QuantityStepper.svelte'
 
   interface Props {
     visible: boolean
@@ -30,7 +31,7 @@
 
   $effect(() => {
     if (!visible) return
-    qty = clamp(defaultQty ?? max)
+    qty = clampQuantity(defaultQty ?? max, max)
     tick().then(() => {
       if (!visible) return
       inputEl?.focus()
@@ -38,34 +39,8 @@
     })
   })
 
-  function clamp(n: number): number {
-    if (!Number.isFinite(n)) return 1
-    return Math.min(max, Math.max(1, Math.round(n)))
-  }
-
-  function onInput(e: Event) {
-    const value = Number((e.target as HTMLInputElement).value)
-    qty = clamp(value)
-  }
-
-  function step(delta: number) {
-    if (stepSize > 1) {
-      qty = clamp(qty + delta)
-      return
-    }
-    const zeroBased = qty - 1 + delta
-    qty = (((zeroBased % max) + max) % max) + 1
-  }
-
-  function onWheel(event: WheelEvent) {
-    if (stepSize === 1 || event.ctrlKey || event.deltaY === 0) return
-    event.preventDefault()
-    event.stopPropagation()
-    step(event.deltaY < 0 ? stepSize : -stepSize)
-  }
-
   function confirm() {
-    onConfirm(clamp(qty))
+    onConfirm(clampQuantity(qty, max))
   }
 
   function onKeydown(e: KeyboardEvent) {
@@ -87,28 +62,7 @@
         <img class="item-icon" src="/items/{icon}" alt="" draggable="false" />
         <span class="item-name">{itemName}</span>
       </div>
-      <div class="qty-row" onwheel={onWheel}>
-        <button
-          class="step-btn"
-          aria-label={$t('quantity.decrease', { step: stepSize })}
-          onclick={() => step(-stepSize)}>−</button
-        >
-        <input
-          bind:this={inputEl}
-          class="qty-input"
-          type="number"
-          min="1"
-          step="1"
-          {max}
-          value={qty}
-          oninput={onInput}
-        />
-        <button
-          class="step-btn"
-          aria-label={$t('quantity.increase', { step: stepSize })}
-          onclick={() => step(stepSize)}>+</button
-        >
-      </div>
+      <QuantityStepper bind:value={qty} {max} {stepSize} bind:inputEl />
       <div class="max-note">{$t('quantity.maximum', { max })}</div>
       <div class="popup-actions">
         <button class="cancel-btn" onclick={onCancel}
@@ -170,46 +124,6 @@
     white-space: nowrap;
   }
 
-  .qty-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .step-btn {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    padding: 0;
-    line-height: 1;
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    color: #e6edf3;
-    font-size: 16px;
-    font-weight: 700;
-    cursor: pointer;
-    flex-shrink: 0;
-  }
-
-  .step-btn:hover {
-    background: rgba(255, 255, 255, 0.16);
-  }
-
-  .qty-input {
-    flex: 1;
-    min-width: 0;
-    text-align: center;
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
-    color: #e6edf3;
-    font-family: inherit;
-    font-size: 14px;
-    padding: 6px 4px;
-  }
-
   .max-note {
     text-align: center;
     color: #6b7d8d;
@@ -251,12 +165,5 @@
   .confirm-btn:hover {
     background: rgba(80, 120, 80, 0.95);
     color: #fff;
-  }
-
-  @media (max-width: 600px), (pointer: coarse) {
-    .step-btn {
-      width: 40px;
-      height: 40px;
-    }
   }
 </style>
