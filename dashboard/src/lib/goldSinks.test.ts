@@ -8,17 +8,18 @@ const entries = [
   { sink: 'land_recovery', name: '토지 체납 복구 비용', quantity: 1, gold: 6000 },
   { sink: 'item_buyback', item_def_id: 'iron_sword', name: '철검', quantity: 1, gold: 4000 },
   { sink: 'land_tax', name: '토지세', quantity: 1, gold: 2000 },
+  { sink: 'salon', name: '미장원 외형 변경', quantity: 1, gold: 1000 },
   { sink: 'stall_tax', name: '가판 판매 수수료', quantity: 2, gold: 15 },
   { sink: 'npc_outfit', npc_id: 'rica', name: 'rica의 옷 한 벌', quantity: 1, gold: 10 },
 ]
-const data = { from: until - 86400, until, collection_started_at: until - 3600, total_gold: 20025, entries }
+const data = { from: until - 86400, until, collection_started_at: until - 3600, total_gold: 21025, entries }
 
 describe('gold consumption ranking', () => {
   it.each(goldPeriods)('accepts $label and distinguishes purchases from buybacks of the same item', ({ hours }) => {
     const response = { ...data, from: until - hours * 3600 }
     const parsed = parseGoldSinks(response, hours)
     expect(parsed).toEqual(response)
-    expect(new Set(parsed.entries.map(goldSinkKey)).size).toBe(6)
+    expect(new Set(parsed.entries.map(goldSinkKey)).size).toBe(7)
   })
 
   it('accepts empty and zero-value periods during the first collection hour', () => {
@@ -36,8 +37,8 @@ describe('gold consumption ranking', () => {
       { entries: [{ ...entries[0], item_def_id: '' }], total_gold: 8000 },
       { entries: [{ ...entries[0], item_def_id: undefined }], total_gold: 8000 },
       { entries: [{ ...entries[1], item_def_id: 'iron_sword' }], total_gold: 6000 },
-      { entries: [{ ...entries[5], npc_id: '' }], total_gold: 10 },
-      { entries: [{ ...entries[5], item_def_id: 'iron_sword' }], total_gold: 10 },
+      { entries: [{ ...entries[6], npc_id: '' }], total_gold: 10 },
+      { entries: [{ ...entries[6], item_def_id: 'iron_sword' }], total_gold: 10 },
       ...[0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1].map((quantity) => ({ entries: [{ ...entries[0], quantity }], total_gold: 8000 })),
       ...[-1, Infinity, Number.MAX_SAFE_INTEGER + 1].map((gold) => ({ entries: [{ ...entries[0], gold }], total_gold: gold })),
     ]) expect(() => parseGoldSinks({ ...data, ...invalid }, 24)).toThrow()
