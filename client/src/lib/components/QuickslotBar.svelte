@@ -27,6 +27,7 @@
   import { getItemDef, isHealingPotion } from '../data/itemDefs'
   import { networkManager } from '../network/socket'
   import { potionCooldownRemaining } from '../stores/potionCooldownStore'
+  import { cooldownLabel } from '../utils/cooldownLabel'
   import {
     quickslots,
     QUICKSLOT_COUNT,
@@ -128,12 +129,6 @@
     useSlot(index)
   }
 
-  function cooldownLabel(remaining: number) {
-    return remaining <= 1000
-      ? (Math.ceil(remaining / 100) / 10).toFixed(1)
-      : String(Math.ceil(remaining / 1000))
-  }
-
   // The 1-based key label shown on each slot (last slot is "0").
   function keyLabel(index: number): string {
     return index === 9 ? '0' : String(index + 1)
@@ -213,7 +208,7 @@
           alt=""
           draggable="false"
         />
-        {#if potionWait > 0}<span class="skill-cooldown"
+        {#if potionWait > 0}<span class="skill-cooldown potion-cooldown"
             >{cooldownLabel(potionWait)}</span
           >{/if}
         {#if entry.enchant !== null && entry.enchant > 0}
@@ -243,6 +238,9 @@
     font-size: 18px;
     font-weight: bold;
     pointer-events: none;
+  }
+  .potion-cooldown {
+    font-size: 12px;
   }
   .item-icon.skill-icon {
     width: 100%;

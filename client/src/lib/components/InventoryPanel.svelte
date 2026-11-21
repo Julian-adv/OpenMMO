@@ -10,7 +10,14 @@
     wornAmmoStack,
   } from '../stores/inventoryStore'
   import type { ItemInstance } from '../stores/inventoryStore'
-  import { getItemDef, isUsable, type ItemDefinition } from '../data/itemDefs'
+  import {
+    getItemDef,
+    isHealingPotion,
+    isUsable,
+    type ItemDefinition,
+  } from '../data/itemDefs'
+  import { potionCooldownRemaining } from '../stores/potionCooldownStore'
+  import { cooldownLabel } from '../utils/cooldownLabel'
   import GoldAmount from './GoldAmount.svelte'
   import { networkManager } from '../network/socket'
   import type { EquipSlot } from '../network/networkTypes'
@@ -320,6 +327,8 @@
   {@const def = slot ? getItemDef(slot.item_def_id) : null}
   {@const locked = selectMode && slot !== null && !isSelectable(slot)}
   {@const onTable = slot ? reservedQuantity($playerTrade, slot.instance_id) : 0}
+  {@const potionWait =
+    def && isHealingPotion(def) ? $potionCooldownRemaining : 0}
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
     class="grid-cell"
@@ -334,6 +343,9 @@
   >
     {#if def}
       <img class="item-icon" src="/items/{def.icon}" alt="" draggable="false" />
+    {/if}
+    {#if potionWait > 0}
+      <span class="potion-cooldown">{cooldownLabel(potionWait)}</span>
     {/if}
     {#if slot && slot.enchant > 0}
       <span class="item-enchant">+{slot.enchant}</span>
@@ -708,6 +720,18 @@
     height: 90%;
     object-fit: contain;
     image-rendering: pixelated;
+  }
+
+  .potion-cooldown {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: #0006;
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+    pointer-events: none;
   }
 
   .item-qty {
