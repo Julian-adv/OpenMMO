@@ -586,7 +586,7 @@ Use the readiness status above. Wait for server success or failure feedback."#,
         // Nearby players (exclude self and humans beyond the sight radius)
         let sp = self.self_player.as_ref();
         let index = self.pricing.as_ref().map_or(100, |p| p.index_percent);
-        for (_, p) in self.players_on_my_floor() {
+        for (_, p) in self.players_in_my_space() {
             if self.self_player_id.as_ref() == Some(&p.id) {
                 continue;
             }

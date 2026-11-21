@@ -159,13 +159,39 @@ impl SharedState {
         self.self_player.as_ref().is_some_and(|p| p.health == 0)
     }
 
-    /// Characters on our own floor. Someone a floor above is a dot straight
-    /// overhead, not a neighbour, so nothing the LLM sees or names should
-    /// reach them.
+    /// Characters on our own floor we can reach or name; what the LLM sees
+    /// goes through `players_in_my_space`.
     pub(super) fn players_on_my_floor(&self) -> impl Iterator<Item = (&PlayerId, &Player)> {
         self.nearby_players
             .iter()
             .filter(|(_, p)| p.floor_level == self.self_floor_level)
+    }
+
+    /// Whether `other` is in our house, or outdoors with us: walls hide the rest.
+    pub(super) fn shares_space(&self, other: &Player) -> bool {
+        let world = self.world_cache.read().unwrap();
+        self.my_house(&world).is_none_or(|mine| {
+            mine == world.house_at(other.position.x, other.position.z, other.floor_level)
+        })
+    }
+
+    /// Our house, or `None` outdoors; the outer `None` means we have no position yet.
+    fn my_house<'w>(&self, world: &'w super::WorldCache) -> Option<Option<&'w str>> {
+        let me = self.self_player.as_ref()?;
+        Some(world.house_at(me.position.x, me.position.z, self.self_floor_level))
+    }
+
+    /// Characters on our floor we can see past the walls.
+    pub(super) fn players_in_my_space(&self) -> impl Iterator<Item = (&PlayerId, &Player)> {
+        let world = self.world_cache.read().unwrap();
+        let mine = self.my_house(&world);
+        let seen: Vec<_> = self
+            .players_on_my_floor()
+            .filter(|(_, p)| {
+                mine.is_none_or(|h| h == world.house_at(p.position.x, p.position.z, p.floor_level))
+            })
+            .collect();
+        seen.into_iter()
     }
 
     /// Monsters on our own floor — cross-floor ones read to the LLM as

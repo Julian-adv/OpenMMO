@@ -616,6 +616,52 @@ fn chat_does_not_carry_through_house_walls() {
 }
 
 #[test]
+fn players_outside_the_house_go_unnoticed_until_they_step_in() {
+    use onlinerpg_shared::housing::RoomType;
+
+    let guest = PlayerId::from(2);
+    let mut s = chat_state();
+    s.world_cache.write().unwrap().add_house(house(
+        "shop",
+        p(-2.0, 0.0, -2.0),
+        vec![room(0, 0, RoomType::default())],
+    ));
+    let mut outside = s.nearby_players.remove(&guest).unwrap();
+    outside.position.x = 10.0;
+
+    let appeared = ServerMessage::PlayerAppeared {
+        player: outside.clone(),
+    };
+    assert_eq!(s.push_event(appeared), EventUrgency::Noise);
+    assert!(s.drain_events().is_empty());
+    assert!(s.drain_agent_events().is_empty());
+    assert!(!s.format_world_state().contains("Guest"));
+    assert!(!s.has_nearby_human_players());
+
+    s.push_event(ServerMessage::PlayerMoved {
+        player_id: guest,
+        position: p(2.0, 0.0, 0.0),
+        rotation: 0.0,
+        floor_level: 0,
+        sprinting: false,
+    });
+    let events = s.drain_agent_events();
+    assert!(
+        events.iter().any(|e| e.starts_with("[PlayerNearby] Guest")),
+        "{events:?}"
+    );
+    assert!(s.format_world_state().contains("Player: Guest"));
+    s.drain_events();
+
+    s.nearby_players.get_mut(&guest).unwrap().position.x = 10.0;
+    assert_eq!(
+        s.push_event(ServerMessage::PlayerDisappeared { player_id: guest }),
+        EventUrgency::Noise
+    );
+    assert!(s.drain_events().is_empty());
+}
+
+#[test]
 fn small_talk_carries_ten_metres_and_a_named_line_carries_all_the_way() {
     let mut s = chat_state();
     let guest = PlayerId::from(2);
