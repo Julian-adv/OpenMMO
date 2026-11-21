@@ -40,7 +40,7 @@ impl Default for PricingConfig {
     fn default() -> Self {
         Self {
             active_days: 30,
-            target_daily_growth: 0.0003,
+            target_daily_growth: 0.0001355,
             gain: 0.5,
             max_step_per_meeting: 0.1,
             index_min: 0.9,

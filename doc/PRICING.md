@@ -71,7 +71,7 @@ P_new  = clamp(P_new, P_min, P_max)        -- 전체 범위
 
 ```json
 "pricing": {
-  "targetDailyGrowth": 0.0003,
+  "targetDailyGrowth": 0.0001355,
   "gain": 0.5,
   "maxStepPerMeeting": 0.1,
   "indexMin": 0.5,
@@ -80,7 +80,7 @@ P_new  = clamp(P_new, P_min, P_max)        -- 전체 범위
 }
 ```
 
-`targetDailyGrowth` 0.0003은 2026-11 실측 증가 속도(실제 한 달 약 +7.5%)에 맞춘 값이다.
+`targetDailyGrowth` 0.0001355는 게임 1년(360게임일)에 약 +5%, 실제 1년(2,920게임일)에 약 +49%다.
 
 ### 영속화
 
