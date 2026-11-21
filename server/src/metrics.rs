@@ -70,6 +70,7 @@ pub enum GoldSource {
     CoinPile,
     CoinPouch,
     NpcSalary,
+    WatchWage,
 }
 
 impl GoldSource {
@@ -80,6 +81,7 @@ impl GoldSource {
             Self::CoinPile => ("coin_pile", ""),
             Self::CoinPouch => ("coin_pouch", ""),
             Self::NpcSalary => ("npc_salary", ""),
+            Self::WatchWage => ("watch_wage", ""),
         }
     }
 }

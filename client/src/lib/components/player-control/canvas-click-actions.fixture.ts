@@ -23,5 +23,6 @@ export function makeCanvasClickActions() {
     openNoticeBoard: vi.fn(),
     toggleObjectDoor: vi.fn(),
     openMailbox: vi.fn(),
+    useWatchRack: vi.fn(),
   } satisfies CanvasClickActions
 }

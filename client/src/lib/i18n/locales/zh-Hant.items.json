@@ -503,6 +503,12 @@
   "guard_boots.description": "腳踝有帶扣皮帶、膝下纏著亞麻布的及膝皮靴。奧德馬克衛隊的配發品。",
   "guard_tabard.name": "衛隊罩袍",
   "guard_tabard.description": "皮革包邊並繫腰帶的亞麻罩袍。可像披風一樣染色，胸前會顯示家族紋章。",
+  "watch_tabard.name": "衛隊借用罩袍",
+  "watch_tabard.description": "奧德馬克衛隊借給一日巡邏隊員的衛隊配色罩袍。與長槍一起放回武器架。",
+  "watch_shovel.name": "衛隊借用雪鏟",
+  "watch_shovel.description": "奧德馬克衛隊借給一日巡邏隊員的雪鏟。與長槍一起放回武器架。",
+  "watch_spear.name": "衛隊借用長槍",
+  "watch_spear.description": "奧德馬克衛隊借給一日巡邏隊員的樸素白蠟木長槍。執勤結束後交還衛兵隊長。",
   "guard_spear.name": "衛隊長槍",
   "guard_spear.description": "裝有寬鐵槍頭的白蠟木長槍。奧德馬克衛隊的配發品。"
 }

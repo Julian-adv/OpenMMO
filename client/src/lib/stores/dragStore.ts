@@ -9,7 +9,10 @@ export type ItemDragMeta = {
   defId: string
   enchant: number
   equipSlot: EquipSlot | null
-  source: { type: 'bag' } | { type: 'equipped'; slot: EquipSlot }
+  source:
+    | { type: 'bag' }
+    | { type: 'equipped'; slot: EquipSlot }
+    | { type: 'rack' }
   icon: string
   /** Icons and quantities for a multi-item selection. */
   groupItems?: { icon: string; quantity: number }[]

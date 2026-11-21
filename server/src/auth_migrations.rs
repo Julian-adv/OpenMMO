@@ -128,6 +128,7 @@ impl AuthService {
         Self::ensure_notice_board_schema(conn)?;
         Self::ensure_mail_schema(conn)?;
         Self::ensure_road_patrol_schema(conn)?;
+        Self::ensure_watch_shift_schema(conn)?;
 
         // Every inventory read and every save's DELETE filters on character_id;
         // without this SQLite full-scans the table once per character.

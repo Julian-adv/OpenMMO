@@ -157,6 +157,7 @@ async fn time_sync_tick(game_state: &GameState, auth_service: &Arc<AuthService>,
 
     // Pay NPC trader salaries on game-day rollover (economy phase 3)
     game_state.tick_npc_salaries().await;
+    game_state.tick_watch_introductions().await;
     game_state.tick_land_taxes(auth_service).await;
     game_state.tick_character_deletions(auth_service).await;
     game_state.tick_guard_notices(auth_service).await;

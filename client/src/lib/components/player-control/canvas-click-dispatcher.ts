@@ -17,6 +17,7 @@ type MealIntent = Extract<ClickIntent, { type: 'meal' }>
 type AltarIntent = Extract<ClickIntent, { type: 'altar' }>
 type NoticeBoardIntent = Extract<ClickIntent, { type: 'notice_board' }>
 type MailboxIntent = Extract<ClickIntent, { type: 'mailbox' }>
+type WatchRackIntent = Extract<ClickIntent, { type: 'watch_rack' }>
 type ObjectDoorIntent = Extract<ClickIntent, { type: 'object_door' }>
 
 export interface CanvasClickActions {
@@ -60,6 +61,7 @@ export interface CanvasClickActions {
   inspectAltar(intent: AltarIntent): void
   openNoticeBoard(intent: NoticeBoardIntent): void
   openMailbox(intent: MailboxIntent): void
+  useWatchRack(intent: WatchRackIntent): void
   toggleObjectDoor(intent: ObjectDoorIntent): void
 }
 
@@ -135,6 +137,9 @@ export function dispatchCanvasClickIntent(
       return
     case 'mailbox':
       actions.openMailbox(intent)
+      return
+    case 'watch_rack':
+      actions.useWatchRack(intent)
       return
     case 'object_door':
       actions.toggleObjectDoor(intent)

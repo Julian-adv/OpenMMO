@@ -673,6 +673,11 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::MergerCelebrated { .. } => "MergerCelebrated",
         ServerMessage::MergerPledgeOffered => "MergerPledgeOffered",
         ServerMessage::ImpoundOffered { .. } => "ImpoundOffered",
+        ServerMessage::PatrolRollCalled { .. } => "PatrolRollCalled",
+        ServerMessage::WatchOffered { .. } => "WatchOffered",
+        ServerMessage::WatchVerdict { .. } => "WatchVerdict",
+        ServerMessage::WatchRackState { .. } => "WatchRackState",
+        ServerMessage::WatchDuty { .. } => "WatchDuty",
         ServerMessage::FamilyEmblemShown { .. } => "FamilyEmblemShown",
     }
 }

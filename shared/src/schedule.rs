@@ -30,6 +30,8 @@ fn full_probability() -> f32 {
 
 /// Registry id of the guard captain, who holds impounded goods.
 pub const GUARD_CAPTAIN: &str = "karl";
+/// Catalog object the day recruits draw their lent gear from.
+pub const WATCH_GEAR_RACK: &str = "watch_gear_rack";
 
 /// Road patrol: `waypoints` are walked out and back as laps (doc/ROAD_PATROL.md).
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -42,6 +44,9 @@ pub struct RoadPatrol {
     /// Game minutes per lap.
     #[serde(default)]
     pub lap_minutes: u32,
+    /// Where the guard waits out the entry once no further lap fits.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub stand_down: Option<[f32; 3]>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,6 +118,9 @@ pub struct ScheduleEntry {
     pub waypoint_activities: Vec<WaypointActivity>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub patrol: Option<RoadPatrol>,
+    /// Off duty: wander among `waypoints` at random instead of walking them in order.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub roam: bool,
     /// Told to the NPC on arrival, to prompt a spoken line.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cue: Option<String>,

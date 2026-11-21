@@ -990,6 +990,48 @@ class NetworkManager {
     this.sendMessage({ ImpoundReclaim: { npc_player_id: npcPlayerId } })
   }
 
+  sendWatchShiftVisit(npcPlayerId: number) {
+    this.sendMessage({ WatchShiftVisit: { npc_player_id: npcPlayerId } })
+  }
+
+  sendWatchShiftAccept(npcPlayerId: number, sergeant: string) {
+    this.sendMessage({
+      WatchShiftAccept: { npc_player_id: npcPlayerId, sergeant },
+    })
+  }
+
+  sendWatchRackOpen(objectId: number) {
+    this.sendMessage({ WatchRackOpen: { object_id: objectId } })
+  }
+
+  sendWatchRackMove(
+    objectId: number,
+    itemDefId: string,
+    take: boolean,
+    equip: boolean
+  ) {
+    this.sendMessage({
+      WatchRackMove: {
+        object_id: objectId,
+        item_def_id: itemDefId,
+        take,
+        equip,
+      },
+    })
+  }
+
+  sendWatchShiftQuit() {
+    this.sendMessage('WatchShiftQuit')
+  }
+
+  sendWatchRackSettle(objectId: number) {
+    this.sendMessage({ WatchRackSettle: { object_id: objectId } })
+  }
+
+  sendWatchToolUse(tool: 'spear' | 'shovel') {
+    this.sendMessage({ WatchToolUse: { tool } })
+  }
+
   sendChangeAppearance(npcPlayerId: number, appearance: CharacterAppearance) {
     this.sendMessage({
       ChangeAppearance: { npc_player_id: npcPlayerId, appearance },

@@ -150,6 +150,28 @@ pub(super) enum AgentAction {
         #[serde(alias = "target", alias = "player_name", alias = "target_player")]
         player: String,
     },
+    /// Hire a nearby player for a watch, or settle the one they walked (the
+    /// guard captain only).
+    #[serde(rename = "watch_shift")]
+    WatchShift {
+        #[serde(alias = "target", alias = "player_name", alias = "target_player")]
+        player: String,
+    },
+    /// Ask the guard captain for a day's watch work, or for the pay.
+    #[serde(rename = "watch_work")]
+    WatchWork,
+    /// Say yes to the terms the guard captain put to us.
+    #[serde(rename = "watch_accept")]
+    WatchAccept,
+    /// Draw the lent gear from the watch house rack, or put it back.
+    #[serde(rename = "watch_rack")]
+    WatchRack,
+    /// On watch as a recruit: strike down what blocks the road here.
+    #[serde(rename = "clear_road")]
+    ClearRoad,
+    /// On watch as a recruit: shovel the snow off the road here.
+    #[serde(rename = "shovel_snow")]
+    ShovelSnow,
     #[serde(rename = "buy_from_player")]
     BuyFromPlayer {
         player: String,
@@ -626,6 +648,8 @@ pub(crate) struct Roles {
     pub(crate) guard_captain: bool,
     /// Keeps a spare outfit for regulars.
     pub(crate) outfitter: bool,
+    /// An adventurer, who may take day work.
+    pub(crate) adventurer: bool,
 }
 
 impl Roles {
@@ -635,7 +659,10 @@ impl Roles {
         match action {
             "offer_deal" | "open_trade" => Some(self.trader),
             "offer_pledge" => Some(self.officiant),
-            "open_impound" => Some(self.guard_captain),
+            "open_impound" | "watch_shift" => Some(self.guard_captain),
+            "watch_work" | "watch_accept" | "watch_rack" | "clear_road" | "shovel_snow" => {
+                Some(self.adventurer)
+            }
             "offer_outfit" | "gift_outfit" => Some(self.outfitter),
             "serve" => Some(self.inn_staff),
             "recite" => Some(self.bard),
@@ -945,6 +972,43 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         doc: r#"- Open the reclaim window on a nearby player's screen
   when they say they have come for their seized goods:
   {"type": "open_impound", "target": "darkcocoa"}"#,
+    },
+    ActionSpec {
+        names: &["watch_shift"],
+        aliases: &[],
+        doc: r#"- Open your watch roll for a nearby player who asks for a
+  day's work with the guard, or who reports back from the road. The roll
+  puts the terms to them, or pays them, and a [Watch] line tells you which:
+  {"type": "watch_shift", "target": "darkcocoa"}"#,
+    },
+    ActionSpec {
+        names: &["watch_work", "watch_accept", "watch_rack"],
+        aliases: &[],
+        doc: r#"- Day work with the Aldermark guard, one recruit to a watch. Standing
+  beside Captain Karl at his post (he sleeps from dusk to dawn), ask:
+  {"type": "watch_work"}
+  A [Watch] event gives his terms; to take them, still beside him:
+  {"type": "watch_accept"}
+  Then draw your spear and tabard (and a snow shovel when snow lies) from
+  the gear rack by the watch house door behind him; the tabard goes on you:
+  {"type": "watch_rack"}
+  Your watch reports to Karl at his post before it marches (the day watch
+  under Sergeant Garrick at dawn, the night watch under Sergeant Osric at
+  dusk). Be beside the sergeant from that report on and keep within a few
+  steps of him the whole watch ({"type": "follow", "target": "Garrick"}): he
+  calls the roll when they leave, at every stop and when they are home. The
+  wage is your share of the calls you answer, and it is halved once you miss
+  any. When a [System] line says the watch is home, send watch_rack again to
+  put the gear back: the wage is paid then and there."#,
+    },
+    ActionSpec {
+        names: &["clear_road", "shovel_snow"],
+        aliases: &[],
+        doc: r#"- Out with the watch as a recruit, use the lent spear to pull down
+  fences and furniture blocking the public road where you stand, or the lent
+  shovel to clear lying snow off it:
+  {"type": "clear_road"}
+  {"type": "shovel_snow"}"#,
     },
     ActionSpec {
         names: &[
@@ -1304,6 +1368,12 @@ impl AgentAction {
             | Self::OfferOutfit { .. }
             | Self::GiftOutfit { .. }
             | Self::OpenImpound { .. }
+            | Self::WatchShift { .. }
+            | Self::WatchWork
+            | Self::WatchAccept
+            | Self::WatchRack
+            | Self::ClearRoad
+            | Self::ShovelSnow
             | Self::PartyInvite { .. }
             | Self::PartyAccept { .. }
             | Self::PartyDecline { .. }
@@ -1483,6 +1553,12 @@ impl AgentAction {
             | Self::OfferOutfit { .. }
             | Self::GiftOutfit { .. }
             | Self::OpenImpound { .. }
+            | Self::WatchShift { .. }
+            | Self::WatchWork
+            | Self::WatchAccept
+            | Self::WatchRack
+            | Self::ClearRoad
+            | Self::ShovelSnow
             | Self::PartyInvite { .. }
             | Self::PartyAccept { .. }
             | Self::PartyDecline { .. }
@@ -1533,6 +1609,12 @@ impl AgentAction {
             Self::OpenTrade { .. } => "open_trade",
             Self::OfferPledge { .. } => "offer_pledge",
             Self::OpenImpound { .. } => "open_impound",
+            Self::WatchShift { .. } => "watch_shift",
+            Self::WatchWork => "watch_work",
+            Self::WatchAccept => "watch_accept",
+            Self::WatchRack => "watch_rack",
+            Self::ClearRoad => "clear_road",
+            Self::ShovelSnow => "shovel_snow",
             Self::OfferOutfit { .. } => "offer_outfit",
             Self::GiftOutfit { .. } => "gift_outfit",
             Self::OpenStall { .. } => "open_stall",
@@ -2173,6 +2255,16 @@ pub(super) fn action_to_command(
         AgentAction::OpenTrade { .. } => None,
         AgentAction::OfferPledge { .. } => None,
         AgentAction::OpenImpound { .. } => None,
+        AgentAction::WatchShift { .. }
+        | AgentAction::WatchWork
+        | AgentAction::WatchAccept
+        | AgentAction::WatchRack => None,
+        AgentAction::ClearRoad => Some(onlinerpg_shared::ClientMessage::WatchToolUse {
+            tool: onlinerpg_shared::messages::WatchTool::Spear,
+        }),
+        AgentAction::ShovelSnow => Some(onlinerpg_shared::ClientMessage::WatchToolUse {
+            tool: onlinerpg_shared::messages::WatchTool::Shovel,
+        }),
         AgentAction::OfferOutfit { .. } | AgentAction::GiftOutfit { .. } => None,
         // Needs the bag and worn gear from SharedState; likewise handled there.
         AgentAction::Use { .. } => None,
@@ -3343,6 +3435,7 @@ mod tests {
                         bard: true,
                         guard_captain: true,
                         outfitter: true,
+                        adventurer: true,
                     }),
                 );
             let text = if name.ends_with(".rs") {

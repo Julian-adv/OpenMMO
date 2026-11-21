@@ -15,6 +15,7 @@ pub enum EventUrgency {
 use onlinerpg_shared::fishing::{
     auto_stance, FishingAction, FishingOutcome, HOOK_REACTION_MS, STANCE_REACTION_MS,
 };
+use onlinerpg_shared::messages::WatchNote;
 use onlinerpg_shared::notice_board::NoticeBoardRef;
 use std::ops::RangeInclusive;
 use std::time::Duration;
@@ -125,6 +126,11 @@ impl SharedState {
                     EventUrgency::Urgent
                 }
             }
+            // The captain's roll answers him: he speaks from its verdict.
+            ServerMessage::WatchVerdict { note, .. } => match note {
+                WatchNote::TakenOn { .. } => EventUrgency::Routine,
+                _ => EventUrgency::Urgent,
+            },
             // Routine: feedback on our own command (/who output, whisper
             // errors) — worth seeing, not worth an immediate wakeup.
             ServerMessage::SystemMessage { .. } => EventUrgency::Routine,
@@ -610,6 +616,11 @@ impl SharedState {
                 floor_level,
             } => {
                 if self.self_player_id.as_ref() == Some(player_id) {
+                    tracing::info!(
+                        "Server moved us to ({:.1}, {:.1}) floor {floor_level}",
+                        position.x,
+                        position.z
+                    );
                     self.relocate_self(*position, *rotation, *floor_level);
                     // Any teleport settles the pending summons.
                     self.pending_party_summons.clear();
@@ -1239,6 +1250,19 @@ impl SharedState {
             ServerMessage::PatrolScouted { target } => {
                 self.patrol_target = *target;
                 self.patrol_scouts += 1;
+            }
+            ServerMessage::PatrolRollCalled {
+                missing,
+                rejoined,
+                late,
+            } => {
+                self.patrol_roll_calls += 1;
+                self.patrol_missing = missing.clone();
+                self.patrol_rejoined = rejoined.clone();
+                self.patrol_late = late.clone();
+            }
+            ServerMessage::WatchOffered { sergeant, .. } => {
+                self.watch_offered = Some(sergeant.clone());
             }
             ServerMessage::PatrolShovelled { cleared } => {
                 self.patrol_shovels += 1;

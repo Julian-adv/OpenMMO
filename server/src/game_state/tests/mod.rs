@@ -69,6 +69,7 @@ mod teleport_scroll_tests;
 mod tip_hat_tests;
 mod title_tests;
 mod trading_tests;
+mod watch_shift_tests;
 mod weather_tests;
 mod wet_tests;
 mod world_ready_tests;

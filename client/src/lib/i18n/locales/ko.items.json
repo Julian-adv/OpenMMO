@@ -503,6 +503,12 @@
   "guard_boots.description": "발목에 죔쇠 끈을 두르고 무릎 밑에 리넨을 감은 무릎 높이 가죽 장화. 알더마크 경비대의 지급품입니다.",
   "guard_tabard.name": "경비대 타바드",
   "guard_tabard.description": "가죽으로 가장자리를 두르고 허리띠를 맨 리넨 타바드. 망토처럼 물들일 수 있고 가슴에 가문 문장이 나타납니다.",
+  "watch_tabard.name": "경비대 대여 타바드",
+  "watch_tabard.description": "알더마크 경비대가 일일 순찰 대원에게 빌려주는 경비대 색 타바드. 창과 함께 거치대에 돌려놓습니다.",
+  "watch_shovel.name": "경비대 대여 눈삽",
+  "watch_shovel.description": "알더마크 경비대가 일일 순찰 대원에게 빌려주는 눈삽. 창과 함께 거치대에 돌려놓습니다.",
+  "watch_spear.name": "경비대 대여 창",
+  "watch_spear.description": "알더마크 경비대가 일일 순찰 대원에게 빌려주는 수수한 물푸레나무 창. 근무를 마치면 경비대장에게 돌려줍니다.",
   "guard_spear.name": "경비대 창",
   "guard_spear.description": "넓은 철 촉을 단 긴 물푸레나무 창. 알더마크 경비대의 지급품입니다."
 }

@@ -415,6 +415,20 @@ export type ClientMessage =
   | { LandAccount: { merchant_player_id: number } }
   | { ImpoundQuery: { npc_player_id: number } }
   | { ImpoundReclaim: { npc_player_id: number } }
+  | { WatchShiftVisit: { npc_player_id: number } }
+  | { WatchToolUse: { tool: 'spear' | 'shovel' } }
+  | { WatchShiftAccept: { npc_player_id: number; sergeant: string } }
+  | { WatchRackOpen: { object_id: number } }
+  | {
+      WatchRackMove: {
+        object_id: number
+        item_def_id: string
+        take: boolean
+        equip: boolean
+      }
+    }
+  | { WatchRackSettle: { object_id: number } }
+  | 'WatchShiftQuit'
   | {
       ChangeAppearance: {
         npc_player_id: number

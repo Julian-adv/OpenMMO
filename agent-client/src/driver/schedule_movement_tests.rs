@@ -1185,19 +1185,21 @@ fn the_guard_watches_hand_over_without_sharing_a_bunk_or_a_seat() {
                 );
             }
         }
-        for (night, day) in [(3, 1), (4, 2)] {
-            if label(night, minute).starts_with("getting up") {
-                assert!(
-                    label(day, minute - 5).starts_with("waking"),
-                    "minute {minute}"
-                );
-            }
-        }
+        // One watch is always on the road.
+        let on_road = (1..5).filter(|g| at(*g, minute).patrol.is_some()).count();
+        assert_eq!(on_road, 2, "minute {minute}");
     }
     assert_eq!(reports, 4 * 20);
+    // Twelve hours on the road, seven asleep, the rest their own.
     for guard in 0..5 {
         let asleep = (0..24 * 60).filter(|m| at(guard, *m).is_sleeping()).count();
-        assert!(asleep >= 9 * 60, "guard {guard} sleeps {asleep} minutes");
+        assert_eq!(asleep, 7 * 60, "guard {guard}");
+    }
+    for guard in 1..5 {
+        let on_road = (0..24 * 60)
+            .filter(|m| at(guard, *m).patrol.is_some())
+            .count();
+        assert_eq!(on_road, 12 * 60, "guard {guard}");
     }
 }
 

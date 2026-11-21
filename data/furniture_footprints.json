@@ -91,6 +91,12 @@
     "minZ": -0.215,
     "maxZ": 0.215
   },
+  "watch_gear_rack": {
+    "minX": -0.7,
+    "maxX": 0.7,
+    "minZ": 0,
+    "maxZ": 0.634
+  },
   "terraclash_dormant": {
     "minX": -5.248,
     "maxX": 4.967,

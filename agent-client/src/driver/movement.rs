@@ -8,7 +8,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use onlinerpg_shared::furniture::FurniturePlacement;
-use onlinerpg_shared::messages::MoveStatus;
+use onlinerpg_shared::messages::{
+    MoveStatus, PatrolMuster, WATCH_CALL_BACK_WAIT_SECS, WATCH_ROLL_CALL_M,
+};
 use onlinerpg_shared::ClientMessage;
 use onlinerpg_terrain::coords::{tile_to_region, world_to_tile};
 use rand::Rng;
@@ -16,7 +18,7 @@ use tokio::sync::Mutex;
 use tracing::{debug, error, info, warn};
 
 use super::walk;
-use crate::state::SharedState;
+use crate::state::{SharedState, WatchCall};
 use crate::terrain_http::http_client;
 use onlinerpg_shared::schedule::{ScheduleCondition, ScheduleEntry};
 
@@ -375,6 +377,113 @@ async fn shovel_toward(state: &Arc<Mutex<SharedState>>, x: f32, z: f32, floor: u
     }
 }
 
+/// The watch has no time for another lap: report home at the stand-down
+/// spot instead of waiting at the road head. The guard is off duty after.
+pub(super) async fn stand_down(state: Arc<Mutex<SharedState>>, entry: ScheduleEntry) {
+    let Some(spot) = entry.patrol.as_ref().and_then(|patrol| patrol.stand_down) else {
+        return;
+    };
+    let to = walk::WalkTo::Schedule {
+        x: spot[0],
+        z: spot[2],
+        floor: entry.floor_level,
+    };
+    if !matches!(
+        execute_walk(&state, &to, Some(false)).await,
+        MoveResult::Arrived
+    ) {
+        return;
+    }
+    state.lock().await.push_ambient_event(
+        "[Duty] Your watch has walked its last lap and you stand at Captain Karl's post. If the \
+         Captain is in sight, report the watch home to him aloud in one short line. With that \
+         your duty is done for the day and you are off duty."
+            .to_string(),
+    );
+}
+
+/// How long an off-duty wanderer stands between walks, in seconds.
+const ROAM_PAUSE_SECS: std::ops::Range<u64> = 15..50;
+
+/// Stand a while, then stroll to one of the entry's spots picked at random.
+pub(super) async fn roam_once(state: Arc<Mutex<SharedState>>, entry: ScheduleEntry) {
+    let (pause, spot) = {
+        let mut rng = rand::thread_rng();
+        let spot = entry.waypoints[rng.gen_range(0..entry.waypoints.len())];
+        (rng.gen_range(ROAM_PAUSE_SECS), spot)
+    };
+    tokio::time::sleep(std::time::Duration::from_secs(pause)).await;
+    let to = walk::WalkTo::Schedule {
+        x: spot[0],
+        z: spot[2],
+        floor: entry.floor_level,
+    };
+    execute_walk(&state, &to, Some(false)).await;
+}
+
+/// Ask the server for the roll and have the sergeant remark on recruits who
+/// came back. Returns those out of reach whom he is to wait for.
+async fn ask_roll(
+    state: &Arc<Mutex<SharedState>>,
+    muster: PatrolMuster,
+    patrol_id: i64,
+) -> Vec<String> {
+    let seen = state.lock().await.patrol_roll_calls;
+    send_patrol(state, ClientMessage::PatrolRollCall { muster, patrol_id }).await;
+    super::execute::wait_for_answer(state, seen, |s| s.patrol_roll_calls).await;
+    let mut s = state.lock().await;
+    if s.patrol_roll_calls == seen {
+        return Vec::new();
+    }
+    let late = std::mem::take(&mut s.patrol_late).join(", ");
+    if !late.is_empty() {
+        s.push_ambient_event(format!(
+            "[Recruit] {late} is back beside your watch only now, after missing roll calls. Say so \
+             aloud by name in one short, stern line in the language they speak, and that it comes \
+             off their pay, such as \"이제서야 복귀하다니. 일당은 깎일 줄 알아라.\""
+        ));
+    }
+    let rejoined = std::mem::take(&mut s.patrol_rejoined).join(", ");
+    if !rejoined.is_empty() {
+        s.push_ambient_event(format!(
+            "[Recruit] {rejoined} came back when you called, in time. Acknowledge it aloud by name \
+             in one short, gruff line in the language they speak, and tell them to keep up."
+        ));
+    }
+    std::mem::take(&mut s.patrol_missing)
+}
+
+/// Call the roll at a stop. A recruit out of reach is called back by name
+/// and waited for, then the roll is asked again.
+async fn call_roll(state: &Arc<Mutex<SharedState>>, patrol_id: i64) {
+    let missing = ask_roll(state, PatrolMuster::Stop, patrol_id).await;
+    if missing.is_empty() {
+        return;
+    }
+    let names = missing.join(", ");
+    state.lock().await.push_ambient_event(format!(
+        "[Recruit] {names} has fallen more than {WATCH_ROLL_CALL_M:.0} paces behind your watch. Order them back \
+         aloud right now, by name, in one short line in the language they speak, such as \
+         \"훈련병 {names}, 어서 복귀하시오.\" You are standing and waiting a few seconds for them."
+    ));
+    tokio::time::sleep(std::time::Duration::from_secs(WATCH_CALL_BACK_WAIT_SECS)).await;
+    ask_roll(state, PatrolMuster::Recheck, patrol_id).await;
+}
+
+/// Call the day recruits home once the watch has walked its last lap.
+pub(super) async fn call_watch_home(state: &Arc<Mutex<SharedState>>) {
+    let patrol_id = {
+        let mut s = state.lock().await;
+        if s.patrol_call != WatchCall::Out {
+            return;
+        }
+        s.patrol_call = WatchCall::Home;
+        s.patrol_lap_id
+    };
+    let muster = PatrolMuster::Home;
+    send_patrol(state, ClientMessage::PatrolRollCall { muster, patrol_id }).await;
+}
+
 /// One road-patrol lap: out along the entry's waypoints and back to `pos`.
 /// Resumes at `SharedState::patrol_reached`.
 pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: ScheduleEntry) {
@@ -387,6 +496,20 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
         .map_or(0, |elapsed| elapsed.as_secs() as i64);
     let outbound_stops = entry.waypoints.len();
     let mut stop = start;
+    if patrol.sweeps {
+        let muster = {
+            let mut s = state.lock().await;
+            s.patrol_lap_id = patrol_id;
+            let out = s.patrol_call == WatchCall::NotOut;
+            if out {
+                s.patrol_call = WatchCall::Out;
+            }
+            out.then_some(PatrolMuster::Out)
+        };
+        if let Some(muster) = muster {
+            send_patrol(&state, ClientMessage::PatrolRollCall { muster, patrol_id }).await;
+        }
+    }
     'lap: while stop < lap_stops(outbound_stops) {
         while state.lock().await.schedule_combat_active() {
             tokio::time::sleep(std::time::Duration::from_secs(1)).await;
@@ -422,6 +545,9 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
                     MoveResult::Arrived => {
                         go_on = true;
                         state.lock().await.patrol_blocked = 0;
+                        if patrol.sweeps {
+                            call_roll(&state, patrol_id).await;
+                        }
                         break;
                     }
                     MoveResult::Died => break 'lap,
@@ -516,7 +642,7 @@ pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry
     {
         return;
     }
-    let waypoints: &[[f32; 3]] = if entry.patrol.is_some() {
+    let waypoints: &[[f32; 3]] = if entry.patrol.is_some() || entry.roam {
         &[]
     } else {
         &entry.waypoints
@@ -559,8 +685,15 @@ pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry
     match execute_walk(state, &to, Some(false)).await {
         MoveResult::Arrived => {}
         MoveResult::Blocked => {
+            warn!(
+                "Schedule walk to {} blocked at ({:.1}, {:.1})",
+                entry.display_label(),
+                entry.pos[0],
+                entry.pos[2]
+            );
             if state.lock().await.protects() {
-                break_out(state, false).await;
+                let freed = break_out(state, false).await;
+                info!("Break-out after a blocked schedule walk: freed={freed}");
             }
             return;
         }

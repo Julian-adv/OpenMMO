@@ -352,6 +352,13 @@
     "model": "objects/mine_tool_rack.glb"
   },
   {
+    "id": "watch_gear_rack",
+    "name": "Watch Gear Rack",
+    "model": "objects/mine_tool_rack.glb",
+    "gearRack": true,
+    "solid": true
+  },
+  {
     "id": "mine_ore_heap",
     "name": "Ore Heap",
     "model": "objects/mine_ore_heap.glb"

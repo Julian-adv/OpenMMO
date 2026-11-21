@@ -1171,6 +1171,78 @@ async fn handle_client_message(
                 game_state.offer_impound(id, &target_player_id).await;
             }
         }
+        ClientMessage::PatrolRollCall { muster, patrol_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .patrol_roll_call(id, muster, patrol_id, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::WatchShiftAccept {
+            npc_player_id,
+            sergeant,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .watch_shift_accept(id, &npc_player_id, &sergeant, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::WatchRackUse { object_id } => {
+            if let Some(id) = &state.player_id {
+                game_state.watch_rack_use(id, object_id, auth_service).await;
+            }
+        }
+        ClientMessage::WatchRackOpen { object_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .watch_rack_open(id, object_id, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::WatchRackMove {
+            object_id,
+            item_def_id,
+            take,
+            equip,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .watch_rack_move(id, object_id, &item_def_id, take, equip, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::WatchRackSettle { object_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .watch_rack_settle(id, object_id, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::WatchShiftQuit => {
+            if let Some(id) = &state.player_id {
+                game_state.watch_shift_quit(id, auth_service).await;
+            }
+        }
+        ClientMessage::WatchToolUse { tool } => {
+            if let Some(id) = &state.player_id {
+                game_state.watch_tool_use(id, tool, auth_service).await;
+            }
+        }
+        ClientMessage::OfferWatchShift { target_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .watch_shift_visit(&target_player_id, id, true, auth_service)
+                    .await;
+            }
+        }
+        ClientMessage::WatchShiftVisit { npc_player_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .watch_shift_visit(id, &npc_player_id, false, auth_service)
+                    .await;
+            }
+        }
         ClientMessage::ImpoundReclaim { npc_player_id } => {
             if let Some(id) = &state.player_id {
                 game_state

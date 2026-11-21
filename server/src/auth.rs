@@ -57,6 +57,9 @@ mod road_patrol;
 #[cfg(test)]
 pub(crate) use road_patrol::IMPOUND_HOLD_SECONDS;
 pub(crate) use road_patrol::{ImpoundedStack, RoadClearance, RoadSeizure};
+#[path = "auth_watch_shift.rs"]
+mod watch_shift;
+pub(crate) use watch_shift::{WatchHire, WatchShiftRow};
 #[path = "auth_landscaping.rs"]
 mod landscaping;
 #[path = "auth_loot_tally.rs"]

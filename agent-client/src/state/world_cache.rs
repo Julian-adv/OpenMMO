@@ -812,15 +812,16 @@ impl WorldCache {
             .collect()
     }
 
-    fn boards_within<'a>(
+    fn placements_within<'a>(
         &'a self,
         from: &'a Position,
         max_dist: f32,
+        is_type: impl Fn(&str) -> bool + 'a,
     ) -> impl Iterator<Item = (f32, &'a FurniturePlacement)> + 'a {
         self.furniture_placements
             .values()
             .flatten()
-            .filter(|p| onlinerpg_shared::notice_board::is_notice_board(&p.type_id))
+            .filter(move |p| is_type(&p.type_id))
             .filter_map(move |p| {
                 let at = Position {
                     x: p.x,
@@ -830,6 +831,18 @@ impl WorldCache {
                 let dist = from.dist_xz_sq(&at).sqrt();
                 (dist <= max_dist).then_some((dist, p))
             })
+    }
+
+    fn boards_within<'a>(
+        &'a self,
+        from: &'a Position,
+        max_dist: f32,
+    ) -> impl Iterator<Item = (f32, &'a FurniturePlacement)> + 'a {
+        self.placements_within(
+            from,
+            max_dist,
+            onlinerpg_shared::notice_board::is_notice_board,
+        )
     }
 
     /// Notice boards within `max_dist` of `from` with their distance, nearest first.
@@ -857,6 +870,22 @@ impl WorldCache {
             .filter(|(_, p)| p.id == board_id)
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(_, p)| p.clone())
+    }
+
+    /// The nearest watch gear rack within `max_dist`: its object id, place and floor.
+    pub fn watch_rack_near(&self, from: &Position, max_dist: f32) -> Option<(u32, Position, i8)> {
+        self.placements_within(from, max_dist, |type_id| {
+            type_id == onlinerpg_shared::schedule::WATCH_GEAR_RACK
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))
+        .map(|(_, p)| {
+            let at = Position {
+                x: p.x,
+                y: p.y,
+                z: p.z,
+            };
+            (p.id, at, p.floor_level as i8)
+        })
     }
 
     /// Village and estate mailboxes within `max_dist` of `from`, nearest first.

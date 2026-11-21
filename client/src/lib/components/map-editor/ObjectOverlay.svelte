@@ -89,6 +89,8 @@
   import { SvelteMap, SvelteSet } from 'svelte/reactivity'
   import { disposeObjectTree } from '../../utils/disposeObjectTree'
   import { emblemClothMaterial } from '../../utils/familyEmblem'
+  import ClickHintSparkle from '../ClickHintSparkle.svelte'
+  import { rackDue, watchDuty } from '../../stores/watchDutyStore'
   import { translucentClone } from '../../utils/translucentMaterial'
 
   const PREVIEW_OPACITY = 0.5
@@ -102,6 +104,12 @@
   let selectedType = $state<string | null>(null)
   let debugInfo = $state<PlayerDebugInfo | null>(null)
   let openDoorIds = $state<ReadonlySet<string>>(new Set())
+  /** Gear racks a day recruit of the watch is due to draw from or return to. */
+  const racksToUse = $derived.by(() => {
+    if (!rackDue($watchDuty)) return []
+    return placements.filter((p) => objectDefsById.get(p.type)?.gearRack)
+  })
+
   /** Open-door bits of the loaded region's placements, by placement id. */
   let openHere: Map<number, number> = new Map()
   let isEditorMode = $state(false)
@@ -875,7 +883,9 @@
         ? 'notice_board'
         : catDef?.mailbox
           ? 'mailbox'
-          : null
+          : catDef?.gearRack
+            ? 'watch_rack'
+            : null
     if (clickKind) clone.userData.objectClickKind = clickKind
     if (catDef) {
       for (const door of doorwaysOf(p, catDef)) {
@@ -1099,5 +1109,8 @@
 </script>
 
 <T is={group} />
+{#each racksToUse as rack (rack.id)}
+  <ClickHintSparkle x={rack.x} y={rack.y} z={rack.z} rotation={rack.rotation} />
+{/each}
 <T is={fireRoot} />
 <T is={wakeEffect.group} />

@@ -231,6 +231,14 @@ pub struct Recital {
     until: std::time::Instant,
 }
 
+/// Whether a watch has called its recruits out, and then home.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum WatchCall {
+    NotOut,
+    Out,
+    Home,
+}
+
 pub struct SharedState {
     pub characters: Vec<Character>,
     pub in_game: bool,
@@ -301,6 +309,19 @@ pub struct SharedState {
     pub self_fishing: bool,
     /// Waypoints behind us on the current lap; a lap broken off by a fight resumes there.
     pub patrol_reached: usize,
+    /// The lap id of the patrol under way.
+    pub patrol_lap_id: i64,
+    pub patrol_call: WatchCall,
+    /// The watch has walked its last lap and gone to wait out the entry.
+    pub patrol_stood_down: bool,
+    /// Answers to `PatrolRollCall`, and the recruits the latest one found missing.
+    pub patrol_roll_calls: u64,
+    pub patrol_missing: Vec<String>,
+    /// Recruits back within the wait, and those back after losing roll calls.
+    pub patrol_rejoined: Vec<String>,
+    pub patrol_late: Vec<String>,
+    /// Sergeant of the watch the guard captain last offered us.
+    pub watch_offered: Option<String>,
     /// The fence the last scout found, and how many scouts were answered.
     pub patrol_target: Option<onlinerpg_shared::Position>,
     pub patrol_scouts: u64,
@@ -555,6 +576,14 @@ impl SharedState {
             outfit_gifts_reopen_at: None,
             self_fishing: false,
             patrol_reached: 0,
+            patrol_lap_id: 0,
+            patrol_call: WatchCall::NotOut,
+            patrol_stood_down: false,
+            patrol_roll_calls: 0,
+            patrol_missing: Vec::new(),
+            patrol_rejoined: Vec::new(),
+            patrol_late: Vec::new(),
+            watch_offered: None,
             patrol_target: None,
             patrol_scouts: 0,
             patrol_shovels: 0,

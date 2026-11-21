@@ -463,3 +463,6 @@
 각 부위는 방어 1이며 상점 판매와 플레이어 거래를 차단한다. 승인된 Tripo 피팅 모델을
 재사용해 게임용 착용 파츠와 바닥 모델·인벤토리 아이콘을 만들었다.
 [등록·출처·재생성·검증 기록](modular-caveman-runtime.md).
+- `watch_spear`(신병용 창, 2026-11-20) — 새 모델·아이콘 없음. 기존 `spear`의 `weapons/spear.glb`와 `weapons/spear_icon.png`를 그대로 쓴다.
+- `watch_tabard`(신병용 타바드, 2026-11-20) — 새 모델·아이콘 없음. `guard_tabard`의 `armor/guard_tabard.glb`와 `armor/guard_tabard.png`를 그대로 쓴다.
+- `watch_shovel`(경비대 대여 눈삽, 2026-11-21) — 새 모델·아이콘 없음. `snow_shovel`의 `weapons/snow_shovel.glb`와 `objects/snow_shovel.png`를 그대로 쓴다.

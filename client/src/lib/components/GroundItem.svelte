@@ -30,6 +30,8 @@
   import { loadGLB } from '../utils/gltfCache'
   import { loadIconTexture } from '../utils/iconTextureCache'
   import { createRng } from '../utils/simplex-noise'
+  import { sparkSeed, sparksAt } from '../utils/sparkles'
+  import Sparkles from './Sparkles.svelte'
   import { reparentGroundItem } from '../utils/groundItemAttachment'
   import { localPlayerRightHand } from '../stores/playerHandRegistry'
   import { hoveredGroundItemId } from '../stores/gameStore'
@@ -74,11 +76,7 @@
   const SPARK_DENSITY_PER_M = 34 // sparks per metre of bounding-box diagonal
   const SPARK_COUNT_MIN = 10
   const SPARK_COUNT_MAX = 44
-  const SPARK_LIFETIME = 1.6 // seconds for one rise cycle
-  const SPARK_RISE = 0.45 // metres a spark climbs over its lifetime
-  const SPARK_DRIFT = 0.06 // max horizontal wander
-  const SPARK_SIZE = 0.07 // sprite world size at full twinkle
-  const SPARK_TWINKLE_FREQ = 9 // brightness flicker speed
+  const SPARK_LOOK = { lifetime: 1.6, rise: 0.45, size: 0.07 }
 
   let worldModelScene: THREE.Object3D | undefined = $state()
   // Local-space (relative to origin) bounding box of the loaded model. Single
@@ -148,22 +146,6 @@
       mesh.receiveShadow = true
     })
   }
-
-  // Soft radial sparkle, generated once and shared by every spark sprite.
-  function makeSparkTexture(): THREE.CanvasTexture {
-    const c = document.createElement('canvas')
-    c.width = 64
-    c.height = 64
-    const ctx = c.getContext('2d')!
-    const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32)
-    g.addColorStop(0, 'rgba(255,255,255,1)')
-    g.addColorStop(0.25, 'rgba(255,241,189,0.85)')
-    g.addColorStop(1, 'rgba(255,221,130,0)')
-    ctx.fillStyle = g
-    ctx.fillRect(0, 0, 64, 64)
-    return new THREE.CanvasTexture(c)
-  }
-  const sparkTexture = makeSparkTexture()
 
   /** Bind a clip to a freshly cloned scene as a one-shot (LoopOnce + clamp) and
    *  return the mixer. The clip is node-based TRS (no skeleton), so the clone's
@@ -444,7 +426,6 @@
 
   onDestroy(() => {
     nameTexture?.dispose()
-    sparkTexture.dispose()
   })
 
   // Self-animating loot pours in via its own clip, so it skips the generic loot
@@ -546,9 +527,6 @@
     if (!box) return []
     // Seeded per item so each spark keeps a stable identity across frames.
     const rand = createRng((data.instanceId * 2654435761) >>> 0)
-    const yaw = data.restingRotationY
-    const cos = Math.cos(yaw)
-    const sin = Math.sin(yaw)
     const diagonal = Math.hypot(
       box.max.x - box.min.x,
       box.max.y - box.min.y,
@@ -563,37 +541,13 @@
       const lx = box.min.x + (box.max.x - box.min.x) * (0.2 + 0.6 * rand())
       const ly = box.min.y + (box.max.y - box.min.y) * (0.1 + 0.8 * rand())
       const lz = box.min.z + (box.max.z - box.min.z) * (0.2 + 0.6 * rand())
-      const driftAngle = rand() * Math.PI * 2
-      return {
-        ox: lx * cos + lz * sin,
-        oy: ly,
-        oz: -lx * sin + lz * cos,
-        dx: Math.cos(driftAngle) * SPARK_DRIFT,
-        dz: Math.sin(driftAngle) * SPARK_DRIFT,
-        phase: rand(),
-        twinkle: rand() * Math.PI * 2,
-      }
+      return sparkSeed(rand, [lx, ly, lz], data.restingRotationY)
     })
   })
 
-  // Current per-frame position/scale/opacity for each spark, driven by the
-  // shared animation clock. Each rises over its lifetime, fading in then out
-  // while flickering, and loops back to its emission point.
-  const sparkStates = $derived.by(() => {
-    const t = animationTimeMs / 1000
-    return sparkSeeds.map((s) => {
-      const phase = (t / SPARK_LIFETIME + s.phase) % 1
-      const fade = Math.sin(phase * Math.PI) // 0 at ends, 1 mid-rise
-      const twinkle = 0.5 + 0.5 * Math.sin(t * SPARK_TWINKLE_FREQ + s.twinkle)
-      return {
-        x: s.ox + s.dx * phase,
-        y: s.oy + phase * SPARK_RISE,
-        z: s.oz + s.dz * phase,
-        opacity: fade * (0.35 + 0.65 * twinkle),
-        scale: SPARK_SIZE * (0.55 + 0.45 * twinkle) * (0.5 + 0.5 * fade),
-      }
-    })
-  })
+  const sparkStates = $derived(
+    sparksAt(sparkSeeds, animationTimeMs / 1000, SPARK_LOOK)
+  )
 
   $effect(() => {
     terrainAlignedRef?.quaternion.copy(terrainAlignmentQuaternion)
@@ -631,24 +585,7 @@
     <!-- Rising sparkles: emitted from points across the item, climbing and
          twinkling. Kept at the root group so they rise along world up rather
          than tilting with the terrain or spinning with the model. -->
-    {#each sparkStates as spark, i (i)}
-      <T.Sprite
-        position.x={spark.x}
-        position.y={spark.y}
-        position.z={spark.z}
-        scale={[spark.scale, spark.scale, spark.scale]}
-        renderOrder={2}
-      >
-        <T.SpriteMaterial
-          map={sparkTexture}
-          color="#ffe7a8"
-          transparent={true}
-          opacity={spark.opacity}
-          depthWrite={false}
-          blending={THREE.AdditiveBlending}
-        />
-      </T.Sprite>
-    {/each}
+    <Sparkles sparks={sparkStates} />
   {/if}
 
   {#if qtyBadge && !data.inHand}

@@ -72,6 +72,10 @@ impl super::GameState {
             .as_millis() as u64
     }
 
+    pub(super) fn game_minutes_now(&self) -> f64 {
+        self.current_total_game_seconds() as f64 / 60.0
+    }
+
     pub fn current_total_game_seconds(&self) -> i64 {
         let clock = self.game_clock.read().expect("game clock lock poisoned");
         let elapsed_real_seconds = clock.start_real.elapsed().as_secs_f64();

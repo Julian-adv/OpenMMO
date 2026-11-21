@@ -107,6 +107,27 @@ impl AuthService {
                  UPDATE item_sale_collection SET rewards_started_at = unixepoch();",
             )?;
         }
+        let lists_sources: bool = transaction.query_row(
+            "SELECT sql LIKE '%source IN (%' FROM sqlite_master WHERE name='item_sale_samples'",
+            [],
+            |row| row.get(0),
+        )?;
+        if lists_sources {
+            transaction.execute_batch(
+                "ALTER TABLE item_sale_samples RENAME TO listed_item_sale_samples;
+                 CREATE TABLE item_sale_samples (
+                    timestamp INTEGER NOT NULL,
+                    source TEXT NOT NULL DEFAULT 'item_sale',
+                    item_def_id TEXT NOT NULL,
+                    quantity INTEGER NOT NULL CHECK (quantity > 0),
+                    gold INTEGER NOT NULL CHECK (gold >= 0),
+                    PRIMARY KEY (timestamp, source, item_def_id),
+                    CHECK ((source = 'item_sale') = (item_def_id != ''))
+                 );
+                 INSERT INTO item_sale_samples SELECT * FROM listed_item_sale_samples;
+                 DROP TABLE listed_item_sale_samples;",
+            )?;
+        }
         transaction.commit()
     }
 
@@ -175,6 +196,7 @@ impl AuthService {
                     "coin_pile" => (GoldSource::CoinPile, "동전 더미 획득".into()),
                     "coin_pouch" => (GoldSource::CoinPouch, "동전 주머니 개봉".into()),
                     "npc_salary" => (GoldSource::NpcSalary, "주민 NPC 급여".into()),
+                    "watch_wage" => (GoldSource::WatchWage, "순찰 일당".into()),
                     _ => return Err(rusqlite::Error::InvalidQuery),
                 };
                 Ok(crate::metrics::ItemGoldSource {

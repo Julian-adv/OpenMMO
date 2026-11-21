@@ -734,21 +734,88 @@ pub(super) async fn handle_response(
             continue;
         }
 
-        if let AgentAction::OfferPledge { player } | AgentAction::OpenImpound { player } = action {
-            let pledge = matches!(action, AgentAction::OfferPledge { .. });
+        if let AgentAction::OfferPledge { player }
+        | AgentAction::OpenImpound { player }
+        | AgentAction::WatchShift { player } = action
+        {
             let mut s = state.lock().await;
             let Some((target_player_id, _)) = s.resolve_nearby_player(player) else {
-                s.push_agent_event(if pledge {
-                    format!("[Rite] No one named '{player}' is nearby; no pledge form was handed over.")
-                } else {
-                    format!("[Impound] No one named '{player}' is nearby; no reclaim window was opened.")
+                s.push_agent_event(match action {
+                    AgentAction::OfferPledge { .. } => format!(
+                        "[Rite] No one named '{player}' is nearby; no pledge form was handed over."
+                    ),
+                    AgentAction::OpenImpound { .. } => format!(
+                        "[Impound] No one named '{player}' is nearby; no reclaim window was opened."
+                    ),
+                    _ => {
+                        format!("[Watch] No one named '{player}' is nearby; your roll stayed shut.")
+                    }
                 });
                 continue;
             };
-            let cmd = if pledge {
-                onlinerpg_shared::ClientMessage::OfferMergerPledge { target_player_id }
-            } else {
-                onlinerpg_shared::ClientMessage::OfferImpound { target_player_id }
+            let cmd = match action {
+                AgentAction::OfferPledge { .. } => {
+                    onlinerpg_shared::ClientMessage::OfferMergerPledge { target_player_id }
+                }
+                AgentAction::OpenImpound { .. } => {
+                    onlinerpg_shared::ClientMessage::OfferImpound { target_player_id }
+                }
+                _ => onlinerpg_shared::ClientMessage::OfferWatchShift { target_player_id },
+            };
+            if let Err(e) = s.send_command(cmd).await {
+                error!("Failed to send {}: {e}", action.label());
+            }
+            continue;
+        }
+
+        if matches!(action, AgentAction::WatchRack) {
+            let rack = {
+                let s = state.lock().await;
+                s.self_player.as_ref().and_then(|p| {
+                    s.world_cache
+                        .read()
+                        .unwrap()
+                        .watch_rack_near(&p.position, BOARD_REACH_SEARCH_M)
+                })
+            };
+            let Some((object_id, at, floor_level)) = rack else {
+                state.lock().await.push_agent_event(
+                    "[Watch] There is no gear rack nearby; it stands by the watch house door \
+                     behind Captain Karl's post in Aldermark."
+                        .to_string(),
+                );
+                continue;
+            };
+            let cmd = onlinerpg_shared::ClientMessage::WatchRackUse { object_id };
+            let failure = "[Watch] You could not get to the gear rack";
+            walk_then_send(state, at, floor_level, None, cmd, failure).await;
+            continue;
+        }
+
+        if matches!(action, AgentAction::WatchWork | AgentAction::WatchAccept) {
+            let mut s = state.lock().await;
+            let Some(npc_player_id) = s.nearby_guard_captain() else {
+                s.push_agent_event(
+                    "[Watch] Captain Karl is not in sight; go to his post in Aldermark first."
+                        .to_string(),
+                );
+                continue;
+            };
+            let cmd = match (action, s.watch_offered.take()) {
+                (AgentAction::WatchWork, _) => {
+                    onlinerpg_shared::ClientMessage::WatchShiftVisit { npc_player_id }
+                }
+                (_, Some(sergeant)) => onlinerpg_shared::ClientMessage::WatchShiftAccept {
+                    npc_player_id,
+                    sergeant,
+                },
+                (_, None) => {
+                    s.push_agent_event(
+                        "[Watch] Captain Karl has put no terms to you; ask with watch_work first."
+                            .to_string(),
+                    );
+                    continue;
+                }
             };
             if let Err(e) = s.send_command(cmd).await {
                 error!("Failed to send {}: {e}", action.label());

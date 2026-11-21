@@ -6,6 +6,12 @@
   import { onDestroy, onMount } from 'svelte'
   import { GUARD_CAPTAIN, openImpound } from '../stores/impoundStore'
   import {
+    followTarget,
+    stopFollowing,
+    toggleFollow,
+  } from '../stores/followStore'
+  import { watchDuty } from '../stores/watchDutyStore'
+  import {
     inspectionTargeting,
     cancelInspection,
     takeInspectionTarget,
@@ -322,6 +328,63 @@
     if (!autoTravelTarget) return
     travelDestination.set(null)
     if (message) addChatMessage({ text: message, sender: 'system' })
+  }
+
+  /** How close a follower keeps, and how far the leader moves before the
+   *  follower sets out again. */
+  const FOLLOW_GAP_M = 2.5
+  const FOLLOW_REPLAN_M = 1.5
+  /** Beyond this the follower sprints to catch up; inside it they keep the
+   *  leader's own pace, walking or sprinting as the leader does. */
+  const FOLLOW_SPRINT_GAP_M = 8
+  /** Frames out of sight before a follow gives up (about three seconds). */
+  const FOLLOW_LOST_FRAMES = 180
+  let followed: { id: number; name: string } | null = null
+  let followedTo: { x: number; z: number } | null = null
+  let followLostFrames = 0
+  onDestroy(
+    followTarget.subscribe((target) => {
+      followed = target
+      followedTo = null
+      followLostFrames = 0
+    })
+  )
+
+  function updateFollow() {
+    const target = followed
+    if (!target) return
+    if (!currentPlayer || currentPlayer.health <= 0)
+      return stopFollowing('follow.stopped')
+    const leader = remotePlayerManager.players.get(target.id)
+    if (!leader) {
+      followLostFrames += 1
+      if (followLostFrames > FOLLOW_LOST_FRAMES) stopFollowing('follow.lost')
+      return
+    }
+    followLostFrames = 0
+    const here = currentPlayer.position
+    const there = leader.position
+    const dx = here.x - there.x
+    const dz = here.z - there.z
+    const gap = Math.hypot(dx, dz)
+    if (gap <= FOLLOW_GAP_M) return
+    if (
+      followedTo &&
+      Math.hypot(followedTo.x - there.x, followedTo.z - there.z) <
+        FOLLOW_REPLAN_M
+    )
+      return
+    followedTo = { x: there.x, z: there.z }
+    const short = (FOLLOW_GAP_M - 0.5) / gap
+    handleClickToMove(
+      { x: there.x + dx * short, y: there.y, z: there.z + dz * short },
+      {
+        following: true,
+        sprinting:
+          gap > FOLLOW_SPRINT_GAP_M ||
+          remotePlayerManager.isSprinting(target.id),
+      }
+    )
   }
 
   function updateAutoTravel(deltaTime: number) {
@@ -994,6 +1057,7 @@
       return
     }
     updateAutoTravel(deltaTime)
+    updateFollow()
     const pose = serverMovement.sample((from, to) =>
       isMovementBlocked(from.x, from.z, to.x, to.z, from.y)
     )
@@ -1189,8 +1253,11 @@
       sprinting?: boolean
       stopAtHouseEntrance?: boolean
       preserveCombatTarget?: boolean
+      /** A step of the follow itself; any other move ends the follow. */
+      following?: boolean
     } = {}
   ) {
+    if (!options.following) stopFollowing()
     cancelAutoTravel()
     // Any fresh movement cancels a pending prop action (approachProp re-arms
     // it after its own walk-up call below).
@@ -1770,6 +1837,11 @@
       networkManager.sendToggleDoor(door.door)
     )
   }
+  function useWatchRack(intent: Extract<ClickIntent, { type: 'watch_rack' }>) {
+    approachAndAct({ position: intent.position, ...ALTAR_APPROACH }, () =>
+      networkManager.sendWatchRackOpen(intent.objectId)
+    )
+  }
   function openMailbox(intent: Extract<ClickIntent, { type: 'mailbox' }>) {
     approachAndAct({ position: intent.position, ...ALTAR_APPROACH }, () =>
       networkManager.sendOpenMailbox({
@@ -2123,6 +2195,22 @@
                 () => openImpound(intent.playerId)
               ),
           })
+          entries.push({
+            label: translate('watch.menu'),
+            action: () =>
+              approachAndAct(
+                { position: intent.position, ...NPC_TRADE_APPROACH },
+                () => networkManager.sendWatchShiftVisit(intent.playerId)
+              ),
+          })
+        }
+        // A day recruit keeps beside the watch sergeant.
+        if (npc.rank === 'sergeant' && get(watchDuty)) {
+          const following = get(followTarget)?.id === intent.playerId
+          entries.push({
+            label: translate(following ? 'follow.stop' : 'follow.start'),
+            action: () => toggleFollow(intent.playerId, npc.name),
+          })
         }
         npcContextMenu.set({
           npcName: npc.name,
@@ -2300,6 +2388,7 @@
       inspectAltar,
       openNoticeBoard,
       openMailbox,
+      useWatchRack,
       toggleObjectDoor,
       breakProp,
       mineProp,

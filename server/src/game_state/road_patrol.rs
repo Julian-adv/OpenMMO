@@ -67,7 +67,7 @@ enum Shovelling {
 
 /// How far around a guard one sweep reaches.
 const SWEEP_RADIUS_M: f32 = 24.0;
-const GUARD_CLASS: &str = "guard";
+pub(super) const GUARD_CLASS: &str = "guard";
 /// A walk that gets this many cells from the guard is not penned in.
 const PEN_REACH_CELLS: i32 = 48;
 /// Nested pens one break-out works through.
@@ -241,7 +241,10 @@ impl GameState {
         let _ = self.roads.set(roads);
     }
 
-    async fn surface_guard(&self, player_id: &PlayerId) -> Result<Position, &'static str> {
+    pub(super) async fn surface_guard(
+        &self,
+        player_id: &PlayerId,
+    ) -> Result<Position, &'static str> {
         let players = self.players.read().await;
         let guard = players.get(player_id).ok_or("Character not found.")?;
         let is_guard = guard.is_official_npc
@@ -277,8 +280,7 @@ impl GameState {
         found
     }
 
-    async fn sweep_plan(&self, player_id: &PlayerId) -> Result<SweepPlan, &'static str> {
-        let guard = self.surface_guard(player_id).await?;
+    async fn sweep_plan(&self, guard: Position) -> SweepPlan {
         let mut plan = SweepPlan {
             guard,
             edges: Vec::new(),
@@ -286,7 +288,7 @@ impl GameState {
             houses: Vec::new(),
         };
         let Some(roads) = self.roads.get() else {
-            return Ok(plan);
+            return plan;
         };
         plan.edges = self
             .fences
@@ -319,12 +321,17 @@ impl GameState {
             }
         }
         drop(index);
-        Ok(plan)
+        plan
     }
 
     /// The nearest thing a sweep from here would pull down.
     pub async fn patrol_scout(&self, player_id: &PlayerId) {
-        let target = self.sweep_plan(player_id).await.ok().and_then(|plan| {
+        let guard = self.surface_guard(player_id).await.ok();
+        let plan = match guard {
+            Some(guard) => Some(self.sweep_plan(guard).await),
+            None => None,
+        };
+        let target = plan.and_then(|plan| {
             let guard = plan.guard;
             plan.edges
                 .iter()
@@ -349,7 +356,7 @@ impl GameState {
 
     /// Road stretches still clear of snow.
     pub fn road_snow_message(&self) -> ServerMessage {
-        let now = self.current_total_game_seconds() as f64 / 60.0;
+        let now = self.game_minutes_now();
         let mut cleared = self.road_snow.lock().expect("road snow lock poisoned");
         cleared.retain(|stretch| now - stretch.clearing.at_min < SNOW_CLEAR_LASTS_MIN);
         ServerMessage::RoadSnowCleared {
@@ -365,7 +372,7 @@ impl GameState {
         if !roads.near_road(guard.x, guard.z) || !self.snow_lies_at(guard.x, guard.z) {
             return None;
         }
-        let now = self.current_total_game_seconds() as f64 / 60.0;
+        let now = self.game_minutes_now();
         let mut cleared = self.road_snow.lock().expect("road snow lock poisoned");
         cleared.retain(|stretch| now - stretch.clearing.at_min < SNOW_CLEAR_LASTS_MIN);
         let fresh = cleared.iter_mut().find(|stretch| {
@@ -399,24 +406,29 @@ impl GameState {
         Some(Shovelling::Clears(clearing))
     }
 
-    pub async fn patrol_shovel(&self, player_id: &PlayerId) {
-        let shovelling = match self.surface_guard(player_id).await {
-            Ok(guard) => self.shovel_here(player_id, &guard).map(|s| (guard, s)),
-            Err(_) => None,
+    /// Shovel the lying snow off the road around `at`; false when there is none to clear.
+    pub(super) async fn shovel_at(&self, player_id: &PlayerId, at: &Position) -> bool {
+        let Some(shovelling) = self.shovel_here(player_id, at) else {
+            return false;
         };
-        let cleared = shovelling.is_some();
-        if let Some((guard, shovelling)) = shovelling {
-            let shovelled = ServerMessage::PlayerShovelled {
-                player_id: *player_id,
-            };
-            self.publish_nearby(&guard, 0, shovelled, None).await;
-            if let Shovelling::Clears(stretch) = shovelling {
-                self.broadcast(ServerMessage::RoadSnowCleared {
-                    reset: false,
-                    stretches: vec![stretch],
-                });
-            }
+        let shovelled = ServerMessage::PlayerShovelled {
+            player_id: *player_id,
+        };
+        self.publish_nearby(at, 0, shovelled, None).await;
+        if let Shovelling::Clears(stretch) = shovelling {
+            self.broadcast(ServerMessage::RoadSnowCleared {
+                reset: false,
+                stretches: vec![stretch],
+            });
         }
+        true
+    }
+
+    pub async fn patrol_shovel(&self, player_id: &PlayerId) {
+        let cleared = match self.surface_guard(player_id).await {
+            Ok(guard) => self.shovel_at(player_id, &guard).await,
+            Err(_) => false,
+        };
         self.send_direct_message(player_id, ServerMessage::PatrolShovelled { cleared })
             .await;
     }
@@ -439,7 +451,18 @@ impl GameState {
         patrol_id: i64,
         auth: &AuthService,
     ) -> Result<Vec<PatrolSeizure>, &'static str> {
-        let plan = self.sweep_plan(player_id).await?;
+        let guard = self.surface_guard(player_id).await?;
+        self.sweep_road_at(guard, patrol_id, auth).await
+    }
+
+    /// Pull down everything a patrol standing at `from` clears off the road.
+    pub(super) async fn sweep_road_at(
+        &self,
+        from: Position,
+        patrol_id: i64,
+        auth: &AuthService,
+    ) -> Result<Vec<PatrolSeizure>, &'static str> {
+        let plan = self.sweep_plan(from).await;
         let clearance = RoadClearance {
             edges: plan.edges,
             furniture: plan.furniture.into_iter().map(|(id, _)| id).collect(),

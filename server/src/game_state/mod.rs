@@ -273,6 +273,7 @@ mod tip_hat;
 mod titles;
 mod trading;
 mod valhalla_charge;
+mod watch_shift;
 pub mod weather;
 pub use trading::BUYBACK_SWEEP_PERIOD;
 
@@ -535,6 +536,7 @@ pub struct GameState {
     roads: Arc<std::sync::OnceLock<crate::road_index::RoadIndex>>,
     guard_notices_checked: Arc<std::sync::atomic::AtomicI64>,
     road_snow: Arc<std::sync::Mutex<Vec<road_patrol::ShovelledStretch>>>,
+    watch_roll: Arc<tokio::sync::OnceCell<watch_shift::WatchRoll>>,
     /// Price index + meeting bookkeeping (doc/PRICING.md), mirrored in DB.
     pricing: Arc<RwLock<crate::auth::PricingState>>,
     dungeon_reset: Arc<RwLock<dungeon::DungeonResetState>>,
@@ -885,6 +887,7 @@ impl GameState {
             roads: Arc::new(std::sync::OnceLock::new()),
             guard_notices_checked: Arc::default(),
             road_snow: Arc::default(),
+            watch_roll: Arc::default(),
             pricing: Arc::new(RwLock::new(Default::default())),
             dungeon_reset: Arc::new(RwLock::new(Default::default())),
             dungeon_defs,

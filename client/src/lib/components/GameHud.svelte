@@ -22,6 +22,7 @@
   import TradeWindow from './TradeWindow.svelte'
   import FishingPrompt from './FishingPrompt.svelte'
   import ChargeTargetPrompt from './ChargeTargetPrompt.svelte'
+  import WatchDutyChip from './WatchDutyChip.svelte'
   import TradeOfferToast from './TradeOfferToast.svelte'
   import OutfitOfferToast from './OutfitOfferToast.svelte'
   import PartyInviteToast from './PartyInviteToast.svelte'
@@ -50,6 +51,8 @@
   import MergerPledgeDialog from './MergerPledgeDialog.svelte'
   import { mergerPledgeOpen } from '../stores/familyStore'
   import ImpoundDialog from './ImpoundDialog.svelte'
+  import WatchOfferDialog from './WatchOfferDialog.svelte'
+  import WatchRackWindow from './WatchRackWindow.svelte'
   import SalonDialog from './SalonDialog.svelte'
   import { impoundSession } from '../stores/impoundStore'
   import { salonSession } from '../stores/salonStore'
@@ -295,6 +298,7 @@
     <NpcContextMenu />
     <FishingPrompt />
     <ChargeTargetPrompt />
+    <WatchDutyChip />
   {/if}
 
   {#if !$mapEditorMode}
@@ -551,6 +555,9 @@
 {#if $impoundSession}
   <ImpoundDialog />
 {/if}
+
+<WatchOfferDialog />
+<WatchRackWindow />
 
 {#if $salonSession}
   <SalonDialog />

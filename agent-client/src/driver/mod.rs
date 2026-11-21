@@ -668,6 +668,8 @@ pub async fn llm_driver(
     let mut seatless_noted = false;
     // A road-patrol lap walks in the background so the guard can talk on the way.
     let mut patrol_walk: Option<Spawned<()>> = None;
+    // An off-duty wander, one pause and one walk at a time.
+    let mut roam_walk: Option<Spawned<()>> = None;
     let mut weapon_checked_at = Instant::now();
     let mut next_lap_at = Instant::now();
     let mut next_notice_round = Instant::now() + NOTICE_ROUND_EVERY;
@@ -1327,7 +1329,14 @@ pub async fn llm_driver(
                 if transition_now {
                     wrapup = None;
                     unload_trip = None;
-                    state.lock().await.patrol_reached = 0;
+                    roam_walk = None;
+                    movement::call_watch_home(&state).await;
+                    {
+                        let mut s = state.lock().await;
+                        s.patrol_reached = 0;
+                        s.patrol_call = crate::state::WatchCall::NotOut;
+                        s.patrol_stood_down = false;
+                    }
                     active_schedule =
                         check_schedule_transition(&state, &schedule, active_schedule, due, &label)
                             .await;
@@ -1353,23 +1362,61 @@ pub async fn llm_driver(
                 .map(|i| &schedule[i])
                 .filter(|entry| entry.patrol.is_some())
             {
+                // `None` while dead or before the clock is known.
                 let fits = {
                     let s = state.lock().await;
                     let (_, hour, minute, _) = s.time_context();
-                    !s.is_dead()
-                        && (s.patrol_reached > 0
-                            || hour
-                                .zip(minute)
-                                .is_some_and(|(h, m)| entry.patrol_lap_fits(h, m)))
+                    let room = hour
+                        .zip(minute)
+                        .map(|(h, m)| s.patrol_reached > 0 || entry.patrol_lap_fits(h, m));
+                    room.filter(|_| !s.is_dead())
                 };
-                if fits {
-                    info!("[{label}] Road patrol: starting a lap");
-                    patrol_walk = Some(Spawned::spawn(movement::run_patrol_lap(
-                        Arc::clone(&state),
-                        entry.clone(),
-                    )));
+                match fits {
+                    Some(true) => {
+                        info!("[{label}] Road patrol: starting a lap");
+                        patrol_walk = Some(Spawned::spawn(movement::run_patrol_lap(
+                            Arc::clone(&state),
+                            entry.clone(),
+                        )));
+                    }
+                    Some(false) => {
+                        movement::call_watch_home(&state).await;
+                        let first =
+                            !std::mem::replace(&mut state.lock().await.patrol_stood_down, true);
+                        if first {
+                            info!("[{label}] Road patrol: last lap walked, standing down");
+                            patrol_walk = Some(Spawned::spawn(movement::stand_down(
+                                Arc::clone(&state),
+                                entry.clone(),
+                            )));
+                        }
+                    }
+                    None => {}
                 }
             }
+        }
+
+        // === Off duty: wander the town ===
+        // A watch that has reported home early is off duty too.
+        let stood_down = !running(&patrol_walk) && state.lock().await.patrol_stood_down;
+        let roaming = active_schedule
+            .0
+            .map(|i| &schedule[i])
+            .and_then(|entry| match entry.patrol {
+                Some(_) if stood_down => schedule.iter().find(|other| other.roam),
+                _ => Some(entry),
+            })
+            .filter(|entry| entry.roam && !entry.waypoints.is_empty())
+            .filter(|_| attack_target.is_none() && visit_until.is_none());
+        match roaming {
+            Some(entry) if !running(&roam_walk) => {
+                roam_walk = Some(Spawned::spawn(movement::roam_once(
+                    Arc::clone(&state),
+                    entry.clone(),
+                )));
+            }
+            Some(_) => {}
+            None => roam_walk = None,
         }
 
         let is_sleeping = active_schedule.0.is_some_and(|i| schedule[i].is_sleeping());
@@ -1419,8 +1466,11 @@ pub async fn llm_driver(
         // === Standing post: keep the scheduled facing ===
         if Instant::now() >= post_check_at {
             post_check_at = Instant::now() + POST_CHECK_EVERY;
-            if let Some(entry) = active_schedule.0.map(|i| &schedule[i]).filter(|_| {
-                !running(&visit_walk) && !running(&unload_trip) && !running(&patrol_walk)
+            if let Some(entry) = active_schedule.0.map(|i| &schedule[i]).filter(|entry| {
+                !entry.roam
+                    && !running(&visit_walk)
+                    && !running(&unload_trip)
+                    && !running(&patrol_walk)
             }) {
                 keep_post_facing(&state, entry, &label).await;
             }

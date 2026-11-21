@@ -287,6 +287,13 @@ impl SharedState {
             .collect()
     }
 
+    /// The guard captain, when he is in sight on this floor.
+    pub fn nearby_guard_captain(&self) -> Option<PlayerId> {
+        self.players_on_my_floor().find_map(|(id, p)| {
+            (p.is_official_npc && p.rank.as_deref() == Some("captain")).then_some(*id)
+        })
+    }
+
     /// Resolve a same-floor name or id, then an exact visible name with its title.
     pub fn resolve_nearby_player(&self, name_or_id: &str) -> Option<(PlayerId, bool)> {
         let name_or_id = name_or_id.trim();

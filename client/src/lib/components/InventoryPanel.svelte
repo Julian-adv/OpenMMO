@@ -22,6 +22,7 @@
     isOverAnyDialog,
     FALLBACK_ICON,
   } from '../stores/dragStore'
+  import { returnToWatchRack } from '../utils/watchRackDrop'
   import { itemTooltip } from '../actions/itemTooltip'
   import { buildInventorySlots } from './inventorySlots'
   import { inventoryGroupKey, sortBag } from './inventorySort'
@@ -295,6 +296,7 @@
             return
           }
         }
+        if (returnToWatchRack(slot.item_def_id, x, y)) return
         if (
           panelEl &&
           !pointInRect(x, y, panelEl.getBoundingClientRect()) &&

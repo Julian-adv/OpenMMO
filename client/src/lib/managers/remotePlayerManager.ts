@@ -77,6 +77,11 @@ class PlayerStateManager {
 
   heightManager: TerrainHeightManager | null = null
 
+  /** Whether the player's current move is a sprint. */
+  isSprinting(playerId: number): boolean {
+    return this.targetSprinting.get(playerId) ?? false
+  }
+
   isInterpolating(playerId: number): boolean {
     const position = this.players.get(playerId)?.position
     const target = this.targetPositions.get(playerId)

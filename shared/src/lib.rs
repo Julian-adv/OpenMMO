@@ -310,7 +310,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// hair salon.
 /// v167: `SalonError::Asleep`.
 /// v168: `ShoutMessage` (`!` chat).
-pub const PROTOCOL_VERSION: u32 = 168;
+/// v169: day recruits of the guard: `PatrolRollCall`/`PatrolRollCalled`, `OfferWatchShift`,
+/// `WatchShiftVisit`/`WatchOffered`/`WatchShiftAccept`, `WatchRackUse`,
+/// `WatchRackOpen`/`WatchRackState`/`WatchRackMove`/`WatchRackSettle`, `WatchShiftQuit`,
+/// `WatchToolUse` and `WatchDuty`.
+pub const PROTOCOL_VERSION: u32 = 169;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

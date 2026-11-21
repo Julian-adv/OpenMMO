@@ -848,3 +848,56 @@ async fn shovelling_along_a_long_road_leaves_no_snowy_gap() {
         .fold(0.0, f32::max);
     assert!(longest <= 8.0, "a bout clears about six metres each way");
 }
+
+#[tokio::test]
+async fn a_recruit_on_watch_clears_the_road_under_the_sergeants_lap() {
+    use onlinerpg_shared::messages::{PatrolMuster, WatchTool};
+    use onlinerpg_shared::schedule::WATCH_GEAR_RACK;
+    let (game, auth, _owner_rx, _guard_rx) = setup("recruit_sweep").await;
+    build(&game, &auth).await;
+    let recruit = create_test_character(&auth, &auth.login_google("Recruit").unwrap(), "Recruit");
+    let mut walker = make_player("Recruit", 3.0, 2.0);
+    walker.position.y = 5.05;
+    game.add_player(walker).await;
+    game.register_player_character(&pid("Recruit"), recruit.id, 0, attrs_with_cha(10), 0, None)
+        .await;
+    game.inventories
+        .write()
+        .await
+        .insert(pid("Recruit"), PlayerInventory::default());
+    let mut sergeant = make_player("Garrick", 3.0, 3.0);
+    sergeant.position.y = 5.05;
+    sergeant.is_official_npc = true;
+    game.add_player(sergeant).await;
+    let mut sergeant_rx = game.register_direct_channel(&pid("Garrick")).await;
+    super::watch_shift_tests::lead_watch(&game, "Garrick", "12:30-22:00");
+    let rack = onlinerpg_shared::furniture::FurniturePlacement {
+        id: 9,
+        type_id: WATCH_GEAR_RACK.into(),
+        x: 3.0,
+        y: 5.05,
+        z: 2.5,
+        rotation_deg: 0.0,
+        floor_level: 0,
+        open_doors: 0,
+    };
+    game.sync_region_furniture(0, 0, &[rack]);
+    game.debug_set_datetime(&GameState::total_game_seconds_to_datetime(12 * 3600));
+
+    game.watch_shift_accept(&pid("Recruit"), &pid("Karl"), "Garrick", &auth)
+        .await;
+    game.watch_rack_use(&pid("Recruit"), 9, &auth).await;
+    game.patrol_roll_call(&pid("Garrick"), PatrolMuster::Out, 41, &auth)
+        .await;
+    game.watch_tool_use(&pid("Recruit"), WatchTool::Spear, &auth)
+        .await;
+    let left = auth.load_fences().unwrap();
+    assert_eq!(left.len(), 1);
+    assert_eq!(left[0].edge, edge(OFF_ROAD));
+
+    // The sergeant's sweep on the same lap is no second offence.
+    game.edit_fence(&pid("Builder"), edge(ON_ROAD[0]), true, &auth, false)
+        .await;
+    game.patrol_sweep(&pid("Garrick"), 41, &auth).await;
+    assert!(!sweep_result(&mut sergeant_rx)[0].forfeited);
+}

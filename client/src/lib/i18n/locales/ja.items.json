@@ -503,6 +503,12 @@
   "guard_boots.description": "足首に留め具付きの帯を巻き、膝下に亜麻布を巻いた膝丈の革長靴。アルダーマーク警備隊の支給品です。",
   "guard_tabard.name": "警備隊のタバード",
   "guard_tabard.description": "革で縁取り、帯を締めた亜麻のタバード。マントのように染められ、胸に家門の紋章が現れます。",
+  "watch_tabard.name": "警備隊の貸与タバード",
+  "watch_tabard.description": "アルダーマーク警備隊が日雇いの巡回隊員に貸す警備隊色のタバード。槍と一緒に武器架へ戻します。",
+  "watch_shovel.name": "警備隊の貸与雪かき",
+  "watch_shovel.description": "アルダーマーク警備隊が日雇いの巡回隊員に貸す雪かき。槍と一緒に武器架へ戻します。",
+  "watch_spear.name": "警備隊の貸与槍",
+  "watch_spear.description": "アルダーマーク警備隊が日雇いの巡回隊員に貸す質素なトネリコの槍。勤務を終えたら警備隊長に返します。",
   "guard_spear.name": "警備隊の槍",
   "guard_spear.description": "幅広の鉄の穂先を付けた長いトネリコの槍。アルダーマーク警備隊の支給品です。"
 }

@@ -106,7 +106,7 @@ impl GameState {
             };
             return (Some(forced), Vec::new());
         }
-        let minutes = self.current_total_game_seconds() as f64 / 60.0;
+        let minutes = self.game_minutes_now();
         (
             None,
             cells_at(&weather.sectors, weather.seed, weather.bias as f64, minutes),
@@ -163,7 +163,7 @@ impl GameState {
         if let Some(forced) = weather.rain_override {
             return weather.snow_override && forced > 0.0;
         }
-        let minutes = self.current_total_game_seconds() as f64 / 60.0;
+        let minutes = self.game_minutes_now();
         onlinerpg_shared::weather::snow_cover_at(
             &weather.sectors,
             weather.seed,

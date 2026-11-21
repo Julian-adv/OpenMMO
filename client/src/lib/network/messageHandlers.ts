@@ -228,6 +228,7 @@ import {
   MAX_PENDING_FRIEND_REQUESTS,
 } from '../stores/friendStore'
 import { applyImpoundState, openImpound } from '../stores/impoundStore'
+import { watchDuty, watchOffer, watchRack } from '../stores/watchDutyStore'
 import { applySalonResult, openSalonFromChair } from '../stores/salonStore'
 import {
   applyFamilyState,
@@ -2100,6 +2101,26 @@ export function handleServerMessage(
       break
     case 'ImpoundOffered':
       openImpound(data.npc_player_id)
+      break
+    case 'WatchOffered':
+      watchOffer.set({
+        npcPlayerId: data.npc_player_id,
+        sergeant: data.sergeant,
+        departsMinute: data.departs_minute,
+        wage: Number(data.wage),
+      })
+      break
+    case 'WatchRackState':
+      watchRack.set({
+        objectId: data.object_id,
+        onRack: data.on_rack ?? [],
+        owed: data.owed ?? [],
+        returnable: data.returnable,
+      })
+      break
+    case 'WatchDuty':
+      watchDuty.set(data.duty ?? null)
+      if (!data.duty) watchRack.set(null)
       break
     case 'OutfitOffered':
       pendingOutfitOffer.set({

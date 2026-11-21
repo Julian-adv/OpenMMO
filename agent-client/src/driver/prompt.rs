@@ -3,6 +3,7 @@
 //! string suitable for sending to an LLM. Also resolves which schedule
 //! entry should currently be active based on game time.
 
+use onlinerpg_shared::messages::WatchNote;
 use onlinerpg_shared::pricing::{PricingNotice, Trend};
 use onlinerpg_shared::{PlayerId, ServerMessage};
 
@@ -172,6 +173,116 @@ pub(super) fn build_prompt(
 
 /// Format a server event as a human-readable line for LLM prompts.
 /// Returns `None` for events that should not be forwarded to the LLM.
+/// The watch roll's verdict on `name` as the guard's stage direction.
+fn watch_verdict(name: &str, note: &WatchNote) -> String {
+    let clock = |minute: &u32| format!("{:02}:{:02}", minute / 60, minute % 60);
+    match note {
+        WatchNote::VisitorGone => "[Watch] That visitor is no longer here.".to_string(),
+        WatchNote::NotStanding => {
+            format!("[Watch] {name} is not standing with you; ask them to come closer first.")
+        }
+        WatchNote::Waiting {
+            sergeant,
+            departs_minute,
+            geared: true,
+        } => format!(
+            "[Watch] {name} is already on your roll for Sergeant {sergeant}'s watch and already \
+             has their gear. Nothing more is needed now. Tell them only that the watch marches at \
+             {} and reports to you just before, and to be here beside the sergeant then.",
+            clock(departs_minute)
+        ),
+        WatchNote::Waiting {
+            sergeant,
+            departs_minute,
+            geared: false,
+        } => format!(
+            "[Watch] {name} is already on your roll for Sergeant {sergeant}'s watch, marching at \
+             {}, but has not drawn gear. Tell them to draw it from the rack by the door and to be \
+             here beside the sergeant when the watch reports to you.",
+            clock(departs_minute)
+        ),
+        WatchNote::StillOut => format!(
+            "[Watch] {name}'s watch is still out on the road. Send them back to the sergeant; you \
+             pay when the watch is home and the gear is back on the rack."
+        ),
+        WatchNote::GearOut => format!(
+            "[Watch] {name}'s watch is home but the lent gear is not back on the rack. Send them \
+             to the rack by the door first; you pay after."
+        ),
+        WatchNote::RollUnavailable => {
+            format!("[Watch] Your roll could not be opened; {name} was not hired.")
+        }
+        WatchNote::Resting => format!(
+            "[Watch] {name} was paid for a watch only hours ago. Not hired; tell them to rest and \
+             come back later."
+        ),
+        WatchNote::Taken { other } => format!(
+            "[Watch] {other}, of the same household as {name}, is already on your roll. Not hired."
+        ),
+        WatchNote::Full => format!(
+            "[Watch] Each watch takes one recruit and both places are filled. {name} was not \
+             hired; tell them the places are taken and to ask another day."
+        ),
+        WatchNote::Offered { sergeant } => format!(
+            "[Watch] You have put the terms of Sergeant {sergeant}'s watch to {name} and they are \
+             reading them. Say one short line; the roll tells you if they accept."
+        ),
+        WatchNote::Hired {
+            sergeant,
+            departs_minute,
+        } => format!(
+            "[Watch] {name} accepted and is on your roll for Sergeant {sergeant}'s watch, \
+             marching at {}. Tell them to draw their gear from the rack by the door and to be \
+             here beside the sergeant when the watch reports to you.",
+            clock(departs_minute)
+        ),
+        WatchNote::Reporting { sergeant } => format!(
+            "[Watch] Sergeant {sergeant}'s watch is reporting to you before it marches, and \
+             {name} is today's recruit on your roll for it. Present {name} to the watch aloud in \
+             one short line as today's recruit, in the language {name} speaks."
+        ),
+        WatchNote::Quit => format!(
+            "[Watch] {name} has given up their watch and handed the gear in. They are off your \
+             roll with no pay, and the place is open again. If they are in sight, say so in one \
+             line."
+        ),
+        WatchNote::NoShow => format!(
+            "[Watch] {name} answered no roll call of their watch. No pay; struck from your roll. \
+             If they are in sight, say so in one line."
+        ),
+        WatchNote::Paid {
+            wage,
+            answered,
+            calls,
+            gear_back,
+        } => {
+            let amount = crate::shop_info::format_price(*wage);
+            if !gear_back {
+                format!(
+                    "[Watch] {name} put gear back on the rack but not all you lent. The roll paid \
+                     them only {amount}. If they are in sight, say so in one line."
+                )
+            } else if answered == calls {
+                format!(
+                    "[Watch] {name} answered every roll call and put the gear back on the rack. \
+                     The roll paid them {amount}. If they are in sight, commend them in one line."
+                )
+            } else {
+                format!(
+                    "[Watch] {name} answered {answered} of {calls} roll calls and put the gear \
+                     back on the rack. The roll paid them {amount}: their share for the calls \
+                     answered, halved for missing any. If they are in sight, say so in one line."
+                )
+            }
+        }
+        WatchNote::TakenOn { sergeant } => format!(
+            "[Recruit] Captain Karl has taken on {name} as a day recruit for Sergeant \
+             {sergeant}'s next watch. If that is your watch, treat them as one of yours and keep \
+             them beside the sergeant."
+        ),
+    }
+}
+
 pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
     if state.dialogue_ignores_event(msg) {
         return None;
@@ -749,6 +860,25 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             if *accepted { "GRANTED" } else { "REJECTED" }
         )),
         ServerMessage::MergerRiteCue { cue } => Some(format!("[Rite] {cue}")),
+        ServerMessage::WatchOffered {
+            sergeant,
+            departs_minute,
+            wage,
+            ..
+        } => Some(format!(
+            "[Watch] Captain Karl's terms: Sergeant {sergeant}'s watch marches at {:02}:{:02}. The \
+             sergeant calls the roll when it leaves, at every stop and when it is home, and you \
+             must be within {:.0} paces of him each time. The wage is {} for every call answered; \
+             miss any and you get half your share of the calls answered. You draw a spear and \
+             a tabard from the rack by the watch house door, wear the tabard on watch, and \
+             return both there to be paid. Send \
+             watch_accept to take the work, or nothing to decline.",
+            departs_minute / 60,
+            departs_minute % 60,
+            onlinerpg_shared::messages::WATCH_ROLL_CALL_M,
+            crate::shop_info::format_price(*wage),
+        )),
+        ServerMessage::WatchVerdict { recruit, note } => Some(watch_verdict(recruit, note)),
         ServerMessage::OutfitStatus { note, .. } => note.as_ref().map(|n| format!("[Outfit] {n}")),
         ServerMessage::FurnitureSelectionNotice {
             player_id,

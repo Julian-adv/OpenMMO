@@ -11,6 +11,7 @@
   } from '../stores/partyStore'
   import { gameStore } from '../stores/gameStore'
   import { npcContextMenu, type NpcMenuEntry } from '../stores/npcMenuStore'
+  import { followTarget, toggleFollow } from '../stores/followStore'
   import { networkManager } from '../network/socket'
   import { draggablePanel } from '../actions/draggablePanel'
   import { t, translate } from '../i18n'
@@ -78,7 +79,15 @@
         label: translate('party.leave'),
         action: () => networkManager.sendPartyLeave(),
       })
-    } else if (isLeader) {
+    }
+    if (member.id !== selfId) {
+      const following = $followTarget?.id === member.id
+      entries.push({
+        label: translate(following ? 'follow.stop' : 'follow.start'),
+        action: () => toggleFollow(member.id, member.name),
+      })
+    }
+    if (member.id !== selfId && isLeader) {
       entries.push(
         {
           label: translate('party.promote'),

@@ -83,7 +83,11 @@ const STAIR_CLICK_RAY_OFFSETS = [
 ]
 
 /** Catalog objects whose click opens a dialog; set as `userData.objectClickKind`. */
-export type ObjectClickKind = 'altar' | 'notice_board' | 'mailbox'
+export type ObjectClickKind =
+  | 'altar'
+  | 'notice_board'
+  | 'mailbox'
+  | 'watch_rack'
 
 export type ClickIntent =
   | {
@@ -134,6 +138,12 @@ export type ClickIntent =
     }
   | {
       type: 'mailbox'
+      objectId: number
+      position: Position
+    }
+  | {
+      /** The watch house rack a day recruit draws lent gear from. */
+      type: 'watch_rack'
       objectId: number
       position: Position
     }

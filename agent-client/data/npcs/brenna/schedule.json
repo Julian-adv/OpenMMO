@@ -1,7 +1,7 @@
 {
   "schedule": [
     {
-      "at": "18:05-05:15",
+      "at": "22:10-05:10",
       "pos": [-1456.96, 1.25, 4733.99],
       "rotation": 0.0,
       "floor_level": 0,
@@ -10,7 +10,7 @@
       "object_id": 132
     },
     {
-      "at": "05:15-05:45",
+      "at": "05:10-05:40",
       "pos": [-1452.5, 1.3, 4752.0],
       "rotation": 90.0,
       "floor_level": 0,
@@ -18,7 +18,7 @@
       "action": "chair"
     },
     {
-      "at": "05:45-06:05",
+      "at": "05:40-06:00",
       "pos": [-1459.4, 1.2, 4742.0],
       "rotation": 180.0,
       "floor_level": 0,
@@ -26,7 +26,7 @@
       "cue": "You stand before Captain Karl at his post, about to take the day watch out on the north road with Garrick. If he is in sight, report it to him aloud in one short line, the way a soldier reports to an officer, and call him Captain. If he is not there, say nothing."
     },
     {
-      "at": "06:05-17:00",
+      "at": "06:00-18:00",
       "pos": [-1467.4, 1.0, 4700.6],
       "rotation": 0.0,
       "floor_level": 0,
@@ -95,24 +95,45 @@
       "patrol": {
         "partner": "Garrick",
         "sweeps": false,
-        "lap_minutes": 120
-      }
+        "lap_minutes": 120,
+        "stand_down": [-1459.4, 1.2, 4743.6]
+      },
+      "cue": "You are taking the road over from the night watch, Osric and Halda, who are coming in as you go out. If they are in sight, greet them aloud in one short line of barracks talk, soldier to soldier. If not, say nothing."
     },
     {
-      "at": "17:00-17:45",
+      "at": "18:00-18:45",
       "pos": [-1452.5, 1.3, 4752.0],
       "rotation": 90.0,
       "floor_level": 0,
       "label": "eating dinner at the inn after the patrol",
+      "action": "chair",
+      "cue": "Your watch is over and the night watch, Osric and Halda, has taken the road from you. If they are in sight, greet them aloud and hand the road over in one short line of barracks talk. If not, say nothing."
+    },
+    {
+      "at": "18:45-20:30",
+      "pos": [-1452.5, 1.3, 4752.0],
+      "rotation": 90.0,
+      "floor_level": 0,
+      "label": "off duty, drinking at the inn",
       "action": "chair"
     },
     {
-      "at": "17:45-18:05",
-      "pos": [-1458.2, 1.3, 4737.6],
-      "rotation": 90.0,
+      "at": "20:30-22:10",
+      "pos": [-1458.0, 1.3, 4746.5],
+      "rotation": 180.0,
       "floor_level": 0,
-      "label": "waking Halda for the night watch",
-      "cue": "Your day watch is over and you stand at Halda's bunk in the guard station. Halda takes the night watch. If Halda is in the bunk, wake Halda aloud in one short line of rough barracks talk: time to get up, the watch is changing. If Halda is not there, say nothing."
+      "label": "off duty, roaming the town",
+      "waypoints": [
+        [-1463.5, 1.3, 4746.0],
+        [-1458.0, 1.3, 4746.5],
+        [-1464.0, 1.3, 4749.5],
+        [-1456.5, 1.3, 4749.0],
+        [-1497.6, 0.6, 4740.9],
+        [-1512.0, 0.6, 4742.0],
+        [-1524.6, 0.6, 4740.2],
+        [-1530.1, 0.7, 4764.7]
+      ],
+      "roam": true
     }
   ]
 }

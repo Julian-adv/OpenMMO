@@ -99,6 +99,114 @@ impl LocalizedMessage {
     }
 }
 
+/// How close to the sergeant a recruit stands to answer a roll call.
+pub const WATCH_ROLL_CALL_M: f32 = 20.0;
+/// How long the sergeant waits for a recruit he calls back.
+pub const WATCH_CALL_BACK_WAIT_SECS: u64 = 10;
+
+/// Which roll call of a watch this is.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PatrolMuster {
+    /// The watch leaves on its first lap.
+    Out,
+    /// A stop on a lap.
+    Stop,
+    /// The watch is home from its last lap.
+    Home,
+    /// Asked again after waiting for the recruits called back at the last one.
+    Recheck,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WatchTool {
+    /// Strike what blocks the road down, as the patrol does.
+    Spear,
+    Shovel,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WatchStage {
+    /// Hired; the watch has not left with them yet.
+    Waiting,
+    OnWatch,
+    /// The watch is home; the captain is owed a report.
+    Done,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WatchGear {
+    /// Nothing drawn, or all of it back on the rack.
+    Unissued,
+    Issued,
+}
+
+/// What the watch roll reports about a recruit, for the guard NPC to speak from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum WatchNote {
+    /// The visitor the captain named is gone.
+    VisitorGone,
+    /// The visitor is not standing with the captain.
+    NotStanding,
+    /// On the roll already, the watch not marched yet.
+    Waiting {
+        sergeant: String,
+        departs_minute: u32,
+        geared: bool,
+    },
+    StillOut,
+    /// Home, with lent gear not back on the rack.
+    GearOut,
+    RollUnavailable,
+    /// Paid for a watch too recently.
+    Resting,
+    /// Another character of the account is on the roll.
+    Taken {
+        other: String,
+    },
+    Full,
+    /// The terms were put to the recruit, who has yet to answer.
+    Offered {
+        sergeant: String,
+    },
+    Hired {
+        sergeant: String,
+        departs_minute: u32,
+    },
+    /// The watch reports before marching: present the recruit.
+    Reporting {
+        sergeant: String,
+    },
+    Quit,
+    NoShow,
+    Paid {
+        wage: i64,
+        answered: u32,
+        calls: u32,
+        gear_back: bool,
+    },
+    /// To the patrol guards: who walks with the sergeant's next watch.
+    TakenOn {
+        sergeant: String,
+    },
+}
+
+/// A day recruit's standing, for the duty chip.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WatchDuty {
+    pub stage: WatchStage,
+    pub gear: WatchGear,
+    /// Roll calls of the watch so far, and those answered.
+    pub calls: u32,
+    pub answered: u32,
+    /// Whether a snow shovel was lent with the spear.
+    pub shovel: bool,
+}
+
 /// Which side of a merchant trade a haggled deal applies to.
 /// `Buy` = the player buys from the merchant, `Sell` = the player sells to
 /// the merchant.
@@ -1209,6 +1317,53 @@ pub enum ClientMessage {
     OfferImpound {
         target_player_id: PlayerId,
     },
+    /// Watch sergeant only: the roll of day recruits is called beside the
+    /// sergeant. `patrol_id` is the lap's, as in `PatrolSweep`.
+    PatrolRollCall {
+        muster: PatrolMuster,
+        patrol_id: i64,
+    },
+    /// A day recruit on watch works the lent spear or shovel on the road here.
+    WatchToolUse {
+        tool: WatchTool,
+    },
+    /// NPC-only: the guard captain hires a nearby player for a watch, or
+    /// settles the watch they walked (doc/ROAD_PATROL.md).
+    OfferWatchShift {
+        target_player_id: PlayerId,
+    },
+    /// A player asking the guard captain the same thing without his say.
+    WatchShiftVisit {
+        npc_player_id: PlayerId,
+    },
+    /// Yes to the captain's `WatchOffered` terms for `sergeant`'s watch.
+    WatchShiftAccept {
+        npc_player_id: PlayerId,
+        sergeant: String,
+    },
+    /// A day recruit draws all the lent gear from the watch house rack, or
+    /// puts it all back (agents; the web client moves pieces one at a time).
+    WatchRackUse {
+        object_id: u32,
+    },
+    /// Look at the rack; answered with `WatchRackState`.
+    WatchRackOpen {
+        object_id: u32,
+    },
+    /// Take one piece of lent gear off the rack, wearing it with `equip`, or
+    /// put one back.
+    WatchRackMove {
+        object_id: u32,
+        item_def_id: String,
+        take: bool,
+        equip: bool,
+    },
+    /// Give up a watch that is not home yet: off the roll, gear handed in, no pay.
+    WatchShiftQuit,
+    /// Settle a finished watch with lent gear that cannot be put back.
+    WatchRackSettle {
+        object_id: u32,
+    },
 }
 
 impl ClientMessage {
@@ -1981,6 +2136,16 @@ pub enum ServerMessage {
     PlayerSwung {
         player_id: PlayerId,
     },
+    /// Answer to `PatrolRollCall`: recruits out of reach whom the sergeant
+    /// calls back and waits for before asking again with `Recheck`, those back
+    /// within the wait, and those back only after losing roll calls.
+    PatrolRollCalled {
+        missing: Vec<String>,
+        #[serde(default)]
+        rejoined: Vec<String>,
+        #[serde(default)]
+        late: Vec<String>,
+    },
     /// Answer to `PatrolShovel`: whether there was snow here to clear.
     PatrolShovelled {
         cleared: bool,
@@ -2347,6 +2512,31 @@ pub enum ServerMessage {
     /// Direct to a player: the guard captain opens the reclaim window.
     ImpoundOffered {
         npc_player_id: PlayerId,
+    },
+    /// Direct to a player: the captain's terms for a watch, to accept with
+    /// `WatchShiftAccept`. `departs_minute` is the minute of the day it marches.
+    WatchOffered {
+        npc_player_id: PlayerId,
+        sergeant: String,
+        departs_minute: u32,
+        wage: i64,
+    },
+    /// Direct to a guard NPC: what the watch roll came to for `recruit`.
+    WatchVerdict {
+        recruit: String,
+        note: WatchNote,
+    },
+    /// Direct to a day recruit at the rack: what hangs there for them, what
+    /// they still owe it, and whether pieces may go back now.
+    WatchRackState {
+        object_id: u32,
+        on_rack: Vec<String>,
+        owed: Vec<String>,
+        returnable: bool,
+    },
+    /// Direct to a player: their standing as a day recruit, `None` once off the roll.
+    WatchDuty {
+        duty: Option<WatchDuty>,
     },
     /// Answer to `InspectFamilyEmblem`.
     FamilyEmblemShown {
@@ -2870,6 +3060,7 @@ impl ServerMessage {
             | Self::PatrolSweepResult { .. }
             | Self::PatrolScouted { .. }
             | Self::PatrolShovelled { .. }
+            | Self::PatrolRollCalled { .. }
             | Self::PatrolBrokeOut { .. }
             | Self::ImpoundState { .. }
             | Self::AppearanceChangeResult { .. }
@@ -2916,6 +3107,10 @@ impl ServerMessage {
             | Self::MergerRiteCue { .. }
             | Self::MergerPledgeOffered
             | Self::ImpoundOffered { .. }
+            | Self::WatchOffered { .. }
+            | Self::WatchVerdict { .. }
+            | Self::WatchRackState { .. }
+            | Self::WatchDuty { .. }
             | Self::FamilyEmblemShown { .. }
             | Self::TradeDeclined { .. }
             | Self::OutfitOffered { .. }

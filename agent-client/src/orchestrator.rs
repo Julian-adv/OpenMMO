@@ -173,6 +173,7 @@ impl NpcConfig {
             bard: self.plays_music(),
             guard_captain: self.id.as_deref() == Some(onlinerpg_shared::schedule::GUARD_CAPTAIN),
             outfitter: name.is_some_and(crate::shop_info::has_outfit),
+            adventurer: self.id.is_none(),
         }
     }
 

@@ -32,6 +32,7 @@
     isOverAnyDialog,
     FALLBACK_ICON,
   } from '../stores/dragStore'
+  import { putOnWatchRack, returnToWatchRack } from '../utils/watchRackDrop'
   import { itemTooltip } from '../actions/itemTooltip'
   import { draggablePanel } from '../actions/draggablePanel'
   import CharacterStatusPane from './CharacterStatusPane.svelte'
@@ -185,6 +186,7 @@
           networkManager.sendUnequipItem(slot)
           return
         }
+        if (returnToWatchRack(item.item_def_id, x, y)) return
         if (!item.locked && !isOverAnyDialog(x, y)) {
           networkManager.sendDropItems([
             { instance_id: item.instance_id, qty: 1 },
@@ -371,7 +373,8 @@
                   : null}
                 ondblclick={() => {
                   if (ammo) networkManager.sendSelectAmmo(null)
-                  else if (item) unequip(stored)
+                  else if (item && !putOnWatchRack(item.item_def_id))
+                    unequip(stored)
                 }}
                 onpointerdown={(e: PointerEvent) => {
                   if (item && !ammo) onEquipPointerDown(e, stored, item)
