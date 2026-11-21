@@ -887,6 +887,10 @@ class NetworkManager {
     this.sendMessage({ DeleteBookmark: { id } })
   }
 
+  sendAskBlessing(npcPlayerId: number) {
+    this.sendMessage({ AskBlessing: { npc_player_id: npcPlayerId } })
+  }
+
   sendBlessScrolls(npcPlayerId: number, quantity: number) {
     this.sendMessage({
       BlessScrolls: { npc_player_id: npcPlayerId, quantity },

@@ -881,6 +881,10 @@ pub enum ClientMessage {
         instance_id: u64,
         bookmark_id: i64,
     },
+    /// Ask the blesser for the blessing window; off duty she declines aloud.
+    AskBlessing {
+        npc_player_id: PlayerId,
+    },
     /// Pay the blesser to turn plain teleport scrolls into blessed ones.
     BlessScrolls {
         npc_player_id: PlayerId,
@@ -1448,6 +1452,7 @@ impl ClientMessage {
             | UseItem { .. }
             | SaveBookmark { .. }
             | TeleportToBookmark { .. }
+            | AskBlessing { .. }
             | BlessScrolls { .. }
             | UseLandDocument { .. }
             | EditFence { .. }

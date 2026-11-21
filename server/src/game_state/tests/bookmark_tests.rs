@@ -188,6 +188,10 @@ async fn the_blesser_trades_plain_scrolls_and_gold_for_blessed_scrolls() {
     )));
     game.offer_blessing(&id, &id).await;
     assert!(drain(&mut rx).is_empty());
+    game.ask_blessing(&id, &pid("Maelis")).await;
+    assert!(drain(&mut rx)
+        .into_iter()
+        .any(|message| matches!(message, ServerMessage::BlessingOffered { .. })));
 
     game.set_npc_schedule(
         "Maelis",
@@ -201,6 +205,12 @@ async fn the_blesser_trades_plain_scrolls_and_gold_for_blessed_scrolls() {
     assert_eq!(result(&mut rx), (0, Some(BlessError::OffDuty)));
     game.offer_blessing(&pid("Maelis"), &id).await;
     assert!(drain(&mut rx).is_empty());
+    let mut maelis_rx = game.register_direct_channel(&pid("Maelis")).await;
+    game.ask_blessing(&id, &pid("Maelis")).await;
+    assert!(drain(&mut rx).is_empty());
+    assert!(drain(&mut maelis_rx).into_iter().any(
+        |message| matches!(message, ServerMessage::MergerRiteCue { cue } if cue.contains("Marker"))
+    ));
 }
 
 #[tokio::test]

@@ -29,7 +29,7 @@
 - **축복받은 순간이동 주문서**(`blessed_scroll_of_teleportation`): 아이템 효과 `teleportcontrol`을 가진 순간이동 주문서다. 그냥 읽으면 일반 주문서처럼 무작위로 간다. `TeleportToBookmark`로 읽으면 북마크로 가고 거리 제한이 없다.
 - **목적지 선택 조건**: 읽는 주문서나 착용한 장비에 `teleportcontrol`이 있어야 하고, 전투 중(`OUT_OF_COMBAT_MS`)이 아니어야 한다. 거절되면 주문서는 남고 무작위로 대신 가지 않는다. 사유는 `BookmarkRefused`로 온다.
 - **축복**: 성당의 마엘리스가 설교대에 서 있을 때(활성 일정에 `action`이 없을 때) 곁에서 `BlessScrolls`를 보내면 잠기지 않은 일반 주문서를 장당 5,000c에 축복 주문서로 바꾼다. 골드와 가방을 한 트랜잭션으로 저장하고 `blessing` 골드 싱크로 기록한다. 마엘리스는 말로 부탁받으면 `OfferBlessing`(에이전트 행동 `offer_blessing`)으로 상대 화면에 축복 창을 연다.
-- **웹 클라이언트**: 북마크 창은 세계 지도의 북마크 버튼이나 `/bookmark`로 연다. 북마크가 하나라도 있을 때 목적지를 고를 수 있는 주문서를 읽으면 목적지 목록이 먼저 뜬다. 마엘리스가 서 있을 때 오른쪽 클릭하면 축복 메뉴가 나온다.
+- **웹 클라이언트**: 북마크 창은 세계 지도의 북마크 버튼이나 `/bookmark`로 연다. 북마크가 하나라도 있을 때 목적지를 고를 수 있는 주문서를 읽으면 목적지 목록이 먼저 뜬다. 마엘리스를 오른쪽 클릭해 축복 메뉴를 고르면 `AskBlessing`을 보낸다. 설교대에 있으면 창이 열리고, 아니면 마엘리스가 말로 거절한다.
 
 프로토콜 171에서 `SaveBookmark`·`RenameBookmark`·`DeleteBookmark`·`TeleportToBookmark`·`BlessScrolls`·`OfferBlessing`과 `Bookmarks`·`BookmarkRefused`·`BlessResult`·`BlessingOffered`를 추가했다.
 

@@ -5,7 +5,7 @@
   import { translate } from '../i18n'
   import { onDestroy, onMount } from 'svelte'
   import { GUARD_CAPTAIN, openImpound } from '../stores/impoundStore'
-  import { BLESSER, openBlessing } from '../stores/bookmarkStore'
+  import { BLESSER } from '../stores/bookmarkStore'
   import {
     followTarget,
     stopFollowing,
@@ -2187,17 +2187,13 @@
               ),
           })
         }
-        // Seated or abed she is off duty; the server refuses then too.
-        if (
-          npc.name === BLESSER &&
-          remotePlayerManager.players.get(intent.playerId)?.state !== 'interact'
-        ) {
+        if (npc.name === BLESSER) {
           entries.push({
             label: translate('bless.menu'),
             action: () =>
               approachAndAct(
                 { position: intent.position, ...NPC_TRADE_APPROACH },
-                () => openBlessing(intent.playerId)
+                () => networkManager.sendAskBlessing(intent.playerId)
               ),
           })
         }

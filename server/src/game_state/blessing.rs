@@ -30,6 +30,44 @@ impl GameState {
         .await;
     }
 
+    /// A visitor asks through the menu. At her post the window opens; off
+    /// duty she is cued to decline aloud, as she would a spoken request.
+    pub async fn ask_blessing(&self, player_id: &PlayerId, npc_player_id: &PlayerId) {
+        match self.blesser_reach(player_id, npc_player_id).await {
+            Ok(()) => {
+                self.send_direct_message(
+                    player_id,
+                    ServerMessage::BlessingOffered {
+                        npc_player_id: *npc_player_id,
+                    },
+                )
+                .await
+            }
+            Err(BlessError::OffDuty) => {
+                let Some((.., name)) = self.player_pose(player_id).await else {
+                    return;
+                };
+                self.rite_cue(
+                    npc_player_id,
+                    format!(
+                        "{name} asked you to bless a scroll, but you bless scrolls only at the chapel lectern by day. Tell them so kindly in one short line."
+                    ),
+                )
+                .await
+            }
+            Err(error) => {
+                self.send_direct_message(
+                    player_id,
+                    ServerMessage::BlessResult {
+                        blessed: 0,
+                        error: Some(error),
+                    },
+                )
+                .await
+            }
+        }
+    }
+
     /// The blesser answers a visitor who asked for a blessing in words: the
     /// blessing window opens on their screen. A refusal goes back to her as a cue.
     pub async fn offer_blessing(&self, blesser_id: &PlayerId, target_id: &PlayerId) {

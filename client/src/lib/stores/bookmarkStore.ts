@@ -80,10 +80,18 @@ export function openBlessing(npcPlayerId: number) {
   blessSession.set({ npcPlayerId, pending: false, error: null, blessed: null })
 }
 
+/** A refusal with no window open (asking through the menu) goes to chat. */
 export function applyBlessResult(data: {
   blessed: number
   error?: BlessError | null
 }) {
+  if (!get(blessSession) && data.error) {
+    addChatMessage({
+      text: translate(`bless.error.${data.error}`),
+      sender: 'system',
+    })
+    return
+  }
   blessSession.update(
     (session) =>
       session && {

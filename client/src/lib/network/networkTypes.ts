@@ -361,6 +361,7 @@ export type ClientMessage =
   | { RenameBookmark: { id: number; name: string } }
   | { DeleteBookmark: { id: number } }
   | { TeleportToBookmark: { instance_id: number; bookmark_id: number } }
+  | { AskBlessing: { npc_player_id: number } }
   | { BlessScrolls: { npc_player_id: number; quantity: number } }
   | {
       PlaceHouse: {
