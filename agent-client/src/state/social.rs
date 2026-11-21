@@ -39,18 +39,19 @@ impl PushedTrade {
 impl SharedState {
     /// Returns true if any non-NPC (human) player is in `nearby_players`.
     pub fn has_nearby_human_players(&self) -> bool {
-        self.nearby_human_players().next().is_some()
+        self.players_on_my_floor().any(|(id, p)| {
+            self.self_player_id.as_ref() != Some(id) && !p.is_official_npc && self.shares_space(p)
+        })
     }
 
-    /// Human players on our floor, within sight, excluding ourselves.
+    /// Human players in our space, within sight, excluding ourselves.
     fn nearby_human_players(&self) -> impl Iterator<Item = (&PlayerId, &Player)> {
         let self_id = self.self_player_id.as_ref();
-        self.players_on_my_floor()
+        self.players_in_my_space()
             .filter(move |(id, p)| self_id != Some(*id) && !p.is_official_npc)
     }
 
-    /// Emit an agent event for any player on our floor that just entered
-    /// NEARBY_PLAYER_RADIUS for the first time.
+    /// Emit an agent event for any player that just came into view in our space.
     pub(super) fn check_nearby_player_proximity(&mut self) {
         let self_pos = match self.self_player.as_ref() {
             Some(p) => &p.position,
@@ -63,7 +64,9 @@ impl SharedState {
 
         let arrived: Vec<(PlayerId, String)> = self
             .players_on_my_floor()
-            .filter(|(pid, _)| *pid != self_id && !self.seen_nearby_players.contains(pid))
+            .filter(|(pid, p)| {
+                *pid != self_id && !self.seen_nearby_players.contains(pid) && self.shares_space(p)
+            })
             .map(|(pid, player)| {
                 let dist = crate::geom::PlanarDelta::between(&player.position, self_pos).dist;
                 {
@@ -112,6 +115,21 @@ impl SharedState {
         player_id.to_string()
     }
 
+    /// Arrivals and departures behind walls; judged before the state forgets who left.
+    pub(super) fn behind_walls(&self, msg: &ServerMessage) -> bool {
+        match msg {
+            ServerMessage::PlayerJoined { player } | ServerMessage::PlayerAppeared { player } => {
+                self.self_player_id != Some(player.id) && !self.shares_space(player)
+            }
+            ServerMessage::PlayerLeft { player_id }
+            | ServerMessage::PlayerDisappeared { player_id } => self
+                .nearby_players
+                .get(player_id)
+                .is_some_and(|p| !self.shares_space(p)),
+            _ => false,
+        }
+    }
+
     /// Speech stays within one house (or outdoors). Small talk reaches `SMALL_TALK_RADIUS`;
     /// a line naming us, or an untracked speaker, is always heard.
     pub(super) fn hears(&self, speaker: &PlayerId, message: &str) -> bool {
@@ -121,12 +139,7 @@ impl SharedState {
         let (Some(me), Some(other)) = (&self.self_player, self.nearby_players.get(speaker)) else {
             return true;
         };
-        let same_space = {
-            let world = self.world_cache.read().unwrap();
-            world.house_at(me.position.x, me.position.z, self.self_floor_level)
-                == world.house_at(other.position.x, other.position.z, other.floor_level)
-        };
-        same_space
+        self.shares_space(other)
             && (me.position.dist_xz_sq(&other.position) <= SMALL_TALK_RADIUS.powi(2)
                 || crate::shop_info::chat_mentions(&me.name, message))
     }

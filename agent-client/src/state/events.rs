@@ -551,6 +551,8 @@ impl SharedState {
             }
         }
 
+        let behind_walls = self.behind_walls(&msg);
+
         // Update tracked state from certain messages
         let mut slipped: Option<String> = None;
         match &msg {
@@ -1666,6 +1668,9 @@ impl SharedState {
             if !self.hears(player_id, message) {
                 return EventUrgency::Noise;
             }
+        }
+        if behind_walls {
+            return EventUrgency::Noise;
         }
 
         let urgency = self.classify_event(&msg);
