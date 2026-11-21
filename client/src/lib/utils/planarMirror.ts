@@ -9,6 +9,7 @@ import {
   vec3,
   vec4,
 } from 'three/tsl'
+import { renderKeepingLights } from './deferredShaderBuild'
 
 /** Mirrors farther than this from the viewer's character stay a plain plate. */
 const ACTIVE_RANGE = 9
@@ -223,7 +224,7 @@ export function renderMirrorReflection(
   renderer.setMRT(null)
   renderer.setRenderTarget(target)
   renderer.autoClear = true
-  renderer.render(scene, virtual)
+  renderKeepingLights(renderer, scene, virtual)
   renderer.setMRT(previousMRT)
   renderer.setRenderTarget(previousTarget)
   renderer.autoClear = previousAutoClear
