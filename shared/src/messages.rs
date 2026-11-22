@@ -287,6 +287,21 @@ impl std::fmt::Display for AttackRejectReason {
     }
 }
 
+/// Someone turned to stone, kept where a dungeon floor stands them
+/// (doc/STONE_GARDEN.md).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StatueView {
+    pub id: i64,
+    /// `None` for an excavator nobody remembers.
+    pub name: Option<String>,
+    /// Look, place and facing, as a player frozen there.
+    pub look: crate::Player,
+    /// Game date they turned to stone.
+    pub year: u32,
+    pub month: u8,
+    pub day: u8,
+}
+
 /// A haggled price modifier on one item, as included in `ShopState`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ActiveDeal {
@@ -1690,6 +1705,13 @@ pub enum ServerMessage {
         broken: Vec<u32>,
         opened: Vec<u32>,
     },
+    /// The statues standing on a dungeon floor, to a player entering it and
+    /// to everyone on it when one more is turned to stone.
+    DungeonStatues {
+        entrance_id: String,
+        depth: u8,
+        statues: Vec<StatueView>,
+    },
     /// Every dungeon entrance this character has discovered (world-map
     /// markers): full snapshot at join and after each new discovery. Only
     /// ids travel — both sides embed the entrance registry, so the client
@@ -1974,6 +1996,13 @@ pub enum ServerMessage {
         skill: crate::monster_ai::MonsterSkillId,
         victims: Vec<SkillVictim>,
         burn: bool,
+    },
+    /// A mirror shield turned a skill's strike back on its caster for `damage`.
+    MonsterSkillReflected {
+        monster_id: String,
+        skill: crate::monster_ai::MonsterSkillId,
+        player_id: PlayerId,
+        damage: u32,
     },
     /// A plain swing at a distant target: the ground where it stood erupts
     /// after `impact_ms`, striking whoever is still within `radius`.
@@ -2994,6 +3023,7 @@ impl ServerMessage {
             | Self::DungeonCartPushed { .. }
             | Self::DungeonPropOpened { .. }
             | Self::DungeonPropsState { .. }
+            | Self::DungeonStatues { .. }
             | Self::GameState { .. }
             | Self::MonsterSpawned { .. }
             | Self::MonsterMoved { .. }
@@ -3062,6 +3092,7 @@ impl ServerMessage {
             | Self::MergerCelebrated { .. }
             | Self::MonsterSkillStarted { .. }
             | Self::MonsterSkillStruck { .. }
+            | Self::MonsterSkillReflected { .. }
             | Self::MonsterGroundStrike { .. }
             | Self::MonsterAttackedPlayer { .. }
             | Self::PlayerInstrumentNotes { .. }

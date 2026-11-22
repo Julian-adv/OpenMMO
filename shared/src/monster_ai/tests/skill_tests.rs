@@ -504,3 +504,200 @@ fn other_monsters_never_swing_at_stone() {
     stone.petrified = true;
     assert_eq!(first_swing_ms(&mut brain, &[stone]), None);
 }
+
+fn medusa() -> MonsterBrain {
+    let mut brain = MonsterBrain::new(
+        "medusa_1".into(),
+        "medusa",
+        "brave".into(),
+        Position {
+            x: 0.0,
+            y: 0.0,
+            z: 0.0,
+        },
+        25_000,
+        25_000,
+        1.5,
+        4.6,
+        2.0,
+        32.0,
+        2000.0,
+    );
+    brain.staggers = false;
+    brain.target_player_id = Some(1.into());
+    brain.skill_cooldowns_ms.fill(f32::MAX);
+    brain
+}
+
+fn gazes(seen: &[(f32, MonsterSkillId, Vec<AiCommand>)]) -> Vec<f32> {
+    seen.iter()
+        .filter(|(_, skill, _)| *skill == MonsterSkillId::StoneGaze)
+        .map(|(at, ..)| *at)
+        .collect()
+}
+
+#[test]
+fn the_gaze_comes_every_two_to_four_minutes_at_anyone_in_sight() {
+    let mut brain = medusa();
+    // One in melee, three standing off to the east.
+    let party = [
+        raider(1, 0.0, 1.5),
+        raider(2, 15.0, 0.0),
+        raider(3, 18.0, 0.0),
+        raider(4, 21.0, 0.0),
+    ];
+    let mut rng = SmallRng::seed_from_u64(0);
+    let mut seen = Vec::new();
+    for tick in 1..=9000 {
+        let commands = brain.tick_with_behavior_tree(
+            100.0,
+            &party,
+            &[],
+            &attack_tree(),
+            &DirectPath,
+            &mut rng,
+        );
+        if let Some((MonsterSkillId::StoneGaze, rotation, _)) = cast_of(&commands) {
+            seen.push((tick as f32 * 100.0, rotation));
+        }
+    }
+    assert!(seen.len() >= 3, "three gazes in fifteen minutes: {seen:?}");
+    assert!((120_000.0..=240_100.0).contains(&seen[0].0), "{seen:?}");
+    for pair in seen.windows(2) {
+        let gap = pair[1].0 - pair[0].0;
+        assert!((120_000.0..=240_200.0).contains(&gap), "{seen:?}");
+    }
+    let east = std::f32::consts::FRAC_PI_2;
+    assert!(
+        seen.iter().any(|(_, r)| (r - east).abs() < 0.01)
+            && seen.iter().any(|(_, r)| r.abs() < 0.01),
+        "it turns to the ones standing off and to the one in melee: {seen:?}"
+    );
+}
+
+#[test]
+fn each_health_mark_brings_a_gaze_and_two_at_once_wait_out_the_gap() {
+    let mut brain = medusa();
+    let party = [raider(1, 0.0, 1.5)];
+    assert!(gazes(&casts_over(&mut brain, &party, 5000.0)).is_empty());
+
+    brain.health = 18_000;
+    let first = gazes(&casts_over(&mut brain, &party, 5000.0));
+    assert_eq!(first.len(), 1, "one gaze below 75%");
+
+    // A burst takes it past 50% and 25% inside the gap.
+    brain.health = 6000;
+    let after = gazes(&casts_over(&mut brain, &party, 100_000.0));
+    assert_eq!(after.len(), 2, "both owed gazes come: {after:?}");
+    assert!(after[0] >= 39_000.0, "the gap holds: {after:?}");
+    assert!(after[1] - after[0] >= 45_000.0, "{after:?}");
+}
+
+#[test]
+fn the_gaze_waits_for_someone_in_range_and_strikes_where_it_turned() {
+    let mut brain = medusa();
+    brain.health = 18_000;
+    let far = [raider(1, 0.0, 30.0)];
+    assert!(gazes(&casts_over(&mut brain, &far, 3000.0)).is_empty());
+
+    let near = [raider(1, -10.0, 0.0)];
+    let mut rng = SmallRng::seed_from_u64(3);
+    let mut tick = |brain: &mut MonsterBrain, players: &[NearbyPlayer]| {
+        brain.tick_with_behavior_tree(100.0, players, &[], &attack_tree(), &DirectPath, &mut rng)
+    };
+    let cast = tick(&mut brain, &near);
+    let (skill, rotation, _) = cast_of(&cast).expect("a gaze once in range");
+    assert_eq!(skill, MonsterSkillId::StoneGaze);
+    let west = -std::f32::consts::FRAC_PI_2;
+    assert!((rotation - west).abs() < 0.01);
+
+    // The picked one runs behind her; the gaze still lands to the west.
+    let behind = [raider(1, 10.0, 0.0)];
+    let mut landed = Vec::new();
+    for _ in 0..40 {
+        landed.extend(strikes(&tick(&mut brain, &behind)));
+    }
+    assert_eq!(landed.len(), 1);
+    assert!((landed[0].1 - west).abs() < 0.01);
+}
+
+#[test]
+fn the_gaze_keeps_its_clock_through_a_kill_and_waits_for_someone_in_sight() {
+    let mut brain = medusa();
+    let party = [raider(1, 0.0, 1.5), raider(2, 10.0, 0.0)];
+    casts_over(&mut brain, &party, 1000.0);
+    let clock = brain
+        .timed_left_ms
+        .expect("the clock starts with the fight");
+
+    // The one it was on dies; the other fights on.
+    let mut after = party.clone();
+    after[0].health = 0;
+    brain.target_player_id = None;
+    casts_over(&mut brain, &after, 1000.0);
+    let left = brain.timed_left_ms.expect("the clock runs on");
+    assert!((clock - left - 1000.0).abs() < 1.0, "{clock} -> {left}");
+
+    // Everyone behind rock: an owed gaze waits rather than land on stone.
+    brain.health = 18_000;
+    let mut rng = SmallRng::seed_from_u64(5);
+    let mut tick = |brain: &mut MonsterBrain, path: &dyn PathProvider| {
+        brain.tick_with_behavior_tree(100.0, &after, &[], &attack_tree(), path, &mut rng)
+    };
+    for _ in 0..30 {
+        assert!(cast_of(&tick(&mut brain, &walled_line())).is_none());
+    }
+    let seen = (0..3).find_map(|_| cast_of(&tick(&mut brain, &DirectPath)));
+    assert_eq!(
+        seen.map(|(skill, ..)| skill),
+        Some(MonsterSkillId::StoneGaze)
+    );
+
+    // The fight over, the next one starts a fresh clock.
+    after[1].health = 0;
+    casts_over(&mut brain, &after, 6000.0);
+    assert_eq!(brain.timed_left_ms, None);
+}
+
+#[test]
+fn a_brain_made_for_a_wounded_medusa_owes_no_gaze_for_marks_behind_her() {
+    let mut brain = medusa();
+    brain.health = 11_000;
+    let fresh = MonsterBrain::new(
+        "medusa_2".into(),
+        "medusa",
+        "brave".into(),
+        brain.position,
+        11_000,
+        25_000,
+        1.5,
+        4.6,
+        2.0,
+        32.0,
+        2000.0,
+    );
+    assert_eq!(fresh.timed_marks, 2);
+    assert_eq!(brain.timed_marks, 0);
+}
+
+#[test]
+fn the_tail_sweep_waits_for_someone_behind_and_strikes_there() {
+    let mut brain = medusa();
+    brain.skill_cooldowns_ms.fill(0.0);
+    // Facing the one in melee to the north; nobody behind.
+    let front = [raider(1, 0.0, 1.5)];
+    let seen = casts_over(&mut brain, &front, 6000.0);
+    assert!(seen
+        .iter()
+        .all(|(_, skill, _)| *skill != MonsterSkillId::TailSweep));
+
+    let flanked = [raider(1, 0.0, 1.5), raider(2, 0.5, -3.0)];
+    let seen = casts_over(&mut brain, &flanked, 6000.0);
+    let (_, _, commands) = seen
+        .iter()
+        .find(|(_, skill, _)| *skill == MonsterSkillId::TailSweep)
+        .expect("a sweep once someone stands behind");
+    let (_, rotation, _) = cast_of(commands).unwrap();
+    assert!(TAIL_SWEEP.fan_contains(&brain.position, rotation, &flanked[1].position));
+    assert!(!TAIL_SWEEP.fan_contains(&brain.position, rotation, &flanked[0].position));
+}

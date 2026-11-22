@@ -1485,6 +1485,7 @@ impl super::GameState {
             raw_fish,
             debuff,
             alcohol,
+            teaches,
         } = eat;
         let (nutrition, raw_fish, alcohol) = (*nutrition, *raw_fish, *alcohol);
         if self
@@ -1540,6 +1541,18 @@ impl super::GameState {
         }
         if let Some(units) = alcohol {
             self.apply_alcohol(player_id, units).await;
+        }
+        if let Some(skill) = teaches {
+            if self.learn_skill(player_id, *skill).await {
+                self.send_system_message(
+                    player_id,
+                    localized(
+                        "server.learnedTelepathy",
+                        "Your mind opens. With your eyes covered you still sense the living around you.",
+                    ),
+                )
+                .await;
+            }
         }
     }
 

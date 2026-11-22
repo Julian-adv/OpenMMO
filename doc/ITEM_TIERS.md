@@ -16,6 +16,7 @@
 | 5 | Sundered Bastion (25층, barkan) · [필드 레이드 연계 설계](TIER5_FIELD_RAID.md) | ring_of_protection + rune_blade + 대지의 아뮬렛 (가칭) | 던전 본체·rune_blade·아뮬렛 착용 효과 구현, 봉헌 미구현 |
 | 5 | Shadow Guild (25층, shadow_master) | ring_of_protection + shadowfang | 구현 완료, 단검·보스 모델 완료 |
 | 5 | Blackvein Mine (25층, mine_foreman) | ring_of_protection + foreman_pickaxe | 곡괭이 아이콘·모델은 광부의 곡괭이 재사용 |
+| 6 | Garden of Stone (25층, medusa) | ring_of_protection + ring_of_teleport_control | [설계](STONE_GARDEN.md). 반지 아이콘·모델은 균열의 반지 대역 |
 
 특수 망토(투명·보호 등)·셔츠·amulet_of_life_saving·ring_of_regeneration은 던전 풀에 넣지 않는다 — **월드 드랍 전용 희소템**으로 유저 간 거래의 축을 만든다 (아래 참조).
 
@@ -118,6 +119,7 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 | Sundered Bastion (T5) | (시그니처 없음) | ring_of_protection 20%, 전용 rune_blade 20%·earth_amulet 10% | ≈5.0회 (반지 기준) |
 | Shadow Guild (T5) | (시그니처 없음) | ring_of_protection 20%, 전용 shadowfang 20% | ≈5.0회 (반지 기준) |
 | Blackvein Mine (T5) | (시그니처 없음) | ring_of_protection 20%, 전용 foreman_pickaxe 20% | ≈5.0회 (반지 기준) |
+| Garden of Stone (T6) | (시그니처 없음) | ring_of_protection 20%, 전용 ring_of_teleport_control 5% | ≈20회 (제어 반지 기준) |
 
 확률 상수는 아이템 데이터에 `chestChance`로 명시하고, 완성 기대 횟수는 테스트로 고정(시뮬레이션 또는 닫힌식 검증).
 

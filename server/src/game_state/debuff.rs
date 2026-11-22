@@ -527,6 +527,28 @@ impl super::GameState {
         self.set_player_petrified(player_id, true).await;
     }
 
+    /// Killed by the gaze: the body stays standing as stone until it rises.
+    pub(super) async fn leave_stone_corpse(&self, player_id: &PlayerId) {
+        self.set_player_petrified(player_id, true).await;
+    }
+
+    /// A stone corpse turns back to flesh as it rises. Stone with no debuff
+    /// behind it is a corpse's, so a living player's is left alone.
+    pub(super) async fn clear_stone_corpse(&self, player_id: &PlayerId) {
+        if !self.is_petrified(player_id).await {
+            return;
+        }
+        let debuffed = self
+            .hunger
+            .read()
+            .await
+            .get(player_id)
+            .is_some_and(|data| data.petrified());
+        if !debuffed {
+            self.set_player_petrified(player_id, false).await;
+        }
+    }
+
     /// Mirror `petrifies` onto the broadcast `Player`; unlike `wet` the owner
     /// hears it too, since it gates their own input.
     async fn set_player_petrified(&self, player_id: &PlayerId, petrified: bool) {

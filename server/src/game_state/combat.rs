@@ -129,6 +129,11 @@ struct MonsterAttackSnapshot {
     shatter: Option<u32>,
 }
 
+enum GazeWard {
+    Unseen,
+    Mirror,
+}
+
 #[derive(Clone, Copy)]
 enum MonsterReach<'a> {
     Melee(f32),
@@ -247,7 +252,7 @@ pub(super) struct StruckMonster<'a> {
 
 /// The wielded main-hand weapon as combat reads it. Resolved once per request,
 /// under the one `inventories` read the range gate already needs.
-struct EquippedWeapon {
+pub(super) struct EquippedWeapon {
     dagger_instance: Option<u64>,
     /// Unarmed falls back to D&D 5e improvised 1d2.
     dice: String,
@@ -262,6 +267,10 @@ struct EquippedWeapon {
     attack_ability: crate::item_defs::Ability,
     /// What this weapon spends per shot, or `None` when firing is free.
     ammo_kind: Option<String>,
+    /// Wearing a blindfold (`ItemEffect::CoversEyes`).
+    pub(super) covers_eyes: bool,
+    /// Attack-roll change from worn gear (`ItemEffect::Hit`).
+    pub(super) hit_mod: i32,
 }
 
 /// The round a ranged shot spends: the bag stack it comes out of, and the
@@ -284,6 +293,8 @@ impl Default for EquippedWeapon {
             ranged: false,
             attack_ability: crate::item_defs::Ability::Str,
             ammo_kind: None,
+            covers_eyes: false,
+            hit_mod: 0,
         }
     }
 }
@@ -381,10 +392,18 @@ impl super::GameState {
 
     /// Combat breaks invisibility.
     pub(super) async fn mark_in_combat(&self, player_id: &PlayerId) {
+        self.mark_in_combat_facing(player_id, None).await;
+    }
+
+    /// A swing also turns its maker to `target`; a mirror shield reads this.
+    async fn mark_in_combat_facing(&self, player_id: &PlayerId, target: Option<&Position>) {
         let revealed = {
             let mut players = self.players.write().await;
             players.get_mut(player_id).is_some_and(|player| {
                 player.last_combat_at = Self::now_ms();
+                if let Some(bearing) = target.and_then(|at| player.position.bearing_xz_to(at)) {
+                    player.rotation = bearing;
+                }
                 self.reveal_locked(player)
             })
         };
@@ -552,6 +571,10 @@ impl super::GameState {
                     | ItemEffect::Invisibility
                     | ItemEffect::Sustenance
                     | ItemEffect::TeleportControl
+                    | ItemEffect::GazeReflect
+                    | ItemEffect::CoversEyes
+                    | ItemEffect::Hit(_)
+                    | ItemEffect::Telepathy
                     | ItemEffect::CriticalChance(_)
                     | ItemEffect::CarryCapacity(_)
                     | ItemEffect::MaxHpPerLevel(_) => {}
@@ -594,6 +617,18 @@ impl super::GameState {
             .min(100)
     }
 
+    /// The to-hit the place lends a monster standing there: a dungeon's own
+    /// curve where it sets one, else the shared depth and distance rule.
+    fn place_attack_bonus(&self, position: &Position, floor_level: i8) -> i32 {
+        (floor_level < 0)
+            .then(|| self.dungeon_defs.entrance_at(position.x, position.z))
+            .flatten()
+            .and_then(|entrance| entrance.place_attack_bonus(floor_level.unsigned_abs()))
+            .unwrap_or_else(|| {
+                combat::place_attack_bonus(floor_level, self.town_distance(position))
+            })
+    }
+
     pub async fn effective_guard(&self, player_id: &PlayerId) -> i32 {
         self.effective_stats(player_id).await.guard
     }
@@ -602,7 +637,21 @@ impl super::GameState {
         self.effective_stats(player_id).await.cha
     }
 
-    async fn equipped_weapon(&self, player_id: &PlayerId) -> EquippedWeapon {
+    pub(super) async fn equipped_weapon(&self, player_id: &PlayerId) -> EquippedWeapon {
+        let mut weapon = self.wielded_weapon(player_id).await;
+        if let Some(inv) = self.inventories.read().await.get(player_id) {
+            for effect in self.equipped_defs(inv).flat_map(|d| d.effects()) {
+                match effect {
+                    ItemEffect::CoversEyes => weapon.covers_eyes = true,
+                    ItemEffect::Hit(amount) => weapon.hit_mod += amount,
+                    _ => {}
+                }
+            }
+        }
+        weapon
+    }
+
+    async fn wielded_weapon(&self, player_id: &PlayerId) -> EquippedWeapon {
         let weapon = {
             let inventories = self.inventories.read().await;
             inventories
@@ -620,6 +669,7 @@ impl super::GameState {
                         ranged: def.ranged_ability().is_some(),
                         attack_ability: def.attack_ability(),
                         ammo_kind: def.ammo_kind.clone(),
+                        ..EquippedWeapon::default()
                     })
                 })
         };
@@ -735,7 +785,16 @@ impl super::GameState {
         // A weapon's `range` (items.csv) is its reach, shorter or longer than
         // melee; clients swing from inside it, so the slack only covers lag.
         let weapon = self.equipped_weapon(player_id).await;
-        let attack_range = weapon.range.unwrap_or(PLAYER_MELEE_REACH_METERS) + REACH_SLACK_METERS;
+        let mut attack_range = weapon.range.unwrap_or(PLAYER_MELEE_REACH_METERS);
+        // Eyes covered and no telepathy to see by: arm's reach only.
+        if weapon.covers_eyes
+            && !self
+                .has_skill(player_id, onlinerpg_shared::skills::SkillId::Telepathy)
+                .await
+        {
+            attack_range = attack_range.min(PLAYER_MELEE_REACH_METERS);
+        }
+        let attack_range = attack_range + REACH_SLACK_METERS;
         let def = self.monster_defs.get(&monster.monster_type);
         let body = def.and_then(|d| d.body);
         let radius = def.map_or(0.0, |d| d.body_radius);
@@ -1170,7 +1229,7 @@ impl super::GameState {
                 .unwrap_or(0)
         };
 
-        let hit_mod = self.hunger_hit_mod(player_id).await;
+        let hit_mod = self.hunger_hit_mod(player_id).await + weapon.hit_mod;
         let (guaranteed, raging) = {
             let abilities = self.abilities.read().await;
             (
@@ -1216,7 +1275,8 @@ impl super::GameState {
             result.roll, result.hit, result.damage
         );
 
-        self.mark_in_combat(player_id).await;
+        self.mark_in_combat_facing(player_id, Some(&monster_position))
+            .await;
 
         // Send attack result
         self.publish_nearby(
@@ -1240,6 +1300,14 @@ impl super::GameState {
         if !result.hit {
             self.brain_hit(&monster_id, player_id, false, 0).await;
             return false;
+        }
+        let stare = self
+            .monster_defs
+            .get(&monster_type)
+            .and_then(|d| d.stare_debuff.as_deref())
+            .filter(|_| !weapon.ranged);
+        if let Some(debuff) = stare.filter(|_| !weapon.covers_eyes) {
+            self.inflict_debuff(player_id, debuff, None).await;
         }
         let loot_delay = if dagger_strike.is_some() || charge {
             Duration::ZERO
@@ -1577,6 +1645,8 @@ impl super::GameState {
             .await
             .extend(grants.iter().map(|(id, ..)| *id));
         for id in &leveled {
+            // A level-up heals even the dead back to full.
+            self.clear_stone_corpse(id).await;
             self.refresh_player_mana(id).await;
             self.send_direct_message(id, self.effective_stats(id).await.into())
                 .await;
@@ -1978,9 +2048,96 @@ impl super::GameState {
             self.inflict_debuff(&hit.player_id, debuff_id, None).await;
         }
         if let (true, Some((position, floor))) = (hit.died(), hit.at) {
+            let gazed = matches!(reach, MonsterReach::Skill { skill, .. } if skill.gaze);
+            if gazed {
+                self.leave_stone_corpse(&hit.player_id).await;
+                self.keep_statue_of(&hit.player_id).await;
+            }
             self.announce_player_death(&hit.player_id, position, floor, &snapshot.monster_type)
                 .await;
         }
+    }
+
+    /// What a player's gear does to a gaze from `origin`: covered eyes never
+    /// meet it, and a mirror turned within 45° of it throws it back.
+    async fn gaze_ward(&self, player_id: &PlayerId, origin: &Position) -> Option<GazeWard> {
+        let (covered, mirror) = {
+            let inventories = self.inventories.read().await;
+            let inv = inventories.get(player_id)?;
+            let worn = |effect| {
+                self.equipped_defs(inv)
+                    .any(|d| d.effects().contains(&effect))
+            };
+            (worn(ItemEffect::CoversEyes), worn(ItemEffect::GazeReflect))
+        };
+        if covered {
+            return Some(GazeWard::Unseen);
+        }
+        if !mirror {
+            return None;
+        }
+        let players = self.players.read().await;
+        let player = players.get(player_id)?;
+        let bearing = player.position.bearing_xz_to(origin)?;
+        let off = onlinerpg_shared::mount_movement::angle_delta(player.rotation, bearing);
+        (off.abs() <= std::f32::consts::FRAC_PI_4).then_some(GazeWard::Mirror)
+    }
+
+    /// Boxed: the blow it lands can wake the monster's own strikes again.
+    fn reflect_gaze<'a>(
+        &'a self,
+        monster_id: &'a str,
+        player_id: &'a PlayerId,
+        skill: &'a onlinerpg_shared::monster_ai::MonsterSkill,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+        Box::pin(self.reflect_gaze_inner(monster_id, player_id, skill))
+    }
+
+    /// A third of the gaze's roll goes back to its caster. The mirror wounds
+    /// but never kills, so the kill stays a blow someone struck.
+    async fn reflect_gaze_inner(
+        &self,
+        monster_id: &str,
+        player_id: &PlayerId,
+        skill: &onlinerpg_shared::monster_ai::MonsterSkill,
+    ) {
+        let SkillDamage::Roll(dice) = skill.damage else {
+            return;
+        };
+        let Some(monster) = self.monsters.read().await.get(monster_id).cloned() else {
+            return;
+        };
+        let damage = (combat::roll_dice(dice) / 3).min(monster.health.saturating_sub(1));
+        let Some(name) = self
+            .players
+            .read()
+            .await
+            .get(player_id)
+            .map(|p| p.name.clone())
+        else {
+            return;
+        };
+        self.publish_nearby(
+            &monster.position,
+            monster.floor_level,
+            ServerMessage::MonsterSkillReflected {
+                monster_id: monster_id.to_string(),
+                skill: skill.id,
+                player_id: *player_id,
+                damage,
+            },
+            None,
+        )
+        .await;
+        let target = StruckMonster {
+            monster_id,
+            monster_type: &monster.monster_type,
+            position: monster.position,
+            floor_level: monster.floor_level,
+            level_override: monster.level_override,
+        };
+        self.strike_monster(player_id, &name, target, damage, Duration::ZERO, None)
+            .await;
     }
 
     /// Roll a monster's blow and apply it to the target's HP, or `None` when
@@ -2073,6 +2230,22 @@ impl super::GameState {
             );
             return None;
         }
+        if let MonsterReach::Skill { skill, .. } = reach {
+            if skill.gaze {
+                match self.gaze_ward(target_player_id, &monster_position).await {
+                    Some(GazeWard::Unseen) => {
+                        audit.reason = "gaze_unseen";
+                        return None;
+                    }
+                    Some(GazeWard::Mirror) => {
+                        audit.reason = "gaze_reflected";
+                        self.reflect_gaze(monster_id, target_player_id, skill).await;
+                        return None;
+                    }
+                    None => {}
+                }
+            }
+        }
         if shatters.is_some() {
             self.shatter_stone(target_player_id).await;
         }
@@ -2090,22 +2263,21 @@ impl super::GameState {
                 ignores_guard: false,
             },
         };
+        let sure_hit = |damage| combat::AttackResult {
+            hit: true,
+            roll: 0,
+            damage,
+            critical: false,
+        };
         let result = match damage {
-            SkillDamage::Fixed(damage) => combat::AttackResult {
-                hit: true,
-                roll: 0,
-                damage,
-                critical: false,
-            },
+            SkillDamage::Fixed(damage) => sure_hit(damage),
+            SkillDamage::Roll(dice) => sure_hit(combat::roll_dice(dice)),
             SkillDamage::Scaled {
                 multiplier,
                 ignores_guard,
             } => {
                 let target_guard = self.effective_guard(target_player_id).await;
-                let place_bonus = combat::place_attack_bonus(
-                    monster_floor_level,
-                    self.town_distance(&monster_position),
-                );
+                let place_bonus = self.place_attack_bonus(&monster_position, monster_floor_level);
                 let mut result = combat::roll_attack_with_accuracy(
                     attack_bonus + place_bonus,
                     target_guard,

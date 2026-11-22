@@ -35,6 +35,10 @@
     { "monsterType": "troll" },
     { "monsterType": "stone_golem" },
     { "monsterType": "lizardfolk" },
-    { "monsterType": "cyclop" }
+    { "monsterType": "cyclop" },
+    {
+      "monsterType": "floating_eye",
+      "haunt": { "x": -1836, "z": 6844, "radius": 200, "share": 0.4 }
+    }
   ]
 }

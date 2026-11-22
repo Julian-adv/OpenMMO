@@ -106,7 +106,9 @@ impl super::GameState {
             }
         }
         let town_distance = self.town_distance(&point);
-        let Some(monster_type) = self.pick_ambient_type(town_distance) else {
+        // A haunting type keeps its own level however far from town it drifts.
+        let haunting = Self::pick_haunting_type(&point);
+        let Some(monster_type) = haunting.or_else(|| self.pick_ambient_type(town_distance)) else {
             return;
         };
         let max_nearby = crate::world_config::world_config().max_nearby_monsters as usize;
@@ -146,10 +148,12 @@ impl super::GameState {
                 rotation,
                 0,
                 MonsterLifecycle::Ambient,
-                Some(self.level_at_depth(
-                    monster_type,
-                    crate::game::combat::surface_equivalent_depth(town_distance),
-                )),
+                haunting.is_none().then(|| {
+                    self.level_at_depth(
+                        monster_type,
+                        crate::game::combat::surface_equivalent_depth(town_distance),
+                    )
+                }),
                 false,
             )
             .await
@@ -190,6 +194,25 @@ impl super::GameState {
         }
     }
 
+    /// A type that haunts `point`, as often as its share says.
+    fn pick_haunting_type(point: &Position) -> Option<&'static str> {
+        let mut rng = rand::thread_rng();
+        crate::world_config::world_config()
+            .ambient_spawns
+            .iter()
+            .find_map(|rule| {
+                let haunt = rule.haunt.as_ref()?;
+                let centre = Position {
+                    x: haunt.x,
+                    z: haunt.z,
+                    ..*point
+                };
+                (centre.dist_xz_sq(point) <= haunt.radius * haunt.radius
+                    && rng.gen_bool(haunt.share))
+                .then_some(rule.monster_type.as_str())
+            })
+    }
+
     /// Uniform over the ambient types allowed this far from town. What you
     /// meet still follows where you stand, as it did before.
     pub(super) fn pick_ambient_type(&self, town_distance: f32) -> Option<&'static str> {
@@ -197,6 +220,7 @@ impl super::GameState {
             crate::world_config::world_config()
                 .ambient_spawns
                 .iter()
+                .filter(|rule| rule.haunt.is_none())
                 .map(|rule| rule.monster_type.as_str())
                 .filter(|ty| town_distance >= self.min_ambient_town_distance(ty)),
             &mut rand::thread_rng(),

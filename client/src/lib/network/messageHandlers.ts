@@ -255,7 +255,8 @@ import {
   editorGrassDataManager,
   editorSplatManager,
 } from '../stores/editorStore'
-import { discoveredDungeonIds } from '../stores/dungeonStore'
+import { discoveredDungeonIds, floorStatues } from '../stores/dungeonStore'
+import { formatCalendarDate } from '../data/gameCalendar'
 import { requestCameraReset } from '../stores/cameraStore'
 import { setServerGameTime } from '../stores/timeStore'
 import { setWeather } from '../stores/weatherStore'
@@ -316,6 +317,7 @@ import type {
   Position,
   ServerMonster,
   ServerPlayer,
+  ServerStatue,
   CharacterClass,
 } from './networkTypes'
 
@@ -1772,6 +1774,31 @@ export function handleServerMessage(
       handleMonsterSkillStruck(data.victims, data.burn)
       break
 
+    case 'MonsterSkillReflected': {
+      const state = get(gameStore)
+      const own = state.currentPlayer?.id === data.player_id
+      addCombatMessage({
+        text: translate('combat.skillReflected', { damage: data.damage }),
+        sender: own ? 'local' : 'remote',
+        name: own
+          ? translate('chat.you')
+          : state.otherPlayers.get(data.player_id)?.name ||
+            translate('chat.unknown'),
+        hit: true,
+      })
+      monsterManager.handleMonsterAttacked(
+        data.monster_id,
+        data.player_id,
+        true,
+        data.damage,
+        null,
+        false,
+        false,
+        0
+      )
+      break
+    }
+
     case 'MonsterAttackedPlayer': {
       const gameState = get(gameStore)
       const isCurrentPlayer = gameState.currentPlayer?.id === data.player_id
@@ -2445,6 +2472,29 @@ export function handleServerMessage(
       })
       break
     }
+
+    case 'DungeonStatues':
+      floorStatues.set({
+        entranceId: data.entrance_id,
+        depth: data.depth,
+        statues: (data.statues as ServerStatue[]).map((statue) => ({
+          id: statue.id,
+          label: statue.name
+            ? translate('statue.named', {
+                name: statue.name,
+                date: formatCalendarDate(translate, statue),
+              })
+            : translate('statue.nameless'),
+          player: toRemotePlayer(statue.look),
+          position: new Vector3(
+            statue.look.position.x,
+            statue.look.position.y,
+            statue.look.position.z
+          ),
+          rotation: statue.look.rotation ?? 0,
+        })),
+      })
+      break
 
     case 'DungeonPropsState':
       dungeonManager.setPropsState(

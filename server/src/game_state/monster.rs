@@ -269,11 +269,13 @@ impl super::GameState {
     /// A monster type's level at a dungeon depth; the surface passes its
     /// distance-equivalent depth.
     pub(crate) fn level_at_depth(&self, monster_type: &str, depth: u8) -> u8 {
-        let def_level = self
-            .monster_defs
+        onlinerpg_shared::dungeon::monster_level_for_depth(self.def_level(monster_type), depth)
+    }
+
+    pub(super) fn def_level(&self, monster_type: &str) -> u8 {
+        self.monster_defs
             .get(monster_type)
-            .map_or(1, |def| def.level);
-        onlinerpg_shared::dungeon::monster_level_for_depth(def_level, depth)
+            .map_or(1, |def| def.level)
     }
 
     pub(super) async fn despawn_monsters_near(&self, position: &Position) {

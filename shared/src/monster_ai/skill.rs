@@ -16,6 +16,8 @@ pub enum MonsterSkillId {
     FormationBreak,
     Earthquake,
     CrystalEruption,
+    StoneGaze,
+    TailSweep,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -38,6 +40,8 @@ pub enum SkillDamage {
     },
     /// Always lands for exactly this much; only a full health bar outlasts it.
     Fixed(u32),
+    /// Always lands for this dice roll.
+    Roll(&'static str),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -58,6 +62,11 @@ pub struct MonsterSkill {
     pub pools: Option<Pools>,
     /// debuffs.csv id put on everyone the strike lands on.
     pub debuff: Option<&'static str>,
+    /// A fan cast behind the caster, only while someone stands there.
+    pub rear: bool,
+    /// Strikes through the eyes: covered eyes are spared, a mirror turned to
+    /// it throws it back, and its dead stand as stone.
+    pub gaze: bool,
 }
 
 /// Where a cast marks the ground, chosen when it starts so the marks are the
@@ -90,6 +99,19 @@ pub struct SkillSet {
     pub gap_ms: f32,
     pub last_stand: Option<LastStand>,
     pub shatter: Option<Shatter>,
+    pub timed: Option<TimedCast>,
+}
+
+/// A cast on its own clock, apart from the swing: once every `every_ms`
+/// (a range rolled anew each time) and once as health first falls to each of
+/// `health_marks`, never within `gap_ms` of the last. It turns to a living
+/// player picked at random among those in range, whoever holds its attention.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct TimedCast {
+    pub skill: &'static MonsterSkill,
+    pub every_ms: (f32, f32),
+    pub health_marks: &'static [f32],
+    pub gap_ms: f32,
 }
 
 /// With every player around turned to stone, the monster waits beside them
@@ -132,6 +154,8 @@ pub const RUNE_SLASH: MonsterSkill = MonsterSkill {
     spots: None,
     pools: None,
     debuff: None,
+    rear: false,
+    gaze: false,
 };
 
 /// Terraclash's roar (doc/TIER5_FIELD_RAID.md 대지의 포효), as far as its
@@ -149,6 +173,8 @@ pub const EARTH_ROAR: MonsterSkill = MonsterSkill {
     spots: None,
     pools: None,
     debuff: None,
+    rear: false,
+    gaze: false,
 };
 
 /// 진형 붕괴: both fists slam the fan in front, and magma wells up under
@@ -180,6 +206,8 @@ pub const FORMATION_BREAK: MonsterSkill = MonsterSkill {
         damage: 30,
     }),
     debuff: None,
+    rear: false,
+    gaze: false,
 };
 
 /// 지진: the ground splits under most of the raid; the gaps between the marks
@@ -201,6 +229,8 @@ pub const EARTHQUAKE: MonsterSkill = MonsterSkill {
     }),
     pools: None,
     debuff: None,
+    rear: false,
+    gaze: false,
 };
 
 /// The foreman's pick strikes the ground and black-violet crystal bursts up
@@ -227,6 +257,65 @@ pub const CRYSTAL_ERUPTION: MonsterSkill = MonsterSkill {
     }),
     pools: None,
     debuff: Some("petrified"),
+    rear: false,
+    gaze: false,
+};
+
+/// Medusa's gaze (doc/STONE_GARDEN.md 응시): everyone her sight reaches in the
+/// quarter she turned to. A wall or a pillar between breaks the line.
+pub const STONE_GAZE: MonsterSkill = MonsterSkill {
+    id: MonsterSkillId::StoneGaze,
+    cast_ms: 4000.0,
+    strike_ms: 3000.0,
+    cooldown_ms: 0.0,
+    first_cast_ms: 0.0,
+    area: SkillArea::Fan {
+        range: 24.0,
+        half_angle: std::f32::consts::FRAC_PI_4,
+    },
+    damage: SkillDamage::Roll("5d40+300"),
+    spots: None,
+    pools: None,
+    debuff: None,
+    rear: false,
+    gaze: true,
+};
+
+/// Medusa's tail lashes whoever stands behind her.
+pub const TAIL_SWEEP: MonsterSkill = MonsterSkill {
+    id: MonsterSkillId::TailSweep,
+    cast_ms: 2600.0,
+    strike_ms: 1600.0,
+    cooldown_ms: 20_000.0,
+    first_cast_ms: 8000.0,
+    area: SkillArea::Fan {
+        range: 5.0,
+        half_angle: std::f32::consts::FRAC_PI_3,
+    },
+    damage: SkillDamage::Scaled {
+        multiplier: 3,
+        ignores_guard: true,
+    },
+    spots: None,
+    pools: None,
+    debuff: None,
+    rear: true,
+    gaze: false,
+};
+
+/// A five-player party sees the gaze at least three times: the health marks
+/// bring it to a party that kills faster than the clock.
+const MEDUSA_SKILLS: SkillSet = SkillSet {
+    skills: &[(&TAIL_SWEEP, 1)],
+    gap_ms: 0.0,
+    last_stand: None,
+    shatter: None,
+    timed: Some(TimedCast {
+        skill: &STONE_GAZE,
+        every_ms: (120_000.0, 240_000.0),
+        health_marks: &[0.75, 0.5, 0.25],
+        gap_ms: 45_000.0,
+    }),
 };
 
 const FOREMAN_SKILLS: SkillSet = SkillSet {
@@ -237,6 +326,7 @@ const FOREMAN_SKILLS: SkillSet = SkillSet {
         wait_ms: 10_000.0,
         multiplier: 4,
     }),
+    timed: None,
 };
 
 const BARKAN_SKILLS: SkillSet = SkillSet {
@@ -244,6 +334,7 @@ const BARKAN_SKILLS: SkillSet = SkillSet {
     gap_ms: 0.0,
     last_stand: None,
     shatter: None,
+    timed: None,
 };
 
 /// The roar comes least often; at 5% health it roars five times in a row
@@ -258,6 +349,7 @@ pub const TERRACLASH_SKILLS: SkillSet = SkillSet {
         every_ms: 10_000.0,
     }),
     shatter: None,
+    timed: None,
 };
 
 /// Eruption radius of a ranged plain swing (`MonsterGroundStrike`).
@@ -270,11 +362,27 @@ pub fn skill_by_id(id: MonsterSkillId) -> &'static MonsterSkill {
         MonsterSkillId::FormationBreak => &FORMATION_BREAK,
         MonsterSkillId::Earthquake => &EARTHQUAKE,
         MonsterSkillId::CrystalEruption => &CRYSTAL_ERUPTION,
+        MonsterSkillId::StoneGaze => &STONE_GAZE,
+        MonsterSkillId::TailSweep => &TAIL_SWEEP,
     }
 }
 
+/// No cast of its own: it breaks whoever a Serpent Handmaiden turned to stone.
+const STONEBREAKER_SKILLS: SkillSet = SkillSet {
+    skills: &[],
+    gap_ms: 0.0,
+    last_stand: None,
+    shatter: Some(Shatter {
+        wait_ms: 1500.0,
+        multiplier: 3,
+    }),
+    timed: None,
+};
+
 pub fn skills_for(monster_type: &str) -> Option<&'static SkillSet> {
     match monster_type {
+        "garden_breaker" => Some(&STONEBREAKER_SKILLS),
+        "medusa" => Some(&MEDUSA_SKILLS),
         "barkan" => Some(&BARKAN_SKILLS),
         "terraclash" => Some(&TERRACLASH_SKILLS),
         "mine_foreman" => Some(&FOREMAN_SKILLS),

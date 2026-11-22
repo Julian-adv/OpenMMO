@@ -6,6 +6,7 @@ mod chest_tests;
 mod den_tests;
 mod discovery_tests;
 mod door_tests;
+mod garden_tests;
 mod guild_tests;
 mod layout_tests;
 mod mine_tests;

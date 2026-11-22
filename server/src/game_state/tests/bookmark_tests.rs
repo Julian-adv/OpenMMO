@@ -126,6 +126,38 @@ async fn only_a_blessed_scroll_read_out_of_combat_reaches_the_bookmark() {
 }
 
 #[tokio::test]
+async fn wearing_the_ring_of_teleport_control_aims_a_plain_scroll() {
+    let (game, auth, _, mut rx) = setup("bookmark_ring", 0).await;
+    let id = pid("Marker");
+    game.save_bookmark(&id, "Camp".into(), &auth).await;
+    let camp = bookmarks(&mut rx).remove(0);
+    let away = Position {
+        x: 3_000.0,
+        y: 5.0,
+        z: 800.0,
+    };
+    game.teleport_player(&id, away, 0.0, 0).await;
+    game.inventories.write().await.insert(
+        id,
+        PlayerInventory {
+            bag: vec![
+                bag_item(100, SCROLL, 2),
+                bag_item(101, "ring_of_teleport_control", 1),
+            ],
+            ..Default::default()
+        },
+    );
+    game.teleport_to_bookmark(&id, 100, camp.id, &auth).await;
+    assert_eq!(refusal(&mut rx), BookmarkError::NoControl);
+
+    game.equip_item(&id, 101).await;
+    game.teleport_to_bookmark(&id, 100, camp.id, &auth).await;
+    let position = game.players.read().await[&id].position;
+    assert_eq!((position.x, position.z), CAMP);
+    assert_eq!(bag_count(&game, &id, SCROLL).await, 1);
+}
+
+#[tokio::test]
 async fn the_blesser_trades_plain_scrolls_and_gold_for_blessed_scrolls() {
     let gold = BLESSING_PRICE * 2 + 1;
     let (game, auth, character_id, mut rx) = setup("bookmark_bless", gold).await;

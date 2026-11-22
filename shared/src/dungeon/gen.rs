@@ -133,13 +133,17 @@ fn generate_floor(
     let mut rng = ChaCha8Rng::seed_from_u64(seed ^ (depth as u64).wrapping_mul(DEPTH_SALT));
     let is_last = depth == total;
 
+    let hall = style == LayoutStyle::Hall && is_last;
     let attempts = match style {
         LayoutStyle::Rooms => FLOOR_ATTEMPTS,
-        LayoutStyle::Mine => mine::FLOOR_ATTEMPTS,
+        LayoutStyle::Hall if !hall => FLOOR_ATTEMPTS,
+        LayoutStyle::Hall | LayoutStyle::Mine => mine::FLOOR_ATTEMPTS,
     };
     for _ in 0..attempts {
         let layout = match style {
-            LayoutStyle::Rooms => try_generate_floor(&mut rng, depth, is_last, up_shaft, table),
+            LayoutStyle::Rooms | LayoutStyle::Hall => {
+                try_generate_floor(&mut rng, depth, is_last, up_shaft, table, hall)
+            }
             LayoutStyle::Mine => {
                 mine::try_generate_floor(&mut rng, depth, is_last, up_shaft, table)
             }
@@ -157,6 +161,7 @@ fn try_generate_floor(
     is_last: bool,
     up_shaft: StairShaft,
     table: &[SpawnEntry],
+    hall: bool,
 ) -> Option<FloorLayout> {
     let room_count = rng.gen_range(3..=5) as usize;
 
@@ -167,7 +172,9 @@ fn try_generate_floor(
     // (or the boss + chest on the final floor — same generous sizing).
     let down_along_z = rng.gen_range(0..2) == 1;
     while rooms.len() < room_count {
-        let (w, d) = if rooms.len() == room_count - 1 {
+        let (w, d) = if hall && rooms.len() == room_count - 1 {
+            (HALL_SIZE, HALL_SIZE)
+        } else if rooms.len() == room_count - 1 {
             shaft_room_size(
                 rng,
                 down_along_z,
@@ -193,8 +200,28 @@ fn try_generate_floor(
         down_along_z,
         extra_spawns: 0,
         max_mouths: None,
+        pillars: hall,
     };
     finish_floor(rng, depth, is_last, up_shaft, table, plan)
+}
+
+/// Side of a pillared boss hall (`LayoutStyle::Hall`).
+pub(super) const HALL_SIZE: i32 = 23;
+/// Where a hall's 2×2 pillars start, from its centre cell along each axis.
+/// The four nearest the centre are left out, so the boss fights in the open
+/// with cover a short run away.
+const PILLAR_OFFSETS: [i32; 4] = [-9, -4, 3, 8];
+
+/// South-west cells of a hall's pillars.
+pub(super) fn hall_pillars(hall: &Room) -> impl Iterator<Item = (i32, i32)> {
+    let (cx, cz) = hall.center();
+    let inner = |o: i32| o == -4 || o == 3;
+    PILLAR_OFFSETS.into_iter().flat_map(move |dx| {
+        PILLAR_OFFSETS
+            .into_iter()
+            .filter(move |&dz| !(inner(dx) && inner(dz)))
+            .map(move |dz| (cx + dx, cz + dz))
+    })
 }
 
 /// Joins each room to the next. A locked floor's stair room keeps a single
@@ -245,6 +272,9 @@ struct FloorPlan {
     extra_spawns: usize,
     /// Most corridor mouths each room may show.
     max_mouths: Option<Vec<usize>>,
+    /// The end room is a hall whose pillars stand as uncarved rock, so they
+    /// wall off sight and movement like any other wall.
+    pillars: bool,
 }
 
 /// Carve a plan, reject it if a door or the stair room breaks, then roll
@@ -264,6 +294,7 @@ fn finish_floor(
         down_along_z,
         extra_spawns,
         max_mouths,
+        pillars,
     } = plan;
     let down_shaft = if is_last {
         None
@@ -282,6 +313,14 @@ fn finish_floor(
     }
     for &(a, b, x_first) in &corridors {
         carve_corridor(&mut carved, rooms[a].center(), rooms[b].center(), x_first);
+    }
+
+    if pillars {
+        for (x, z) in hall_pillars(&rooms[end_room]) {
+            for (dx, dz) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                carved[(x + dx + (z + dz) * GRID) as usize] = false;
+            }
+        }
     }
 
     let chest = is_last.then(|| rooms[end_room].center());
@@ -698,7 +737,7 @@ pub(super) fn cell_is_corridor(layout: &FloorLayout, x: i32, z: i32) -> bool {
 
 /// Number of orthogonal neighbours that are solid rock (uncarved). 0 = open
 /// floor, 1 = flush against a wall, ≥2 = a corner nook.
-fn wall_sides(layout: &FloorLayout, x: i32, z: i32) -> u8 {
+pub(super) fn wall_sides(layout: &FloorLayout, x: i32, z: i32) -> u8 {
     let mut n = 0;
     for (dx, dz) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
         if !layout.is_carved(x + dx, z + dz) {

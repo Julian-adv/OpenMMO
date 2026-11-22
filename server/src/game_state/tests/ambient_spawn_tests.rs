@@ -184,10 +184,15 @@ async fn eligible_types_follow_the_distance_from_town() {
             "{monster_type} belongs further from town than the gates"
         );
     }
+    let roaming = world_config()
+        .ambient_spawns
+        .iter()
+        .filter(|rule| rule.haunt.is_none())
+        .count();
     assert_eq!(
         deep.len(),
-        world_config().ambient_spawns.len(),
-        "past the deepest gate every ambient type is on offer"
+        roaming,
+        "past the deepest gate every roaming type is on offer"
     );
 }
 

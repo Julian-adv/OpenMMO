@@ -17,6 +17,7 @@
   import EstateStorageWindow from './EstateStorageWindow.svelte'
   import QuickslotBar from './QuickslotBar.svelte'
   import HungerIndicator from './HungerIndicator.svelte'
+  import BlindfoldVeil from './BlindfoldVeil.svelte'
   import BuffIndicator from './BuffIndicator.svelte'
   import LevelBadge from './LevelBadge.svelte'
   import TradeWindow from './TradeWindow.svelte'
@@ -215,6 +216,7 @@
 <FurnitureShopPanel />
 
 <div class="game-hud" style:--cluster-width="{clusterWidth}px">
+  <BlindfoldVeil />
   <ServerNotice />
   <SkillFailureToast />
   <AnnouncementToasts />

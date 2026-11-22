@@ -47,6 +47,8 @@
   import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js'
   import { get } from 'svelte/store'
   import { onDestroy, untrack } from 'svelte'
+  import ChatBubble from './ChatBubble.svelte'
+  import { translate } from '../i18n'
   import { timeScale } from '../stores/timeStore'
   import { DamageTextEmitter } from '../effects/damage-text-pool'
 
@@ -506,10 +508,24 @@
       entry.effects.start(group.getWorldPosition(new THREE.Vector3()), cast)
       entry.sounded = false
     }
+    if (def.lines?.length) {
+      speech = translate(
+        def.lines[Math.floor(Math.random() * def.lines.length)]
+      )
+      speechLeft = SPEECH_SECONDS
+    }
     attackClip = clip.name
     isAttackAnimationFinished = false
     return true
   }
+
+  const SPEECH_SECONDS = 3.5
+  let speech = $state<string | null>(null)
+  let speechLeft = 0
+  // The bubble sits a player's height up; lift it to this monster's head.
+  const speechAnchor = $derived(
+    new THREE.Vector3(position.x, position.y + nametagHeight - 1.9, position.z)
+  )
 
   function updateSkillEffects(deltaTime: number, camera?: THREE.Camera) {
     for (const entry of skillEffects) {
@@ -528,6 +544,7 @@
   }
 
   export function update(deltaTime: number, camera?: THREE.Camera) {
+    if (speech && (speechLeft -= deltaTime) <= 0) speech = null
     // 0. Sync Three.js group position imperatively so the refraction render
     //    (which runs during the game loop, before Svelte's reactive updates)
     //    sees the monster at its current position.
@@ -908,6 +925,14 @@
       />
     {/each}
   </T.Group>
+{/if}
+
+{#if speech && monsterState !== 'dead'}
+  <ChatBubble
+    position={speechAnchor}
+    camera={threlte.camera.current}
+    message={speech}
+  />
 {/if}
 
 <!-- Name tag / Debug info -->

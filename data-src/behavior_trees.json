@@ -302,6 +302,50 @@
           }
         ]
       }
+    },
+    "passive": {
+      "description": "Never fights: drifts about and comes home when it strays.",
+      "root": {
+        "type": "selector",
+        "children": [
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "is_beyond_leash",
+                "params": {
+                  "range": 30.0
+                }
+              },
+              {
+                "type": "action",
+                "name": "return_to_spawn"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "chance",
+                "params": {
+                  "probability": 0.3
+                }
+              },
+              {
+                "type": "action",
+                "name": "wander"
+              }
+            ]
+          },
+          {
+            "type": "action",
+            "name": "idle"
+          }
+        ]
+      }
     }
   }
 }

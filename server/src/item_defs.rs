@@ -31,6 +31,16 @@ pub enum ItemEffect {
     Sustenance,
     /// Lets a teleport scroll go to a bookmark (doc/TELEPORTATION.md).
     TeleportControl,
+    /// Turns Medusa's gaze back on her while its bearer faces her
+    /// (doc/STONE_GARDEN.md 거울 방패).
+    GazeReflect,
+    /// A blindfold: no gaze or stare finds the eyes, and without telepathy
+    /// nothing past arm's reach can be struck.
+    CoversEyes,
+    /// Added to the wearer's attack rolls.
+    Hit(i32),
+    /// Food that teaches telepathy to whoever eats it.
+    Telepathy,
 }
 
 impl ItemEffect {
@@ -51,6 +61,9 @@ impl ItemEffect {
         if let Some(amount) = token.strip_prefix("cha") {
             return amount.parse().ok().map(ItemEffect::Cha);
         }
+        if let Some(amount) = token.strip_prefix("hit") {
+            return amount.parse().ok().map(ItemEffect::Hit);
+        }
         if let Some(amount) = token.strip_prefix("int") {
             return amount.parse().ok().map(ItemEffect::Int);
         }
@@ -65,6 +78,9 @@ impl ItemEffect {
             "light" => Some(ItemEffect::Light),
             "invisibility" => Some(ItemEffect::Invisibility),
             "teleportcontrol" => Some(ItemEffect::TeleportControl),
+            "gazereflect" => Some(ItemEffect::GazeReflect),
+            "blindfold" => Some(ItemEffect::CoversEyes),
+            "telepathy" => Some(ItemEffect::Telepathy),
             _ => None,
         }
     }
@@ -270,6 +286,8 @@ pub struct EatEffect {
     pub raw_fish: bool,
     pub debuff: Option<String>,
     pub alcohol: Option<u32>,
+    /// Learned for good by eating it.
+    pub teaches: Option<onlinerpg_shared::skills::SkillId>,
 }
 
 /// The effect produced by consuming a usable item via `use_item`, decided by
@@ -472,6 +490,7 @@ impl ItemDefinition {
                 raw_fish: true,
                 debuff: self.use_debuff.clone(),
                 alcohol: None,
+                teaches: None,
             })),
             "food" | "drink" => self.nutrition.map(|nutrition| {
                 UseEffect::Eat(EatEffect {
@@ -479,6 +498,10 @@ impl ItemDefinition {
                     raw_fish: false,
                     debuff: self.use_debuff.clone(),
                     alcohol: self.alcohol,
+                    teaches: self
+                        .effects
+                        .contains(&ItemEffect::Telepathy)
+                        .then_some(onlinerpg_shared::skills::SkillId::Telepathy),
                 })
             }),
             "campfire_kit" => Some(UseEffect::PlaceCampfire),

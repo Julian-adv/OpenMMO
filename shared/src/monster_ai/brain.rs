@@ -76,6 +76,11 @@ pub struct MonsterBrain {
     pub(super) skill_cooldowns_ms: Vec<f32>,
     /// Last-stand casts left, once it begins.
     pub(super) last_stand: Option<u8>,
+    /// Time left on the timed cast's clock, rolled once a fight is on.
+    pub(super) timed_left_ms: Option<f32>,
+    pub(super) timed_gap_left_ms: f32,
+    /// How many of the timed cast's health marks have had their cast.
+    pub(super) timed_marks: usize,
     /// The cast whose strike is still to land.
     pub(super) cast: Option<Cast>,
     /// Time left in a cast; the brain holds its pose and facing until it ends.
@@ -177,6 +182,16 @@ impl MonsterBrain {
                 set.skills.iter().map(|(s, _)| s.first_cast_ms).collect()
             }),
             last_stand: None,
+            timed_left_ms: None,
+            timed_gap_left_ms: 0.0,
+            // A brain made for a wounded monster owes nothing for marks
+            // already behind it.
+            timed_marks: skills.and_then(|set| set.timed).map_or(0, |rule| {
+                rule.health_marks
+                    .iter()
+                    .filter(|&&mark| health as f32 <= max_health as f32 * mark)
+                    .count()
+            }),
             cast: None,
             cast_left_ms: 0.0,
             chase_goal_cell: None,
@@ -326,6 +341,10 @@ impl MonsterBrain {
             *cooldown = (*cooldown - delta_ms).max(0.0);
         }
         self.cast_left_ms = (self.cast_left_ms - delta_ms).max(0.0);
+        self.timed_gap_left_ms = (self.timed_gap_left_ms - delta_ms).max(0.0);
+        if let Some(left) = &mut self.timed_left_ms {
+            *left = (*left - delta_ms).max(0.0);
+        }
         self.stagger_left_ms = (self.stagger_left_ms - delta_ms).max(0.0);
         self.slow_left_ms = (self.slow_left_ms - delta_ms).max(0.0);
         if let Some((_, left)) = &mut self.noticing {
@@ -408,8 +427,17 @@ impl MonsterBrain {
             }
             rule.skill
         } else {
+            let behind = self.rotation + std::f32::consts::PI;
+            let someone_behind = |skill: &super::MonsterSkill| {
+                nearby_players.iter().any(|p| {
+                    p.health > 0
+                        && !p.petrified
+                        && skill.fan_contains(&self.position, behind, &p.position)
+                })
+            };
             let ready: Vec<usize> = (0..set.skills.len())
                 .filter(|&i| self.skill_cooldowns_ms[i] <= 0.0)
+                .filter(|&i| !set.skills[i].0.rear || someone_behind(set.skills[i].0))
                 .collect();
             let Ok(&i) = ready.choose_weighted(rng, |&i| set.skills[i].1) else {
                 return false;
@@ -422,9 +450,112 @@ impl MonsterBrain {
             }
             skill
         };
-        self.cast_left_ms = skill.cast_ms;
         self.attack_cooldown_left_ms = skill.cast_ms + swing_wait_ms;
-        let rotation = self.aim_toward(self.position.bearing_xz_to(target));
+        let rotation = if skill.rear {
+            self.rotation + std::f32::consts::PI
+        } else {
+            self.aim_toward(self.position.bearing_xz_to(target))
+        };
+        self.begin_cast(
+            skill,
+            rotation,
+            nearby_players,
+            path_provider,
+            rng,
+            commands,
+        );
+        true
+    }
+
+    /// Start the timed cast (`SkillSet::timed`) once its clock or a health
+    /// mark calls for it, at a player picked at random among those in range
+    /// and in sight. A cast owed inside the gap, or with nobody in sight,
+    /// waits. The clock starts with the fight and resets once nobody living
+    /// is left around.
+    pub(super) fn try_timed_cast(
+        &mut self,
+        nearby_players: &[NearbyPlayer],
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+        commands: &mut Vec<AiCommand>,
+    ) -> bool {
+        let Some(rule) = self.skills.and_then(|set| set.timed) else {
+            return false;
+        };
+        if !nearby_players.iter().any(|p| p.health > 0) {
+            self.timed_left_ms = None;
+            return false;
+        }
+        if self.target_player_id.is_none() && self.timed_left_ms.is_none() {
+            return false;
+        }
+        let (min_ms, max_ms) = rule.every_ms;
+        let clock_due = *self
+            .timed_left_ms
+            .get_or_insert_with(|| rng.gen_range(min_ms..=max_ms))
+            <= 0.0;
+        let mark_due = rule
+            .health_marks
+            .get(self.timed_marks)
+            .is_some_and(|mark| self.health as f32 <= self.max_health as f32 * mark);
+        if !(clock_due || mark_due) || self.timed_gap_left_ms > 0.0 || self.swing_left_ms > 0.0 {
+            return false;
+        }
+        let range_sq = rule.skill.range().powi(2);
+        let floor = self.path_floor;
+        let in_sight: Vec<&NearbyPlayer> = nearby_players
+            .iter()
+            .filter(|p| p.health > 0 && !p.petrified)
+            .filter(|p| self.position.dist_xz_sq(&p.position) <= range_sq)
+            .filter(|p| {
+                let from = self.strike_origin(&p.position);
+                !path_provider.attack_line_blocked(
+                    from.x,
+                    from.z,
+                    p.position.x,
+                    p.position.z,
+                    floor,
+                )
+            })
+            .collect();
+        let Some(pick) = in_sight.choose(rng) else {
+            return false;
+        };
+        if mark_due {
+            self.timed_marks += 1;
+        } else {
+            self.timed_left_ms = None;
+        }
+        self.timed_gap_left_ms = rule.gap_ms;
+        let bearing = self.position.bearing_xz_to(&pick.position);
+        self.set_facing(bearing);
+        self.state = AiState::Attack;
+        self.state_timer_ms = 0.0;
+        self.target_position = None;
+        self.waypoints.clear();
+        self.attack_cooldown_left_ms = self.attack_cooldown_left_ms.max(rule.skill.cast_ms);
+        let rotation = self.aim_toward(bearing);
+        self.begin_cast(
+            rule.skill,
+            rotation,
+            nearby_players,
+            path_provider,
+            rng,
+            commands,
+        );
+        true
+    }
+
+    fn begin_cast(
+        &mut self,
+        skill: &'static super::MonsterSkill,
+        rotation: f32,
+        nearby_players: &[NearbyPlayer],
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+        commands: &mut Vec<AiCommand>,
+    ) {
+        self.cast_left_ms = skill.cast_ms;
         let floor = self.path_floor;
         let spots = skill.lay_spots(
             self.body,
@@ -446,7 +577,6 @@ impl MonsterBrain {
             rotation,
             spots,
         });
-        true
     }
 
     fn tick_cast(&mut self, commands: &mut Vec<AiCommand>) {
@@ -547,6 +677,10 @@ impl MonsterBrain {
         let targets = self.targetable(nearby_players);
         let nearby_players = &*targets;
         self.update_aggro_target(nearby_players, path_provider, rng);
+
+        if self.try_timed_cast(nearby_players, path_provider, rng, &mut commands) {
+            return commands;
+        }
 
         let was_noticing = self.noticing.is_some();
         if matches!(self.state, AiState::Walk | AiState::Run) {

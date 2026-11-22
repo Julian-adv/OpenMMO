@@ -271,6 +271,7 @@ mod cart;
 mod meal;
 mod mining;
 mod stall;
+mod statues;
 pub(crate) mod time;
 mod tip_hat;
 mod titles;
@@ -423,6 +424,7 @@ pub struct GameState {
     pending_loot_tally: Arc<std::sync::Mutex<crate::metrics::LootTally>>,
     pending_field_raid_events: Arc<std::sync::Mutex<Vec<crate::metrics::FieldRaidEvent>>>,
     pending_field_raid_records: Arc<std::sync::Mutex<Vec<crate::metrics::FieldRaidRecord>>>,
+    statues: Arc<std::sync::Mutex<statues::StatueBook>>,
     next_account_session: Arc<std::sync::atomic::AtomicU64>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<Bytes>>>>,
     // player_id → (character_id, current_xp, attributes)
@@ -841,6 +843,7 @@ impl GameState {
             pending_loot_tally: Arc::default(),
             pending_field_raid_events: Arc::default(),
             pending_field_raid_records: Arc::default(),
+            statues: Arc::default(),
             next_account_session: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
             player_characters: Arc::new(RwLock::new(HashMap::new())),

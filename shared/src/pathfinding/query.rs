@@ -832,8 +832,7 @@ pub fn is_on_building_floor(cache: &PassabilityCache, x: f32, z: f32, floor_leve
             && z >= rp.min_z
             && z <= rp.max_z
             && rp.floors.iter().any(|floor| {
-                floor.floor_level == floor_level
-                    && grid_world_bounds(rp, floor).contains(x, z, 0.0)
+                floor.floor_level == floor_level && grid_world_bounds(rp, floor).contains(x, z, 0.0)
             })
     })
 }

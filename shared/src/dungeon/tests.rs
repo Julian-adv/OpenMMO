@@ -1757,3 +1757,85 @@ fn variants_redraw_the_floors_behind_the_same_entrance() {
         "only {usable} usable variants"
     );
 }
+
+/// The Garden's last floor always fits its hall: twelve 2×2 pillars of rock
+/// ring an open middle where the chest and the boss stand, and every floor
+/// above is laid out exactly as a plain `Rooms` dungeon's.
+#[test]
+fn the_hall_stands_twelve_pillars_around_the_boss_over_many_seeds() {
+    let build = |seed, style| {
+        super::gen::generate_dungeon_with(seed, seed, Some(25), "medusa", None, "garden", style)
+    };
+    for seed in 0..300u64 {
+        let floors = build(seed, super::LayoutStyle::Hall);
+        let plain = build(seed, super::LayoutStyle::Rooms);
+        assert_eq!(floors.len(), 25, "seed {seed}");
+        for (f, p) in floors.iter().zip(&plain).take(24) {
+            assert_eq!(f.carved, p.carved, "seed {seed} depth {}", f.depth);
+        }
+        let last = &floors[24];
+        let hall = last.rooms.last().unwrap();
+        let size = super::gen::HALL_SIZE;
+        assert_eq!((hall.w, hall.d), (size, size), "seed {seed}");
+        let rock = (hall.x..hall.x + hall.w)
+            .flat_map(|x| (hall.z..hall.z + hall.d).map(move |z| (x, z)))
+            .filter(|&(x, z)| !last.is_carved(x, z))
+            .count();
+        assert_eq!(rock, 12 * 4, "seed {seed}");
+        let (cx, cz) = last.chest.unwrap();
+        let boss = last.spawns.iter().find(|s| s.is_boss).unwrap();
+        assert!(last.spawns.iter().all(|s| s.is_boss), "seed {seed}");
+        for (x, z) in [(cx, cz), (boss.x, boss.z)] {
+            for (px, pz) in super::gen::hall_pillars(hall) {
+                assert!(
+                    (x - px).max(px + 1 - x) >= 3 || (z - pz).max(pz + 1 - z) >= 3,
+                    "seed {seed}: a pillar crowds ({x}, {z})"
+                );
+            }
+        }
+        // Rock two cells from the walls leaves a way round every pillar.
+        for (px, pz) in super::gen::hall_pillars(hall) {
+            assert!(
+                px - hall.x >= 2 && hall.x + hall.w - (px + 2) >= 2,
+                "seed {seed}"
+            );
+            assert!(
+                pz - hall.z >= 2 && hall.z + hall.d - (pz + 2) >= 2,
+                "seed {seed}"
+            );
+        }
+        let props = &last.props;
+        assert!(
+            props.iter().all(|p| last.is_carved(p.x, p.z)),
+            "seed {seed}: a prop sits in a pillar"
+        );
+    }
+}
+
+#[test]
+fn every_garden_floor_has_room_for_its_statues() {
+    for seed in 0..40u64 {
+        let floors = super::gen::generate_dungeon_with(
+            seed,
+            seed,
+            Some(25),
+            "medusa",
+            None,
+            "garden",
+            super::LayoutStyle::Hall,
+        );
+        for layout in &floors {
+            let cells = statue_cells(layout);
+            let want = if layout.depth == 25 { 12 } else { 4 };
+            assert_eq!(cells.len(), want, "seed {seed} depth {}", layout.depth);
+            assert_eq!(statue_capacity(layout), want);
+            let distinct: std::collections::HashSet<_> = cells.iter().collect();
+            assert_eq!(distinct.len(), want, "seed {seed} depth {}", layout.depth);
+            for &(x, z) in &cells {
+                assert!(layout.is_carved(x, z));
+                assert!(layout.props.iter().all(|p| !p.cells().any(|c| c == (x, z))));
+            }
+            assert_eq!(cells, statue_cells(layout));
+        }
+    }
+}

@@ -697,6 +697,9 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             let def = skill_by_id(*skill);
             let strike_s = def.strike_ms / 1000.0;
             let area = match def.area {
+                SkillArea::Fan { .. } if def.rear => format!(
+                    "the {range:.0}m fan behind it, so step round to its front or out of range"
+                ),
                 SkillArea::Fan { .. } => format!(
                     "the {range:.0}m fan in front of it, so step behind it or out of range"
                 ),
@@ -729,10 +732,16 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 SkillDamage::Fixed(damage) => format!(
                     " It deals {damage} whatever your armor; drink a potion now if your HP is {damage} or less."
                 ),
+                SkillDamage::Roll(dice) => format!(" It deals {dice} whatever your armor."),
                 SkillDamage::Scaled { .. } => String::new(),
             };
+            let gaze = if def.gaze {
+                " It strikes everyone it can see: get out of the fan, put a wall or pillar between you, or stand facing it with a mirror shield equipped. A blindfold on your head spares you too."
+            } else {
+                ""
+            };
             Some(format!(
-                "[MonsterSkill] {monster_id} winds up {skill:?}: in {strike_s:.1}s it strikes {area}.{marks}{damage}"
+                "[MonsterSkill] {monster_id} winds up {skill:?}: in {strike_s:.1}s it strikes {area}.{marks}{damage}{gaze}"
             ))
         }
         ServerMessage::MonsterSkillStruck {
@@ -753,6 +762,15 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                 ))
                 .collect::<Vec<_>>()
                 .join(", ")
+        )),
+        ServerMessage::MonsterSkillReflected {
+            monster_id,
+            skill,
+            player_id,
+            damage,
+        } => Some(format!(
+            "[MonsterSkillReflected] {}'s mirror shield threw {monster_id}'s {skill:?} back for {damage}",
+            player_name(state, player_id)
         )),
         ServerMessage::MonsterGroundStrike {
             monster_id,

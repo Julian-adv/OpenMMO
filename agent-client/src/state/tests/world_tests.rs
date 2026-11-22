@@ -391,7 +391,7 @@ fn world_state_names_the_dungeon_entrances() {
         .collect();
 
     // Include distant entrances, ordered nearest first.
-    assert_eq!(lines.len(), 8, "{lines:?}");
+    assert_eq!(lines.len(), 9, "{lines:?}");
     assert!(lines[0].contains("Old Crypt"), "{lines:?}");
     assert!(lines[1].contains("Orc Warrens"), "{lines:?}");
     assert!(lines[2].contains("Ogre Stronghold"), "{lines:?}");
@@ -400,6 +400,7 @@ fn world_state_names_the_dungeon_entrances() {
     assert!(lines[5].contains("Thieves' Den"), "{lines:?}");
     assert!(lines[6].contains("Shadow Guild"), "{lines:?}");
     assert!(lines[7].contains("Blackvein Mine"), "{lines:?}");
+    assert!(lines[8].contains("Garden of Stone"), "{lines:?}");
 }
 
 /// The prompt names the storey only while we stand inside a room's

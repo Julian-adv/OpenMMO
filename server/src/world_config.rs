@@ -56,6 +56,18 @@ impl Default for PricingConfig {
 pub struct AmbientSpawnRule {
     #[serde(rename = "monsterType")]
     pub monster_type: String,
+    /// Met only around this spot, whatever its level, in place of `share`
+    /// of the spawns there.
+    #[serde(default)]
+    pub haunt: Option<Haunt>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct Haunt {
+    pub x: f32,
+    pub z: f32,
+    pub radius: f32,
+    pub share: f64,
 }
 
 #[derive(Debug, Deserialize)]

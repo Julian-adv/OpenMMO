@@ -84,6 +84,27 @@ const PRESENTATION: Record<
     applied: 'The floor keeps moving. Walking is going to be an adventure.',
     expired: 'You sober up, more or less.',
   },
+  poison: {
+    labelKey: 'debuff.poison.name',
+    noteKey: 'debuff.poison.note',
+    icon: '🐍',
+    applied: 'Venom burns in your veins!',
+    expired: 'The venom fades.',
+  },
+  stone_touch: {
+    labelKey: 'debuff.petrified.name',
+    noteKey: 'debuff.petrified.note',
+    icon: '🪨',
+    applied: 'Your limbs lock and you turn to stone!',
+    expired: 'The stone cracks away and you can move again.',
+  },
+  eye_stare: {
+    labelKey: 'debuff.petrified.name',
+    noteKey: 'debuff.petrified.note',
+    icon: '👁️',
+    applied: 'The eye stares back and you cannot move!',
+    expired: 'The stare lets go of you.',
+  },
   petrified: {
     labelKey: 'debuff.petrified.name',
     noteKey: 'debuff.petrified.note',

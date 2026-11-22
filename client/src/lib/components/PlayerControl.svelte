@@ -118,10 +118,12 @@
     outOfAmmo,
   } from '../stores/inventoryStore'
   import { hungerState, SPRINT_MIN_SATIATION } from '../stores/hungerStore'
+  import { skillsStore } from '../stores/skillsStore'
   import {
     isRangedWeapon,
     weaponAttackIntervalMs,
     weaponRangeMeters,
+    coversEyes,
   } from '../data/itemDefs'
   import { type Position, type PlayerState } from '../utils/movementUtils'
   import { isMounted } from '../utils/mounts'
@@ -785,7 +787,14 @@
    *  column, so click-to-attack, the chase break-off and the rejection all
    *  agree on one distance. */
   function equippedAttackRange(): number {
-    return weaponRangeMeters($inventoryStore.equipped.main_hand?.item_def_id)
+    const range = weaponRangeMeters(
+      $inventoryStore.equipped.main_hand?.item_def_id
+    )
+    // Eyes covered and no telepathy: the server lets nothing reach further.
+    const blind =
+      coversEyes($inventoryStore.equipped.head?.item_def_id) &&
+      !$skillsStore.learned.includes('telepathy')
+    return blind ? Math.min(range, weaponRangeMeters(null)) : range
   }
 
   function attackCooldownMs(): number {

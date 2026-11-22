@@ -16,5 +16,7 @@ shadow_master_slayer,Slayer of the Shadow Master,그림자 길드장을 쓰러�
 shadow_master_slayer_solo,Who Slew the Shadow Master Alone,홀로 그림자 길드장을 쓰러뜨린 자,boss_kill,shadow_master,,true,57,shadow_master_slayer
 foreman_slayer,Slayer of the Rampaging Foreman,폭주한 작업반장을 쓰러뜨린 자,boss_kill,mine_foreman,,false,58,
 foreman_slayer_solo,Who Slew the Rampaging Foreman Alone,홀로 폭주한 작업반장을 쓰러뜨린 자,boss_kill,mine_foreman,,true,59,foreman_slayer
-terraclash_raider,Who Brought Down Terraclash,테라클래시를 무너뜨린 자,field_raid,terraclash,,false,60,
-terraclash_final_blow,Who Dealt Terraclash the Final Blow,테라클래시에 마지막 일격을 가한 자,field_raid_last_hit,terraclash,,false,61,terraclash_raider
+medusa_slayer,Slayer of Medusa,메두사를 쓰러뜨린 자,boss_kill,medusa,,false,60,
+medusa_slayer_solo,Who Slew Medusa Alone,홀로 메두사를 쓰러뜨린 자,boss_kill,medusa,,true,61,medusa_slayer
+terraclash_raider,Who Brought Down Terraclash,테라클래시를 무너뜨린 자,field_raid,terraclash,,false,62,
+terraclash_final_blow,Who Dealt Terraclash the Final Blow,테라클래시에 마지막 일격을 가한 자,field_raid_last_hit,terraclash,,false,63,terraclash_raider

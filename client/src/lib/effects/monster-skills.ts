@@ -144,6 +144,14 @@ export const MONSTER_SKILLS: Record<
     ...MONSTER_SKILL_DEFS.crystal_eruption,
     createEffects: () => NO_EFFECTS,
   },
+  stone_gaze: {
+    ...MONSTER_SKILL_DEFS.stone_gaze,
+    createEffects: () => NO_EFFECTS,
+  },
+  tail_sweep: {
+    ...MONSTER_SKILL_DEFS.tail_sweep,
+    createEffects: () => NO_EFFECTS,
+  },
 }
 
 export function preloadMonsterSkillSounds() {

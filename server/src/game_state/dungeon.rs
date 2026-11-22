@@ -1423,6 +1423,7 @@ impl GameState {
         }
         self.reconcile_view(player_id).await;
         self.populate_dungeon_floor(entrance_id, depth).await;
+        self.send_floor_statues(player_id, entrance_id, depth).await;
     }
 
     /// Claim free slots, spawn their monsters, and record the ids.
@@ -1464,7 +1465,7 @@ impl GameState {
         };
 
         for (slot_idx, cx, cz, monster_type, aggressive) in to_spawn {
-            let level = self.level_at_depth(&monster_type, depth);
+            let level = entrance.monster_level(self.def_level(&monster_type), depth);
             let pos = cell_center(&entrance.position(), depth, (cx, cz));
             let spawned = self
                 .spawn_monster(

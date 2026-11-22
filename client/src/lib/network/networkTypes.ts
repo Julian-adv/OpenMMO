@@ -48,6 +48,16 @@ export type CharacterAppearance = {
   eye_color_original?: boolean
 }
 
+/** Someone turned to stone on a dungeon floor (shared `StatueView`). */
+export type ServerStatue = {
+  id: number
+  name?: string | null
+  look: ServerPlayer
+  year: number
+  month: number
+  day: number
+}
+
 export type ServerPlayer = {
   id: number
   name: string
@@ -554,7 +564,7 @@ export type EstateChestState = {
 }
 
 /** Trained-skill ids (shared `SkillId` wire strings). */
-export type SkillId = 'fishing'
+export type SkillId = 'fishing' | 'telepathy'
 
 /** Shared `MountKind` wire strings (`Player::mount`). */
 export type MountKind = 'horse' | 'rowboat'

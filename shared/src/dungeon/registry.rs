@@ -55,6 +55,22 @@ pub struct DungeonEntranceDef {
     pub layout_style: LayoutStyle,
     /// Redraw the maze at every sunset reset (doc/DUNGEON.md).
     pub nightly_layout: bool,
+    /// Keeps statues of those turned to stone on its floors.
+    pub keeps_statues: bool,
+    /// Floors added to the depth that levels this dungeon's monsters, so its
+    /// first floor starts where another dungeon's deep floors end.
+    pub depth_offset: u8,
+    /// Where depth stops raising monster levels.
+    pub level_cap: u8,
+    /// This dungeon's own to-hit curve in place of the shared per-floor one.
+    pub place_bonus: Option<PlaceBonus>,
+}
+
+/// `base` to-hit on every floor plus one more per `floors_per_point` floors.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PlaceBonus {
+    pub base: i32,
+    pub floors_per_point: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -65,9 +81,26 @@ pub enum LayoutStyle {
     /// Long corridors between small chambers; every locked floor but the
     /// last forks into three work rooms, one holding the way down.
     Mine,
+    /// `Rooms`, with the final floor's boss in a wide hall of pillars.
+    Hall,
 }
 
 impl DungeonEntranceDef {
+    /// A monster's level on one of this dungeon's floors.
+    pub fn monster_level(&self, def_level: u8, depth: u8) -> u8 {
+        super::monster_level_at(
+            def_level,
+            depth.saturating_add(self.depth_offset),
+            self.level_cap,
+        )
+    }
+
+    /// The to-hit this dungeon lends its monsters on a floor, when it sets its own.
+    pub fn place_attack_bonus(&self, depth: u8) -> Option<i32> {
+        self.place_bonus
+            .map(|bonus| bonus.base + i32::from(depth / bonus.floors_per_point))
+    }
+
     pub fn position(&self) -> Position {
         Position {
             x: self.x,
@@ -117,6 +150,13 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
             }
             let fields: Vec<&str> = line.split(',').collect();
             let field = |name: &str| fields.get(col(name)).map(|s| s.trim()).unwrap_or("");
+            // Columns only the deepest dungeons fill; older tables omit them.
+            let optional = |name: &str| {
+                cols.iter()
+                    .position(|c| *c == name)
+                    .and_then(|index| fields.get(index))
+                    .map_or("", |s| s.trim())
+            };
             let id = field("id");
             if id.is_empty() {
                 return None;
@@ -129,7 +169,7 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
             // Blank = default; anything else must parse (a typo'd row should
             // fail the build, not silently fall back).
             let opt_u8 = |name: &str| {
-                let v = field(name);
+                let v = optional(name);
                 (!v.is_empty()).then(|| {
                     v.parse::<u8>()
                         .unwrap_or_else(|_| panic!("dungeon '{id}' has a non-numeric {name}"))
@@ -184,12 +224,36 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                 layout_style: match field("layoutStyle") {
                     "" => LayoutStyle::Rooms,
                     "mine" => LayoutStyle::Mine,
+                    "hall" => LayoutStyle::Hall,
                     l => panic!("dungeon '{id}' has an invalid layoutStyle '{l}'"),
                 },
                 nightly_layout: match field("nightlyLayout") {
                     "" | "false" => false,
                     "true" => true,
                     n => panic!("dungeon '{id}' has an invalid nightlyLayout '{n}'"),
+                },
+                keeps_statues: match optional("statues") {
+                    "" | "false" => false,
+                    "true" => true,
+                    s => panic!("dungeon '{id}' has an invalid statues '{s}'"),
+                },
+                depth_offset: opt_u8("depthOffset").unwrap_or(0),
+                level_cap: opt_u8("levelCap").unwrap_or(super::DEPTH_LEVEL_CAP),
+                place_bonus: match optional("placeBonus") {
+                    "" => None,
+                    bonus => Some(
+                        bonus
+                            .split_once(':')
+                            .and_then(|(base, floors)| {
+                                Some(PlaceBonus {
+                                    base: base.parse().ok()?,
+                                    floors_per_point: floors.parse().ok().filter(|n| *n > 0)?,
+                                })
+                            })
+                            .unwrap_or_else(|| {
+                                panic!("dungeon '{id}' has an invalid placeBonus '{bonus}' (needs base:floorsPerPoint)")
+                            }),
+                    ),
                 },
             })
         })
@@ -248,6 +312,29 @@ mod tests {
     /// Half-open on both axes, and the embedded csv parses at all. The server
     /// admits a client underground by exactly this test, so its edges are part
     /// of the wire contract.
+    #[test]
+    fn a_deep_dungeon_levels_from_an_offset_depth_and_lends_its_own_to_hit() {
+        let csv = "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls,layoutStyle,nightlyLayout,depthOffset,levelCap,placeBonus\n\
+                   deep,Deep,0,0,0,,25,,,,,,,,,20,45,34:4\n\
+                   plain,Plain,100,0,0,,25,,,,,,,,,,,\n";
+        let defs = parse_entrances(csv);
+        let (deep, plain) = (&defs[0], &defs[1]);
+        assert_eq!(
+            [1, 10, 24].map(|depth| deep.monster_level(20, depth)),
+            [28, 33, 40]
+        );
+        assert_eq!(deep.monster_level(45, 25), 45);
+        assert_eq!(
+            [1, 5, 15, 24].map(|depth| deep.place_attack_bonus(depth)),
+            [Some(34), Some(35), Some(37), Some(40)]
+        );
+        assert_eq!(
+            [1, 10, 24].map(|depth| plain.monster_level(20, depth)),
+            [20, 23, 25]
+        );
+        assert_eq!(plain.place_attack_bonus(10), None);
+    }
+
     #[test]
     fn footprint_is_half_open_around_the_entrance() {
         let def = entrances().first().expect("a registry entrance");

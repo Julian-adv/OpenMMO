@@ -81,6 +81,10 @@ pub struct MonsterDefinition {
     /// Debuff id rolled on every hit (doc/DEBUFF.md).
     #[serde(rename = "hitDebuff", default)]
     pub hit_debuff: Option<String>,
+    /// Debuff put on whoever lands a melee blow on it with their eyes
+    /// uncovered (a floating eye's stare).
+    #[serde(rename = "stareDebuff", default)]
+    pub stare_debuff: Option<String>,
     #[serde(default)]
     pub weapon: Option<String>,
     #[serde(rename = "weaponDropChance", default = "default_weapon_drop_chance")]
@@ -187,7 +191,7 @@ impl MonsterDefs {
 
         info!("Loaded {} monster definitions", defs.len());
         for (id, def) in &defs {
-            if let Some(debuff) = &def.hit_debuff {
+            for debuff in def.hit_debuff.iter().chain(&def.stare_debuff) {
                 crate::debuff_defs::assert_debuff_exists(debuff, &format!("monster '{id}'"));
             }
             let skills = onlinerpg_shared::monster_ai::skills_for(id);

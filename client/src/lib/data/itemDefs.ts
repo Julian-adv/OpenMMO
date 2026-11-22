@@ -161,6 +161,12 @@ function idsWithEffect(effect: string) {
 // Read every frame for every visible player, so resolve the tokens once.
 const LIGHT_ITEM_IDS = idsWithEffect('light')
 const TELEPORT_CONTROL_IDS = idsWithEffect('teleportcontrol')
+const EYE_COVER_IDS = idsWithEffect('blindfold')
+
+/** A blindfold: its wearer sees only what telepathy shows. */
+export function coversEyes(itemDefId: string | null | undefined): boolean {
+  return EYE_COVER_IDS.has(itemDefId ?? '')
+}
 
 /** Lets a teleport scroll be aimed at a bookmark, as the scroll itself or worn. */
 export function controlsTeleport(itemDefId: string): boolean {
@@ -243,6 +249,7 @@ export function averageDamage(
 const STAT_LABELS = {
   cha: 'item.charisma',
   int: 'item.intelligence',
+  hit: 'item.hit',
 } as const
 
 const CARRY_TOKEN = /^carry\+(\d+)%$/
@@ -274,7 +281,7 @@ export function statLabels(
   for (const raw of def.effects?.split(';') ?? []) {
     const token = raw.trim()
     if (!token) continue
-    const stat = token.match(/^(cha|int)([+-]\d+)$/)
+    const stat = token.match(/^(cha|int|hit)([+-]\d+)$/)
     const hpPerLevel = token.match(/^maxhp\+(\d+)\/lv$/)
     const criticalChance = token.match(/^crit\+(\d+)%$/)
     const carry = token.match(CARRY_TOKEN)
@@ -305,6 +312,12 @@ export function statLabels(
       lines.push(translate('item.invisibility', {}, language))
     else if (token === 'teleportcontrol')
       lines.push(translate('item.teleportControl', {}, language))
+    else if (token === 'gazereflect')
+      lines.push(translate('item.gazeReflect', {}, language))
+    else if (token === 'telepathy')
+      lines.push(translate('item.telepathy', {}, language))
+    else if (token === 'blindfold')
+      lines.push(translate('item.gazeImmune', {}, language))
     else lines.push(token)
   }
   return lines

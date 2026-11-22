@@ -16,6 +16,7 @@ fn raw_fish(nutrition: u32) -> crate::item_defs::EatEffect {
         raw_fish: true,
         debuff: Some("food_poisoning".to_string()),
         alcohol: None,
+        teaches: None,
     }
 }
 

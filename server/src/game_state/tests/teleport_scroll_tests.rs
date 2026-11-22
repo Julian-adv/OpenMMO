@@ -646,7 +646,12 @@ async fn teleport_scroll_includes_every_floor_before_anyone_visits() {
     assert!(game.dungeons.read().await.is_empty());
     let areas = game.teleport_dungeon_areas(&NEAR_DUNGEONS);
     let mut total = 0;
-    for entrance in game.dungeon_defs.all() {
+    // The Garden of Stone lies past a scroll's reach from here.
+    let in_reach = |entrance: &&crate::dungeon_defs::DungeonEntranceDef| {
+        NEAR_DUNGEONS.dist_xz_sq(&entrance.position()) <= (2_000.0 + GRID as f32).powi(2)
+    };
+    assert!(game.dungeon_defs.all().any(|entrance| !in_reach(&entrance)));
+    for entrance in game.dungeon_defs.all().filter(in_reach) {
         let layouts = generate_dungeon_for(&entrance.id);
         total += layouts.len();
         let (x, z) = dungeon_origin(entrance.x, entrance.z);

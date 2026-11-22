@@ -773,6 +773,7 @@ impl super::GameState {
         self.flush_weapon_enchant_failures(auth).await;
         self.flush_loot_tally(auth).await;
         self.flush_field_raid_events(auth).await;
+        self.flush_statues(auth).await;
 
         let (dirty_player_ids, dirty_states) = self.collect_dirty_character_states().await;
         let (dirty_inventory_ids, dirty_inventories) = self.collect_dirty_inventory_states().await;
@@ -1198,6 +1199,7 @@ impl super::GameState {
     /// Wake the dead in the inn's sick room: lying in the first free bed, or
     /// standing beside them when every bed is taken.
     pub async fn respawn_player(&self, player_id: &PlayerId) {
+        self.clear_stone_corpse(player_id).await;
         let respawn = &world_config().respawn;
         let npc_spawn = self
             .official_npc_def(player_id)
@@ -1332,6 +1334,7 @@ impl super::GameState {
     /// this only announces the new HP — no AOI move. Returns false when the
     /// player is alive or unknown.
     pub async fn revive_in_place(&self, player_id: &PlayerId, hp_percent: u32) -> bool {
+        self.clear_stone_corpse(player_id).await;
         let revived = {
             let mut players = self.players.write().await;
             let Some(player) = players.get_mut(player_id).filter(|p| p.health == 0) else {

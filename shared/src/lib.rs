@@ -316,7 +316,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `WatchRackOpen`/`WatchRackState`/`WatchRackMove`/`WatchRackSettle`, `WatchShiftQuit`,
 /// `WatchToolUse` and `WatchDuty`.
 /// v170: `JoinDance` and `PlayerDanceSync`: join a nearby dance in step.
-pub const PROTOCOL_VERSION: u32 = 171;
+/// v172: the `stone_gaze` and `tail_sweep` monster skills, `MonsterSkillReflected` and
+/// `DungeonStatues`.
+pub const PROTOCOL_VERSION: u32 = 172;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

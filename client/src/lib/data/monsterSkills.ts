@@ -1,3 +1,5 @@
+import type { MessageKey } from '../i18n'
+
 export const BARKAN_RUNE_SLASH = {
   windup: 1.6,
   slashEntry: 0.3,
@@ -21,10 +23,14 @@ export const EARTHQUAKE_STRIKE_MS = 3500
 export const EARTHQUAKE_CAST_MS = 5000
 export const CRYSTAL_ERUPTION_STRIKE_MS = 2400
 export const CRYSTAL_ERUPTION_CAST_MS = 3367
+export const STONE_GAZE_CAST_MS = 4000
+export const TAIL_SWEEP_CAST_MS = 2600
 
 export interface MonsterSkillDefinition {
   clip: string
   durationMs: number
+  /** Spoken as the cast begins, one picked at random. */
+  lines?: MessageKey[]
   sound?: { url: string; atMs: number }
   marks?: {
     impactMs: number
@@ -79,5 +85,19 @@ export const MONSTER_SKILL_DEFS: Record<string, MonsterSkillDefinition> = {
       sound: '/sounds/terraclash-eruption.ogg',
       crystal: true,
     },
+  },
+  // Timed in tools/blender-scripts/rig_medusa.py.
+  stone_gaze: {
+    clip: 'gaze',
+    durationMs: STONE_GAZE_CAST_MS,
+    lines: [
+      'monster.medusa.gaze1',
+      'monster.medusa.gaze2',
+      'monster.medusa.gaze3',
+    ],
+  },
+  tail_sweep: {
+    clip: 'tail_sweep',
+    durationMs: TAIL_SWEEP_CAST_MS,
   },
 }

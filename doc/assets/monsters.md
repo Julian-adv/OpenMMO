@@ -66,6 +66,18 @@
     검증 스크립트를 아직 통과하지 못한다. 무기 위치는 `modular-character-preview.html?monster=mine_remnant`의 슬라이더로 맞추고
     저장하면 `data-src/monsters.csv`에 기록된다. 재현 절차와 해시는 [리깅 보고서](mine-remnant-rig-v1.json)에 있다.
 
+- medusa — 돌의 정원 보스. [원화](../images/monsters/medusa-concept.png)는 OpenAI Codex ImageGen, ChatGPT Pro 20x로
+  2026-11-22 제작했다(OpenAI 생성 출력물 이용 조건). 두 다리 시안과 뱀 하반신 시안 중 사용자가 뱀 하반신을 골랐고,
+  두 시안과 프롬프트는 `assets/monsters/medusa/concepts/`에 있다.
+  - 3D 원본은 같은 날 Tripo API(`tools/outfits/tripo.py`, P2 모델, PBR, 면 1만 개 목표)로 원화 정면 한 장에서 만들었다.
+    120크레딧, Tripo 이용 약관 적용. 요청과 결과 기록은 `assets/monsters/medusa/tripo_v1/`의 `build.json`·`generation.json`.
+  - 리깅과 동작은 `tools/blender-scripts/rig_medusa.py` 하나로 다시 만든다(Blender 5.2.0 LTS). 이마 앞의 실 같은 조각 252점을
+    지우고 높이 2.4m로 맞춘 뒤 뼈 26개를 넣는다. 몸통을 세우는 기둥 4마디, 상체, 팔, 바닥에 누운 꼬리 8마디다. 가중치는
+    높이·팔 길이·꼬리 중심선을 따라 직접 계산한다. 10,548 triangles, 텍스처 1024² WebP.
+  - 동작은 모두 스크립트로 쓴 것이다: `idle1`, `combat_idle`, `walk`, `run`, `claw`(평타, 0.36초에 닿음), `gaze`(응시, 3.0초에 내지름),
+    `tail_sweep`(꼬리 휘두르기, 왼쪽에서 감았다가 1.6초에 등 뒤를 쓸고 지남), `dying`. 꼬리는 원본에서 왼쪽 뒤로 누워 있고 동작에서는 몸 뒤로 편다.
+    작업 파일은 `assets/monsters/medusa/rig_v1/medusa.blend`, 게임 모델은 `client/public/models/monsters/medusa.glb`.
+
 - shadow_master — 그림자 길드 보스. [원화](../images/monsters/shadow-master-concept.png)는 OpenAI Codex ImageGen,
   ChatGPT Pro 20x로 2026-11-01 제작했다(OpenAI 생성 출력물 이용 조건). 사용자가 같은 날 Tripo 웹 앱 Max 요금제로
   3D 원본을 생성했다(Tripo 서비스 이용 조건).

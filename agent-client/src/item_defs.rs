@@ -62,6 +62,15 @@ impl ItemDef {
             .sum()
     }
 
+    /// A blindfold: worn, nothing past arm's reach can be struck without
+    /// telepathy.
+    pub fn covers_eyes(&self) -> bool {
+        self.effects
+            .iter()
+            .flat_map(|effects| effects.split(';'))
+            .any(|token| token == "blindfold")
+    }
+
     pub fn is_two_handed(&self) -> bool {
         self.hands.unwrap_or(1) >= 2
     }

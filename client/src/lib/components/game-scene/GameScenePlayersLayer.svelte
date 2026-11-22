@@ -50,7 +50,11 @@
     playerVisualFloorLevel,
     playerInsideHouseId,
   } from '../../stores/housingStore'
-  import { currentDungeonDepth } from '../../stores/dungeonStore'
+  import {
+    currentDungeonDepth,
+    currentDungeonId,
+    floorStatues,
+  } from '../../stores/dungeonStore'
   import {
     myFishing,
     fishingCatches,
@@ -637,6 +641,29 @@
     }
   }
 
+  const STATUE_NAME_RANGE = 5
+  let statueModels = $state<(PlayerModel | undefined)[]>([])
+  let nearStatues = $state<number[]>([])
+  let statueFrame = 0
+
+  /** Statues never move: a sparse pass turns late-loading gear to stone
+   *  and shows who each was from close by. */
+  export function updateStatues() {
+    if (statueFrame++ % 10 !== 0) return
+    for (const model of statueModels) model?.update(0)
+    const here = currentPlayer?.position
+    const near = (here ? ($floorStatues?.statues ?? []) : [])
+      .filter(
+        (statue) =>
+          Math.hypot(
+            shortestWrappedDeltaX(here!.x, statue.position.x),
+            here!.z - statue.position.z
+          ) < STATUE_NAME_RANGE
+      )
+      .map((statue) => statue.id)
+    if (near.join() !== nearStatues.join()) nearStatues = near
+  }
+
   export function updateUnifiedTorchFlicker(deltaTime: number) {
     teleportLayer?.update()
     groundEruptionLayer?.update()
@@ -902,6 +929,38 @@
       {/key}
     {/if}
   {/each}
+
+  {#if $floorStatues && $floorStatues.entranceId === $currentDungeonId && $floorStatues.depth === $currentDungeonDepth}
+    {#each $floorStatues.statues as statue, index (statue.id)}
+      <PlayerModel
+        bind:this={statueModels[index]}
+        position={statue.position}
+        name={nearStatues.includes(statue.id) ? statue.label : ''}
+        petrified
+        isCurrentPlayer={false}
+        playerState="idle"
+        speed={0}
+        rotation={statue.rotation}
+        {camera}
+        characterClass={statue.player.characterClass}
+        gender={statue.player.gender}
+        appearance={statue.player.appearance}
+        health={1}
+        maxHealth={0}
+        mainHand={statue.player.mainHand}
+        armor={statue.player.armor}
+        back={statue.player.back}
+        backColor={statue.player.backColor}
+        backTexture={statue.player.backTexture}
+        {torchEffectsDisabled}
+        floorLevel={statue.player.floorLevel}
+        {heightManager}
+        {waterSurfaceAt}
+        {waterFoamMap}
+        {waterSunDirection}
+      />
+    {/each}
+  {/if}
 
   <!-- Enchantment takes priority on the existing shadow light. -->
   {#if !torchEffectsDisabled}

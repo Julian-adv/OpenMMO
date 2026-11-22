@@ -740,6 +740,7 @@
       for (const playerModel of otherPlayerModels) {
         playerModel?.update(dt, windState)
       }
+      playersLayer?.updateStatues()
       loopProfiler.record(
         'otherPlayerAnimation',
         performance.now() - otherPlayerAnimationStart

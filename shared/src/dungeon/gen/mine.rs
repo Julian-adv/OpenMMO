@@ -64,6 +64,7 @@ pub(super) fn try_generate_floor(
         down_along_z,
         extra_spawns: if fork { FORK_EXTRA_SPAWNS } else { 0 },
         max_mouths: Some(max_mouths),
+        pillars: false,
     };
     let mut layout = finish_floor(rng, depth, is_last, up_shaft, table, plan)?;
     let decor = [timber_posts(&layout), rails(&layout)].concat();

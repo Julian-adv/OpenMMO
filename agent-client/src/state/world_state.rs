@@ -145,10 +145,24 @@ impl SharedState {
             .map_or(self.attack_cooldown, std::time::Duration::from_millis)
     }
 
+    /// Closes to arm's reach under a blindfold; telepathy is not tracked
+    /// here, and standing closer than a bow needs costs nothing.
     pub fn attack_approach_range(&self) -> f32 {
-        self.main_hand_weapon()
+        let melee = onlinerpg_shared::reach::PLAYER_MELEE_REACH_METERS;
+        let blind = self
+            .self_equipped
+            .get(&onlinerpg_shared::inventory::EquipSlot::Head)
+            .and_then(|item| crate::item_defs::get(&item.item_def_id))
+            .is_some_and(|def| def.covers_eyes());
+        let range = self
+            .main_hand_weapon()
             .and_then(|def| def.range)
-            .unwrap_or(onlinerpg_shared::reach::PLAYER_MELEE_REACH_METERS)
+            .unwrap_or(melee);
+        if blind {
+            range.min(melee)
+        } else {
+            range
+        }
     }
 
     /// Current game time snapshot for schedule resolution.

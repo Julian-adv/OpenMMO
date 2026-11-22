@@ -89,6 +89,22 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
   - 층 이동은 계단 그대로다. 승강기는 광산 소품 단계에서 계단 자리에 넣는다.
 - 제안서에서 남은 것: 광산 소품(승강기 포함), 전용 몬스터·보스 모델.
 
+
+## Garden of Stone — 티어 6
+
+설계와 진행 상황은 [STONE_GARDEN.md](STONE_GARDEN.md)에 있다.
+
+- 입구: `world(-1836, 1.05, 6844)`, 서향. 25층, 최종 보스 `medusa`(레벨 45·HP 25,000·guard 40). 기술은 응시(`stone_gaze`)와 꼬리 휘두르기(`tail_sweep`)다.
+- `dungeons.csv`의 `depthOffset=20`, `levelCap=45`, `placeBonus=34:4`로 일반 몬스터가 1층 L28에서 24층 L40까지 오르고, 명중 보너스는 34에서 4층마다 1씩 오른다. 세 칸을 비운 던전은 기존 규칙을 따른다.
+- 몬스터는 `garden` 그룹이고 모두 기존 모델 대역이다.
+  - 1–5층: Waking Statue(`garden_statue`). Stone Golem 모델.
+  - 6–10층: Stonescale Serpent(`garden_serpent`). Lizardfolk 모델, 독.
+  - 11–15층: Half-Turned Excavator(`garden_excavator`). 광부 잔존자 모델.
+  - 16–24층: Serpent Handmaiden(`garden_handmaiden`, 돌의 손길)과 Stonebreaker(`garden_breaker`, 내려찍기).
+  - 25층: 메두사만 나온다. `layoutStyle=hall`이라 끝 방이 23×23 기둥 방이다(2×2 암반 기둥 12개).
+- 5·10·15·20·25층 문에 `garden_key_5…25`.
+- 최종 상자: 티어 5 확률 보상에 전용 롤 `ring_of_teleport_control` 5%.
+
 ## 리셋과 재접속
 
 - 게임 내 일몰마다 접속 중인 던전 참가자는 경고 후 해당 던전의 지상 입구로 이동한다.

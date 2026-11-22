@@ -46,8 +46,11 @@ mod family;
 mod family_metrics;
 #[path = "auth_field_raids.rs"]
 mod field_raids;
+#[path = "auth_statues.rs"]
+mod statues;
 pub(crate) use estate_storage::EstateDeposit;
 pub(crate) use family::{FamilyDeparture, FamilyEmblem, FamilyRoster};
+pub(crate) use statues::StatueRow;
 #[path = "auth_fence.rs"]
 mod fence;
 #[path = "auth_gold_sinks.rs"]

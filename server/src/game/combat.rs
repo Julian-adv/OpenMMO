@@ -29,24 +29,25 @@ impl AttackResult {
     }
 }
 
-/// Parse dice notation like "1d6", "2d8" into (count, sides)
-fn parse_damage_roll(damage_roll: &str) -> (u32, u32) {
-    let parts: Vec<&str> = damage_roll.split('d').collect();
+/// `(count, sides, flat bonus)` of "5d40+300"; the bonus is optional.
+fn parse_damage_roll(damage_roll: &str) -> (u32, u32, u32) {
+    let (dice, bonus) = damage_roll.split_once('+').unwrap_or((damage_roll, "0"));
+    let parts: Vec<&str> = dice.split('d').collect();
     if parts.len() == 2 {
         let count = parts[0].parse().unwrap_or(1);
         let sides = parts[1].parse().unwrap_or(6);
-        (count, sides)
+        (count, sides, bonus.trim().parse().unwrap_or(0))
     } else {
-        (1, 6) // default 1d6
+        (1, 6, 0) // default 1d6
     }
 }
 
 /// Roll dice notation like "6d4" and return the summed total (minimum 1).
 /// Used for consumable healing where there's no attack roll, just the dice.
 pub fn roll_dice(notation: &str) -> u32 {
-    let (count, sides) = parse_damage_roll(notation);
+    let (count, sides, bonus) = parse_damage_roll(notation);
     let mut rng = rand::thread_rng();
-    let mut total: u32 = 0;
+    let mut total: u32 = bonus;
     for _ in 0..count {
         total += rng.gen_range(1..=sides);
     }
@@ -120,7 +121,13 @@ pub fn monster_damage_roll_for_level(level: u8) -> &'static str {
         5..=6 => "1d8",
         7..=8 => "2d6",
         9..=12 => "2d8",
-        _ => "3d6",
+        13..=25 => "3d6",
+        // Past the shared level cap a hit grows with the level, so deeper
+        // dungeons cost more potions as they pay more XP (doc/STONE_GARDEN.md).
+        26..=30 => "4d6",
+        31..=35 => "5d6",
+        36..=40 => "6d6",
+        _ => "7d6",
     }
 }
 
@@ -167,7 +174,8 @@ pub fn roll_attack_with_accuracy(
     if hit {
         let mut total: i64 = i64::from(damage_bonus);
         for roll in std::iter::once(damage_roll).chain(extra_damage_roll) {
-            let (count, sides) = parse_damage_roll(roll);
+            let (count, sides, bonus) = parse_damage_roll(roll);
+            total += i64::from(bonus);
             for _ in 0..count {
                 total += i64::from(rng.gen_range(1..=sides));
             }
@@ -187,6 +195,23 @@ pub fn roll_attack_with_accuracy(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_damage_roll_may_carry_a_flat_bonus() {
+        assert_eq!(parse_damage_roll("3d6"), (3, 6, 0));
+        assert_eq!(parse_damage_roll("5d40+300"), (5, 40, 300));
+        for _ in 0..200 {
+            assert!((305..=500).contains(&roll_dice("5d40+300")));
+        }
+    }
+
+    #[test]
+    fn hits_grow_with_level_only_past_the_shared_cap() {
+        assert_eq!(
+            [13, 25, 26, 33, 40, 45].map(monster_damage_roll_for_level),
+            ["3d6", "3d6", "4d6", "5d6", "6d6", "7d6"]
+        );
+    }
 
     #[test]
     fn critical_doubles_weapon_ammo_and_bonus_damage_once() {

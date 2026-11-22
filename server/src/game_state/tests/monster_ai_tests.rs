@@ -842,3 +842,91 @@ async fn terraclash_ground_strike_is_bounded_by_its_swing_reach() {
         );
     }
 }
+
+/// Medusa's gaze rolls 5d40+300 on everyone her sight reaches in the quarter
+/// she faces; a wall between, the fan's sides and its range all spare.
+#[tokio::test(start_paused = true)]
+async fn medusas_gaze_strikes_those_in_sight_in_the_fan() {
+    use onlinerpg_shared::pathfinding::{RuntimeFloorGrid, RuntimePassability};
+    const EDGE_N: u8 = 1;
+    const EDGE_S: u8 = 4;
+
+    let game_state = make_flat_world_game_state("medusa_gaze");
+    let party = [
+        ("open", 6.0, 10.0),
+        ("hidden", 0.0, 10.0),
+        ("side", 10.0, 0.0),
+        ("far", 15.0, 22.0),
+    ];
+    for (name, x, z) in party {
+        game_state.add_player(make_player(name, x, z)).await;
+        let mut players = game_state.players.write().await;
+        let player = players.get_mut(&pid(name)).unwrap();
+        player.health = 600;
+        player.max_health = 600;
+    }
+    let medusa = game_state
+        .spawn_monster(
+            "medusa".into(),
+            spot(0.0, 0.0),
+            0.0,
+            0,
+            MonsterLifecycle::Ambient,
+            None,
+            false,
+        )
+        .await
+        .unwrap();
+    assert_eq!(medusa.max_health, 25_000);
+
+    // A 4m wall across the line to `hidden`, 5m out.
+    let mut cells = vec![0; 20 * 2];
+    for x in 8..12 {
+        cells[x] |= EDGE_S;
+        cells[x + 20] |= EDGE_N;
+    }
+    game_state.passability_write().insert(
+        "gaze_wall".into(),
+        RuntimePassability {
+            house_origin_x: -10.0,
+            house_origin_z: 4.0,
+            min_x: -10.0,
+            max_x: 10.0,
+            min_z: 4.0,
+            max_z: 6.0,
+            floors: vec![RuntimeFloorGrid {
+                floor_level: 0,
+                origin_x: 0,
+                origin_z: 0,
+                width: 20,
+                depth: 2,
+                y_base: 0.0,
+                wall_height: 3.0,
+                cells,
+            }],
+            stairwells: vec![],
+            yields_to_trapped_mover: false,
+            allows_projectiles: false,
+            is_ground: false,
+        },
+    );
+
+    let mut rx = game_state.register_direct_channel(&pid("open")).await;
+    let gaze = &onlinerpg_shared::monster_ai::STONE_GAZE;
+    game_state
+        .monster_skill_strike(&medusa.id, gaze, spot(0.0, 0.0), 0.0, vec![])
+        .await;
+    let victims = drain(&mut rx)
+        .into_iter()
+        .find_map(|m| match m {
+            ServerMessage::MonsterSkillStruck { victims, .. } => Some(victims),
+            _ => None,
+        })
+        .expect("the gaze lands");
+    assert_eq!(victims.len(), 1);
+    assert_eq!(victims[0].player_id, pid("open"));
+    assert!((305..=500).contains(&victims[0].damage));
+    for spared in ["hidden", "side", "far"] {
+        assert_eq!(health_of(&game_state, &pid(spared)).await, 600, "{spared}");
+    }
+}

@@ -7,3 +7,6 @@ tipsy,Tipsy,100,300,,1.1,1.1,,,,,alcohol,,,
 drunk,Drunk,100,300,,0.85,0.85,0.85,,,,alcohol,,-2,
 wasted,Wasted,100,300,,0.6,0.6,0.6,,,,alcohol,2.5,-5,
 petrified,Petrified,100,20,,,,,,,,,,,true
+poison,Poisoned,35,10,3,,,,,,true,,,,
+stone_touch,Stone Touch,10,4,,,,,,,,,,,true
+eye_stare,Held by the Eye,100,5,,,,,,,,,,,true

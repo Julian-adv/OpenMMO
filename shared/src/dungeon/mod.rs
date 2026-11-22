@@ -29,6 +29,7 @@ mod doors;
 mod gen;
 mod registry;
 mod stairs;
+mod statues;
 #[cfg(test)]
 mod tests;
 
@@ -43,6 +44,7 @@ pub use stairs::{
     entrance_ramp_height_at, floor_height_at, ground_y_for_floor, leg_touches_shaft,
     on_stair_shaft, shaft_run_pos, FLOOR_CHANGE_LEG_MAX, LANDING_CELLS, SHAFT_CHANGE_MARGIN,
 };
+pub use statues::{statue_capacity, statue_cells};
 
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
@@ -936,12 +938,21 @@ pub fn spawn_table_for(group: &str, depth: u8) -> &'static [SpawnEntry] {
         .unwrap_or(&[])
 }
 
-/// Depth bonuses cap at 25 without lowering a monster's base level.
+/// Where depth stops raising monster levels unless a dungeon sets its own cap.
+pub const DEPTH_LEVEL_CAP: u8 = 25;
+
+/// A monster's level at a depth on the shared curve; the surface passes its
+/// distance-equivalent depth.
 pub fn monster_level_for_depth(def_level: u8, depth: u8) -> u8 {
+    monster_level_at(def_level, depth, DEPTH_LEVEL_CAP)
+}
+
+/// Depth bonuses stop at `cap` without lowering a monster's base level.
+pub fn monster_level_at(def_level: u8, depth: u8, cap: u8) -> u8 {
     if depth <= 4 {
         def_level
     } else {
-        ((def_level as u32 + (depth as u32 - 4) / 2).min(25) as u8).max(def_level)
+        ((def_level as u32 + (depth as u32 - 4) / 2).min(u32::from(cap)) as u8).max(def_level)
     }
 }
 
