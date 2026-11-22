@@ -117,6 +117,7 @@ mod tests {
     }
 
     #[tokio::test(start_paused = true)]
+    #[ignore = "oopses the pc5090 kernel in AppArmor unix socket checks"]
     async fn monitor_withholds_keepalives_on_stall_and_stops_on_shutdown() {
         use crate::health::{
             tests::{complete_all, register_three},
@@ -154,6 +155,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "oopses the pc5090 kernel in AppArmor unix socket checks"]
     fn sends_to_filesystem_socket() {
         let path = crate::test_util::unique_temp_dir("notify");
         let receiver = UnixDatagram::bind(&path).unwrap();
