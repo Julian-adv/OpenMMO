@@ -22,6 +22,7 @@ function setup() {
     getRenderTarget: () => null,
     setRenderTarget: vi.fn(),
     render: vi.fn(),
+    lighting: { getNode: () => ({ getLights: () => [], setLights: vi.fn() }) },
   }
   const manager = new ReflectionRenderManager(
     renderer as unknown as WebGPURenderer,
