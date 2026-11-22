@@ -24,6 +24,9 @@ pub(super) struct Cast {
     pub(super) spots: Vec<Position>,
 }
 
+/// Fraction of a stone-breaking skill's range the monster closes to.
+const STONE_BREAK_REACH: f32 = 0.6;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct MonsterBrain {
     pub monster_id: String,
@@ -360,11 +363,33 @@ impl MonsterBrain {
 
     /// Players this monster may go for. Stone is out of reach, unless every
     /// living player around is stone and the monster shatters it: then it
-    /// stands by them, holding its swing until the wait runs out.
+    /// stands by them, holding its swing until the wait runs out. A monster
+    /// with `SkillSet::stone_break` sees only the nearest stone while any stands.
     fn targetable<'a>(&mut self, players: &'a [NearbyPlayer]) -> Cow<'a, [NearbyPlayer]> {
         if !players.iter().any(|p| p.petrified) {
             self.stone_wait_left_ms = None;
             return Cow::Borrowed(players);
+        }
+        let nearest_stone = || {
+            players
+                .iter()
+                .filter(|p| p.petrified && p.health > 0)
+                .min_by(|a, b| {
+                    self.position
+                        .dist_xz_sq(&a.position)
+                        .total_cmp(&self.position.dist_xz_sq(&b.position))
+                })
+        };
+        let hunted = self
+            .skills
+            .and_then(|set| set.stone_break)
+            .and_then(|_| nearest_stone());
+        if let Some(stone) = hunted {
+            if self.target_player_id != Some(stone.id) {
+                self.target_player_id = Some(stone.id);
+                self.retry_chase();
+            }
+            return Cow::Borrowed(std::slice::from_ref(stone));
         }
         let all_stone = !players.iter().any(|p| !p.petrified && p.health > 0);
         if let Some(shatter) = self
@@ -529,13 +554,8 @@ impl MonsterBrain {
         self.timed_gap_left_ms = rule.gap_ms;
         let bearing = self.position.bearing_xz_to(&pick.position);
         self.set_facing(bearing);
-        self.state = AiState::Attack;
-        self.state_timer_ms = 0.0;
-        self.target_position = None;
-        self.waypoints.clear();
-        self.attack_cooldown_left_ms = self.attack_cooldown_left_ms.max(rule.skill.cast_ms);
         let rotation = self.aim_toward(bearing);
-        self.begin_cast(
+        self.stand_and_cast(
             rule.skill,
             rotation,
             nearby_players,
@@ -544,6 +564,70 @@ impl MonsterBrain {
             commands,
         );
         true
+    }
+
+    /// Break the stone `targetable` singled out once it is within the tail's
+    /// reach and in the open: the back turns to it and the cast aims at it.
+    pub(super) fn try_stone_break(
+        &mut self,
+        nearby_players: &[NearbyPlayer],
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+        commands: &mut Vec<AiCommand>,
+    ) -> bool {
+        let Some(skill) = self.skills.and_then(|set| set.stone_break) else {
+            return false;
+        };
+        let Some(stone) = self.current_target(nearby_players).filter(|p| p.petrified) else {
+            return false;
+        };
+        let reach = self.attack_range.max(skill.range() * STONE_BREAK_REACH);
+        if self.swing_left_ms > 0.0
+            || self.position.dist_xz_sq(&stone.position) > reach.powi(2)
+            || path_provider.attack_line_blocked(
+                self.position.x,
+                self.position.z,
+                stone.position.x,
+                stone.position.z,
+                self.path_floor,
+            )
+        {
+            return false;
+        }
+        // A statue underfoot is behind her whichever way she stands.
+        let bearing = self
+            .position
+            .bearing_xz_to(&stone.position)
+            .unwrap_or(self.rotation + std::f32::consts::PI);
+        self.set_facing(Some(bearing + std::f32::consts::PI));
+        self.stand_and_cast(skill, bearing, nearby_players, path_provider, rng, commands);
+        true
+    }
+
+    /// Stop where it stands and cast `skill` toward `rotation`, outside the
+    /// swing's own cadence.
+    fn stand_and_cast(
+        &mut self,
+        skill: &'static super::MonsterSkill,
+        rotation: f32,
+        nearby_players: &[NearbyPlayer],
+        path_provider: &dyn PathProvider,
+        rng: &mut impl Rng,
+        commands: &mut Vec<AiCommand>,
+    ) {
+        self.state = AiState::Attack;
+        self.state_timer_ms = 0.0;
+        self.target_position = None;
+        self.waypoints.clear();
+        self.attack_cooldown_left_ms = self.attack_cooldown_left_ms.max(skill.cast_ms);
+        self.begin_cast(
+            skill,
+            rotation,
+            nearby_players,
+            path_provider,
+            rng,
+            commands,
+        );
     }
 
     fn begin_cast(
@@ -678,7 +762,9 @@ impl MonsterBrain {
         let nearby_players = &*targets;
         self.update_aggro_target(nearby_players, path_provider, rng);
 
-        if self.try_timed_cast(nearby_players, path_provider, rng, &mut commands) {
+        if self.try_timed_cast(nearby_players, path_provider, rng, &mut commands)
+            || self.try_stone_break(nearby_players, path_provider, rng, &mut commands)
+        {
             return commands;
         }
 

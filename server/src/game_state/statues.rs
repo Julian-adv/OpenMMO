@@ -119,7 +119,7 @@ impl GameState {
         Self::night_epoch(self.current_total_game_seconds())
     }
 
-    /// The gaze killed this player: keep them as they stand, crowd out the
+    /// This player died broken as stone: keep them as they stand, crowd out the
     /// floor's oldest statue and show everyone there.
     pub(super) async fn keep_statue_of(&self, player_id: &PlayerId) {
         let Some(mut look) = self.players.read().await.get(player_id).cloned() else {

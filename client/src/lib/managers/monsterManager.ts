@@ -485,9 +485,12 @@ class MonsterManager {
     halfAngle: number
   ) {
     const monster = this.monsters.get(monsterId)
-    if (!monster || monster.state === 'dead' || !MONSTER_SKILL_DEFS[skill])
-      return
-    this.applyMonsterPose(monster, { rotation, state: 'attack' })
+    const def = MONSTER_SKILL_DEFS[skill]
+    if (!monster || monster.state === 'dead' || !def) return
+    this.applyMonsterPose(monster, {
+      rotation: def.rear ? rotation + Math.PI : rotation,
+      state: 'attack',
+    })
     monster.skill = {
       id: skill,
       counter: (monster.skill?.counter ?? 0) + 1,

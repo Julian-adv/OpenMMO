@@ -67,6 +67,9 @@ async fn a_pillar_of_the_hall_breaks_medusas_gaze() {
         player.health = 600;
         player.max_health = 600;
         game_state.add_player(player).await;
+        game_state
+            .register_player_character(&pid(name), 1, 0, attrs_with_cha(10), 0, Some(100))
+            .await;
     }
     let east = std::f32::consts::FRAC_PI_2;
     game_state
@@ -79,9 +82,13 @@ async fn a_pillar_of_the_hall_breaks_medusas_gaze() {
         )
         .await;
     let players = game_state.players.read().await;
-    assert_eq!(players[&pid("hidden")].health, 600);
-    let open = players[&pid("open")].health;
-    assert!((100..=295).contains(&open), "the gaze took {}", 600 - open);
+    assert!(!players[&pid("hidden")].petrified);
+    assert!(players[&pid("open")].petrified);
+    assert_eq!(
+        players[&pid("open")].health,
+        600,
+        "the gaze itself costs nothing"
+    );
 }
 
 #[tokio::test]
@@ -112,6 +119,9 @@ async fn gazed_at(tag: &str, gear: &[&str], rotation: f32) -> (GameState, String
     player.rotation = rotation;
     let id = player.id;
     game_state.add_player(player).await;
+    game_state
+        .register_player_character(&id, 1, 0, attrs_with_cha(10), 0, Some(100))
+        .await;
     let bag = gear
         .iter()
         .enumerate()
@@ -165,6 +175,31 @@ async fn gaze(game_state: &GameState, medusa: &str) {
         .await;
 }
 
+/// Her tail lashes north from (0, 2), over the player at (0, 6).
+async fn tail(game_state: &GameState, medusa: &str) {
+    let origin = Position {
+        x: 0.0,
+        y: 0.0,
+        z: 2.0,
+    };
+    game_state
+        .monsters
+        .write()
+        .await
+        .get_mut(medusa)
+        .unwrap()
+        .position = origin;
+    game_state
+        .monster_skill_strike(
+            medusa,
+            &onlinerpg_shared::monster_ai::TAIL_SWEEP,
+            origin,
+            0.0,
+            vec![],
+        )
+        .await;
+}
+
 /// South, toward Medusa at the origin from (0, 6).
 const FACING_HER: f32 = std::f32::consts::PI;
 
@@ -197,8 +232,7 @@ async fn a_mirror_shield_turned_away_does_nothing() {
         assert!(drain(&mut rx)
             .iter()
             .all(|m| !matches!(m, ServerMessage::MonsterSkillReflected { .. })));
-        let health = game_state.players.read().await[&pid("Perseus")].health;
-        assert!((100..=295).contains(&health), "{rotation}: {health}");
+        assert!(game_state.is_petrified(&pid("Perseus")).await, "{rotation}");
         assert_eq!(game_state.monsters.read().await[&medusa].health, 25_000);
     }
 }
@@ -427,9 +461,52 @@ async fn an_auto_attack_on_a_floating_eye_ends_when_the_stare_holds_the_striker(
         .expect("the swing or the logout after it never returned");
 }
 
-/// Whoever the gaze kills stays standing as stone until they rise again.
+/// The gaze turns to stone for 30 s; left unbroken, the stone costs half a
+/// break as it lets go.
 #[tokio::test(start_paused = true)]
-async fn the_gaze_leaves_its_dead_standing_as_stone() {
+async fn the_gaze_turns_to_stone_and_lets_go_for_half_a_break() {
+    let (game_state, medusa, _rx) = gazed_at("gaze_stone", &[], 0.0).await;
+    let id = pid("Perseus");
+    gaze(&game_state, &medusa).await;
+    assert!(game_state.is_petrified(&id).await);
+    tokio::time::sleep(std::time::Duration::from_secs(29)).await;
+    game_state.tick_debuffs().await;
+    assert!(game_state.is_petrified(&id).await);
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+    game_state.tick_debuffs().await;
+    assert!(!game_state.is_petrified(&id).await);
+    let lost = 600 - game_state.players.read().await[&id].health;
+    assert!((155..=250).contains(&lost), "letting go took {lost}");
+}
+
+/// Her tail frees a statue and lands 5d40+300 on it; flesh takes the plain
+/// lash.
+#[tokio::test(start_paused = true)]
+async fn the_tail_frees_a_statue_and_lands_the_break_roll() {
+    let (game_state, medusa, _rx) = gazed_at("gaze_break", &[], 0.0).await;
+    let id = pid("Perseus");
+    gaze(&game_state, &medusa).await;
+    tail(&game_state, &medusa).await;
+    assert!(!game_state.is_petrified(&id).await);
+    let lost = 600 - game_state.players.read().await[&id].health;
+    assert!((305..=500).contains(&lost), "the break took {lost}");
+
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&id)
+        .unwrap()
+        .health = 600;
+    tail(&game_state, &medusa).await;
+    let lost = 600 - game_state.players.read().await[&id].health;
+    assert!(lost < 305, "flesh took {lost}");
+}
+
+/// Whoever the tail breaks to death stays standing as stone until they rise
+/// again.
+#[tokio::test(start_paused = true)]
+async fn a_statue_broken_to_death_stays_standing_as_stone() {
     let (game_state, medusa, mut rx) = gazed_at("gaze_statue", &[], 0.0).await;
     let id = pid("Perseus");
     game_state
@@ -440,13 +517,14 @@ async fn the_gaze_leaves_its_dead_standing_as_stone() {
         .unwrap()
         .health = 200;
     gaze(&game_state, &medusa).await;
+    tail(&game_state, &medusa).await;
     {
         let players = game_state.players.read().await;
         assert_eq!(players[&id].health, 0);
         assert!(players[&id].petrified);
     }
     let messages = drain(&mut rx);
-    let stone = messages.iter().position(|m| {
+    let stone = messages.iter().rposition(|m| {
         matches!(
             m,
             ServerMessage::PlayerPetrifiedToggled {
@@ -517,7 +595,7 @@ async fn garden_delver(game_state: &GameState, name: &str, depth: u8, dz: f32) -
 /// nameless excavators; by another night the maze has moved and they take one
 /// of the floor's statue cells.
 #[tokio::test(start_paused = true)]
-async fn the_gazes_dead_join_the_floors_statues() {
+async fn statues_broken_to_death_join_the_floors_statues() {
     let game_state = make_test_game_state("garden_statues");
     let medusa = floor_monsters(&game_state, "stone_garden", 25).await[0]
         .id
@@ -555,14 +633,17 @@ async fn the_gazes_dead_join_the_floors_statues() {
     victim.max_health = 200;
     game_state.add_player(victim).await;
     game_state
-        .monster_skill_strike(
-            &medusa,
-            &onlinerpg_shared::monster_ai::STONE_GAZE,
-            at(2, 1),
-            std::f32::consts::FRAC_PI_2,
-            vec![],
-        )
+        .register_player_character(&pid("Victim"), 1, 0, attrs_with_cha(10), 0, Some(100))
         .await;
+    let east = std::f32::consts::FRAC_PI_2;
+    for skill in [
+        &onlinerpg_shared::monster_ai::STONE_GAZE,
+        &onlinerpg_shared::monster_ai::TAIL_SWEEP,
+    ] {
+        game_state
+            .monster_skill_strike(&medusa, skill, at(2, 1), east, vec![])
+            .await;
+    }
 
     let tonight = statues_in(drain(&mut rx));
     assert_eq!(tonight.len(), 12);

@@ -525,7 +525,7 @@ impl super::GameState {
         self.set_player_petrified(player_id, true).await;
     }
 
-    /// Killed by the gaze: the body stays standing as stone until it rises.
+    /// Broken to death as stone: the body stays standing as stone until it rises.
     pub(super) async fn leave_stone_corpse(&self, player_id: &PlayerId) {
         self.set_player_petrified(player_id, true).await;
     }

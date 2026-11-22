@@ -176,6 +176,8 @@ struct LandedHit {
     current_health: u32,
     /// Where the target stood, unless it left mid-blow.
     at: Option<(Position, i8)>,
+    /// A skill freed its target from stone to land.
+    broke_stone: bool,
 }
 
 impl LandedHit {
@@ -1996,7 +1998,7 @@ impl super::GameState {
         }
         let victims: Vec<_> = landed
             .iter()
-            .filter(|h| h.result.hit)
+            .filter(|h| h.result.hit && skill.damage != SkillDamage::None)
             .map(|h| SkillVictim {
                 player_id: h.player_id,
                 damage: h.result.damage,
@@ -2078,8 +2080,7 @@ impl super::GameState {
             self.inflict_debuff(&hit.player_id, debuff_id, None).await;
         }
         if let (true, Some((position, floor))) = (hit.died(), hit.at) {
-            let gazed = matches!(reach, MonsterReach::Skill { skill, .. } if skill.gaze);
-            if gazed {
+            if hit.broke_stone {
                 self.leave_stone_corpse(&hit.player_id).await;
                 self.keep_statue_of(&hit.player_id).await;
             }
@@ -2123,7 +2124,7 @@ impl super::GameState {
         Box::pin(self.reflect_gaze_inner(monster_id, player_id, skill))
     }
 
-    /// A third of the gaze's roll goes back to its caster. The mirror wounds
+    /// A third of a stone-break roll goes back to the gaze's caster. The mirror wounds
     /// but never kills, so the kill stays a blow someone struck.
     async fn reflect_gaze_inner(
         &self,
@@ -2131,13 +2132,11 @@ impl super::GameState {
         player_id: &PlayerId,
         skill: &onlinerpg_shared::monster_ai::MonsterSkill,
     ) {
-        let SkillDamage::Roll(dice) = skill.damage else {
-            return;
-        };
         let Some(monster) = self.monsters.read().await.get(monster_id).cloned() else {
             return;
         };
-        let damage = (combat::roll_dice(dice) / 3).min(monster.health.saturating_sub(1));
+        let roll = combat::roll_dice(onlinerpg_shared::monster_ai::STONE_BREAK_ROLL);
+        let damage = (roll / 3).min(monster.health.saturating_sub(1));
         let Some(name) = self
             .players
             .read()
@@ -2196,10 +2195,17 @@ impl super::GameState {
         {
             let players = self.players.read().await;
             let player = players.get(target_player_id)?;
-            // Stone takes no blow but a shattering swing (`SkillSet::shatter`).
-            shatters = snapshot.shatter.filter(|_| {
-                player.petrified && player.health > 0 && matches!(reach, MonsterReach::Melee(_))
-            });
+            // Stone takes no blow but a shattering swing (`SkillSet::shatter`)
+            // or a skill made to break it (`MonsterSkill::breaks_stone`).
+            shatters = match reach {
+                MonsterReach::Melee(_) => snapshot.shatter.map(|multiplier| SkillDamage::Scaled {
+                    multiplier,
+                    ignores_guard: true,
+                }),
+                MonsterReach::Skill { skill, .. } => skill.breaks_stone.map(SkillDamage::Roll),
+                _ => None,
+            }
+            .filter(|_| player.petrified && player.health > 0);
             if !player.is_damageable(now) && shatters.is_none() {
                 return None;
             }
@@ -2280,10 +2286,7 @@ impl super::GameState {
             self.shatter_stone(target_player_id).await;
         }
         let damage = match reach {
-            _ if let Some(multiplier) = shatters => SkillDamage::Scaled {
-                multiplier,
-                ignores_guard: true,
-            },
+            _ if let Some(damage) = shatters => damage,
             MonsterReach::Skill { skill, .. } => skill.damage,
             MonsterReach::Burn { skill, .. } => {
                 SkillDamage::Fixed(skill.pools.map_or(0, |pools| pools.damage))
@@ -2302,6 +2305,7 @@ impl super::GameState {
         let result = match damage {
             SkillDamage::Fixed(damage) => sure_hit(damage),
             SkillDamage::Roll(dice) => sure_hit(combat::roll_dice(dice)),
+            SkillDamage::None => sure_hit(0),
             SkillDamage::Scaled {
                 multiplier,
                 ignores_guard,
@@ -2388,6 +2392,7 @@ impl super::GameState {
             result,
             current_health,
             at: target_loc,
+            broke_stone: shatters.is_some() && matches!(reach, MonsterReach::Skill { .. }),
         })
     }
 

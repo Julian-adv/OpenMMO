@@ -31,6 +31,8 @@ export interface MonsterSkillDefinition {
   durationMs: number
   /** Spoken as the cast begins, one picked at random. */
   lines?: MessageKey[]
+  /** Cast behind the body: the server's rotation is the fan's, not the facing. */
+  rear?: boolean
   sound?: { url: string; atMs: number }
   marks?: {
     impactMs: number
@@ -99,5 +101,6 @@ export const MONSTER_SKILL_DEFS: Record<string, MonsterSkillDefinition> = {
   tail_sweep: {
     clip: 'tail_sweep',
     durationMs: TAIL_SWEEP_CAST_MS,
+    rear: true,
   },
 }

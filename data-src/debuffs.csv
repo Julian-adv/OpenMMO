@@ -10,3 +10,4 @@ petrified,Petrified,100,20,,,,,,,,,,,true,
 poison,Poisoned,35,10,3,,,,,,true,,,,,
 stone_touch,Stone Touch,10,4,,,,,,,,,,,true,
 eye_stare,Held by the Eye,100,15,,,,,,,,,,,true,2d8
+stone_gaze,Stone Gaze,100,30,,,,,,,,,,,true,5d20+150
