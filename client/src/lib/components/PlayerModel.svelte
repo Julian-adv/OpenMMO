@@ -4,6 +4,7 @@
   import { FEMALE_BOOTS_PROPERTY } from '../utils/femaleCharacter'
 
   const LOCAL_NAMETAG_RENDER_ORDER = 1000
+  const DUNGEON_NAMETAG_RENDER_ORDER = 900
   const LOCAL_NAMETAG_OFFSET_PX = 8
 
   // Fixed character-sized hover box; every player shares the skeleton, so the
@@ -380,6 +381,14 @@
   let nametagScale = $state(1)
   let nametagHeight = $state(2.7)
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
+  const nametagOnTop = $derived(isCurrentPlayer || $currentDungeonId !== null)
+  const nametagRenderOrder = $derived(
+    isCurrentPlayer
+      ? LOCAL_NAMETAG_RENDER_ORDER
+      : nametagOnTop
+        ? DUNGEON_NAMETAG_RENDER_ORDER
+        : 0
+  )
   const threlte = useThrelte()
   const { size } = threlte
 
@@ -2415,10 +2424,7 @@
   {/if}
 
   <!-- Name tag (separate from character to avoid rotation inheritance) -->
-  <T.Group
-    bind:ref={nametagGroup}
-    renderOrder={isCurrentPlayer ? LOCAL_NAMETAG_RENDER_ORDER : 0}
-  >
+  <T.Group bind:ref={nametagGroup} renderOrder={nametagRenderOrder}>
     {#if title}
       <TextLabel
         text={$titleName(title)}
@@ -2429,7 +2435,7 @@
         anchorX="center"
         anchorY="middle"
         position={[0, isCurrentPlayer ? 0.26 : 0.3, 0]}
-        depthTest={!isCurrentPlayer}
+        depthTest={!nametagOnTop}
       />
     {/if}
     <TextLabel
@@ -2443,7 +2449,7 @@
       outlineWidth={7}
       anchorX="center"
       anchorY="middle"
-      depthTest={!isCurrentPlayer}
+      depthTest={!nametagOnTop}
     />
 
     {#if isCurrentPlayer}
@@ -2470,6 +2476,8 @@
         y={-0.38 + RESOURCE_BAR_HEIGHT}
         ratio={Math.max(0.001, displayedHealthRatio)}
         color="#ff0000"
+        onTop={nametagOnTop}
+        renderOrder={nametagRenderOrder}
       />
     {/if}
 
@@ -2481,7 +2489,7 @@
         position={[0, 0.4, 0]}
         anchorX="center"
         anchorY="middle"
-        depthTest={!isCurrentPlayer}
+        depthTest={!nametagOnTop}
       />
     {/if}
   </T.Group>

@@ -75,6 +75,7 @@
   import { dungeonManager } from '../managers/dungeonManager'
   import { billboardScale } from '../utils/billboardScale'
   import { hoveredMonsterId } from '../stores/gameStore'
+  import { currentDungeonId } from '../stores/dungeonStore'
   import { HOVER_SCALE_IDLE, stickyHoverScale } from '../utils/stickyHover'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import TargetRing from './TargetRing.svelte'
@@ -189,6 +190,9 @@
   const threlte = useThrelte()
   let group = $state<THREE.Group>()
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
+  const ON_TOP_RENDER_ORDER = 4
+  const inDungeon = $derived($currentDungeonId !== null)
+  const nameOnTop = $derived(!isBoss || inDungeon)
   let nametagHeight = $state(2.5)
   let stunned = $state(false)
   let stunGroup = $state<THREE.Group | undefined>(undefined)
@@ -948,13 +952,9 @@
       anchorY="bottom"
       {...isBoss
         ? { fontSize: 0.3, color: '#ffd166', outlineColor: '#422d00' }
-        : {
-            fontSize: 0.22,
-            color: '#ffffff',
-            outlineColor: '#000000',
-            depthTest: false,
-            renderOrder: 4,
-          }}
+        : { fontSize: 0.22, color: '#ffffff', outlineColor: '#000000' }}
+      depthTest={!nameOnTop}
+      renderOrder={nameOnTop ? ON_TOP_RENDER_ORDER : undefined}
     />
   {/if}
   {#if showHealth && monsterState !== 'dead' && maxHealth > 0}
@@ -962,6 +962,8 @@
       y={-RESOURCE_BAR_HEIGHT}
       ratio={Math.max(0.001, health / maxHealth)}
       color="#ff0000"
+      onTop={inDungeon}
+      renderOrder={inDungeon ? ON_TOP_RENDER_ORDER : 0}
     />
   {/if}
   {#if animDebugInfo}
