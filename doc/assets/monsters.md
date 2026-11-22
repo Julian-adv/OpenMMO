@@ -66,6 +66,23 @@
     검증 스크립트를 아직 통과하지 못한다. 무기 위치는 `modular-character-preview.html?monster=mine_remnant`의 슬라이더로 맞추고
     저장하면 `data-src/monsters.csv`에 기록된다. 재현 절차와 해시는 [리깅 보고서](mine-remnant-rig-v1.json)에 있다.
 
+- floating_eye — 돌의 정원 입구 주변을 떠다니는 눈. [원화](../images/monsters/floating-eye-concept.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-22 제작했다(OpenAI 생성 출력물 이용 조건). 맨 눈알 시안과 돌 껍질 시안 중 사용자가 맨 눈알을 골랐고,
+  두 시안과 프롬프트는 `assets/monsters/floating_eye/concepts/`에 있다.
+  - 3D 원본은 같은 날 Tripo API(`tools/outfits/tripo.py`, P2 모델, PBR, 면 4천 개 목표)로 원화 정면 한 장에서 만들었다.
+    120크레딧, Tripo 이용 약관 적용. 요청과 결과 기록은 `assets/monsters/floating_eye/tripo_v1/`.
+  - 눈꺼풀도 Tripo로 만들었다(사용자 지시, 2026-11-22). 눈알을 파란 마네킹으로 렌더하고
+    (`tools/blender-scripts/render_floating_eye_mannequin.py`) 그 위에 감은 눈꺼풀을 ImageGen으로 그려 정면·왼쪽·뒤 세 장을
+    Tripo multiview에 넣었다(120크레딧, `assets/monsters/floating_eye/eyelids/`). `tools/split-floating-eye-lids.py`가
+    파란 삼각형을 버리고 눈꺼풀만 남긴다. 눈알과 같은 좌표계로 나와 따로 맞출 필요가 없었다.
+  - 리깅과 동작은 `tools/blender-scripts/rig_floating_eye.py` 하나로 다시 만든다. 눈알 지름을 0.8m로 맞춰 중심을 지면 위 1.3m에
+    띄운다. 눈알이 완전한 구가 아니고 각막이 튀어나와 있어, 눈꺼풀은 눈알을 다 비켜 가는 구면 위로 펴고 안쪽으로 5cm 두께를 줬다.
+    눈알 뒤쪽은 생성된 마네킹의 뒷면을 눈꺼풀 색으로 칠해 고정 덮개로 쓰고, 눈꺼풀은 그 밑으로 드나든다(사용자 요청).
+    뼈는 7개다: 뿌리, 몸, 위·아래 눈꺼풀, 촉수 3마디. 9,010 triangles, 텍스처 512² WebP.
+    덮개를 더 앞으로 내린 판과 눈꺼풀을 네 조각으로 가른 판도 만들어 봤으나 사용자가 이 모양을 골랐다(2026-11-22).
+  - 동작: `idle`(떠 있기, 4초에 한 번 깜빡임), `drift`(이동), `dying`(눈을 감고 떨어져 옆으로 구름).
+    작업 파일은 `assets/monsters/floating_eye/rig_v1/floating_eye.blend`, 게임 모델은 `client/public/models/monsters/floating_eye.glb`.
+
 - medusa — 돌의 정원 보스. [원화](../images/monsters/medusa-concept.png)는 OpenAI Codex ImageGen, ChatGPT Pro 20x로
   2026-11-22 제작했다(OpenAI 생성 출력물 이용 조건). 두 다리 시안과 뱀 하반신 시안 중 사용자가 뱀 하반신을 골랐고,
   두 시안과 프롬프트는 `assets/monsters/medusa/concepts/`에 있다.
