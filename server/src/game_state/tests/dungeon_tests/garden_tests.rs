@@ -322,12 +322,9 @@ async fn floating_eyes_drift_only_around_the_garden() {
     assert_eq!(eyes_met_walking_at("eyes_far", -1836.0, 7400.0).await, 0);
 }
 
-/// A floating eye struck by hand holds whoever looked at it; a blindfold or
-/// an arrow avoids the stare.
-#[tokio::test(start_paused = true)]
-async fn striking_a_floating_eye_by_hand_holds_the_striker_unless_blindfolded() {
-    let game_state = make_flat_world_game_state("eye_stare");
-    let (id, _rx) = add_hungry_player(&game_state, "Striker", 100).await;
+async fn eye_beside_striker(tag: &str) -> (GameState, PlayerId, DirectRx, crate::types::Monster) {
+    let game_state = make_flat_world_game_state(tag);
+    let (id, rx) = add_hungry_player(&game_state, "Striker", 100).await;
     let at = game_state.players.read().await[&id].position;
     let eye = game_state
         .spawn_monster(
@@ -344,6 +341,14 @@ async fn striking_a_floating_eye_by_hand_holds_the_striker_unless_blindfolded() 
         )
         .await
         .unwrap();
+    (game_state, id, rx, eye)
+}
+
+/// A floating eye struck by hand holds whoever looked at it; a blindfold or
+/// an arrow avoids the stare.
+#[tokio::test(start_paused = true)]
+async fn striking_a_floating_eye_by_hand_holds_the_striker_unless_blindfolded() {
+    let (game_state, id, _rx, eye) = eye_beside_striker("eye_stare").await;
     game_state.inventories.write().await.insert(
         id,
         PlayerInventory {
@@ -376,6 +381,31 @@ async fn striking_a_floating_eye_by_hand_holds_the_striker_unless_blindfolded() 
         .health = 60;
     strike_until_hit().await;
     assert!(held().await, "open eyes are held");
+}
+
+/// The stare lands inside the striker's own swing, which holds the attack
+/// session: ending the attack there must not wait on that session.
+#[tokio::test(start_paused = true)]
+async fn an_auto_attack_on_a_floating_eye_ends_when_the_stare_holds_the_striker() {
+    let (game_state, id, _rx, eye) = eye_beside_striker("eye_stare_auto").await;
+    let strikes = async {
+        for request in 0..200 {
+            game_state
+                .start_player_attack(id, eye.id.clone(), false, request, None)
+                .await;
+            if game_state.is_petrified(&id).await {
+                break;
+            }
+            game_state.stop_player_attack(&id).await;
+            game_state.last_player_attacks.write().await.remove(&id);
+        }
+        assert!(game_state.is_petrified(&id).await);
+        assert!(!game_state.auto_attacks.read().await.contains_key(&id));
+        game_state.remove_player(&id).await;
+    };
+    tokio::time::timeout(std::time::Duration::from_secs(60), strikes)
+        .await
+        .expect("the swing or the logout after it never returned");
 }
 
 /// Whoever the gaze kills stays standing as stone until they rise again.

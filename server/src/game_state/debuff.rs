@@ -518,9 +518,9 @@ impl super::GameState {
             .is_some_and(|p| p.petrified)
     }
 
-    /// Stop whatever the player was doing, then set the stone flag.
+    /// Stop whatever the player was doing, then set the stone flag. No
+    /// `stop_player_attack`: a stare lands mid-swing, under the session lock.
     async fn turn_to_stone(&self, player_id: &PlayerId) {
-        self.stop_player_attack(player_id).await;
         self.stop_bed_rest(player_id).await;
         self.clear_player_movement(player_id, "petrified").await;
         self.cancel_concentration_if_active(player_id).await;

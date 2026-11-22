@@ -253,7 +253,7 @@ impl GameState {
             || self
                 .player_attack(&player_id, monster_id, auth.as_deref())
                 .await;
-        if !swung {
+        if !swung || self.is_petrified(&player_id).await {
             self.end_player_attack(&player_id, &mut guard).await;
         } else if posed {
             attack.action_version = self.action_version(&player_id).await;
