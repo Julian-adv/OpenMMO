@@ -549,7 +549,7 @@ impl Serialize for PropSpec {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FloorLayout {
     /// 1-based depth below the surface.
@@ -567,6 +567,26 @@ pub struct FloorLayout {
     pub spawns: Vec<SpawnSpec>,
     /// Barrels/crates/chests clustered in room corners — see [`PropSpec`].
     pub props: Vec<PropSpec>,
+    /// Openings in the walls rooms share. Where this is set, rooms stand
+    /// edge to edge: every edge between two of them is a wall but these.
+    pub doorways: Vec<InteriorDoorSpec>,
+}
+
+/// As derived, less `doorways`: [`layout_hash`] reads this form, and they
+/// follow from the rooms.
+impl std::fmt::Debug for FloorLayout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FloorLayout")
+            .field("depth", &self.depth)
+            .field("rooms", &self.rooms)
+            .field("carved", &self.carved)
+            .field("up_shaft", &self.up_shaft)
+            .field("down_shaft", &self.down_shaft)
+            .field("chest", &self.chest)
+            .field("spawns", &self.spawns)
+            .field("props", &self.props)
+            .finish()
+    }
 }
 
 impl FloorLayout {
@@ -1022,6 +1042,34 @@ fn floor_passability_cells_inner(
             }
             if !layout.is_carved(x - 1, z) {
                 cells[idx] |= EDGE_W;
+            }
+        }
+    }
+
+    // Rooms set edge to edge are walled apart except at their doorways.
+    if !layout.doorways.is_empty() {
+        let room_of = |x: i32, z: i32| layout.rooms.iter().position(|r| r.contains(x, z));
+        let doorway = |x: i32, z: i32, spans_x: bool| {
+            layout.doorways.iter().any(|d| {
+                let (lat, line) = if spans_x { (x, z) } else { (z, x) };
+                d.spans_x() == spans_x
+                    && d.wall_line == line
+                    && (d.lat0..d.lat0 + d.len).contains(&lat)
+            })
+        };
+        for z in 0..GRID {
+            for x in 0..GRID {
+                let Some(room) = room_of(x, z) else {
+                    continue;
+                };
+                if room_of(x, z + 1).is_some_and(|r| r != room) && !doorway(x, z + 1, true) {
+                    or_edge_bit(&mut cells, x, z, EDGE_S);
+                    or_edge_bit(&mut cells, x, z + 1, EDGE_N);
+                }
+                if room_of(x + 1, z).is_some_and(|r| r != room) && !doorway(x + 1, z, false) {
+                    or_edge_bit(&mut cells, x, z, EDGE_E);
+                    or_edge_bit(&mut cells, x + 1, z, EDGE_W);
+                }
             }
         }
     }

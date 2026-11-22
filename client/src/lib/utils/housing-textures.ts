@@ -39,6 +39,37 @@ export interface HousingTextureEntry {
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
+/** A dungeon theme's wall and floor (dungeon-cave-themes.ts). */
+function caveTextures(theme: {
+  id: string
+  color: number
+  roughness: number
+  /** Laid blocks and tiles rather than bare rock. */
+  masonry?: boolean
+}): HousingTextureEntry[] {
+  return ['wall', 'floor'].map((surface) => {
+    const masonryWall = !!theme.masonry && surface === 'wall'
+    return {
+      label: `Cave ${theme.id} ${surface}`,
+      glb: '',
+      mapUrl: `/textures/dungeon/cave-${theme.id}-${surface}.webp`,
+      uvScale: masonryWall ? 2 : 1,
+      fallbackColor: theme.color,
+      roughness: theme.roughness,
+      vertexColors: masonryWall,
+      ghostOpacity: masonryWall ? 0.22 : undefined,
+      bumpScale: masonryWall
+        ? 0.012
+        : surface === 'wall'
+          ? 0.09
+          : theme.masonry
+            ? 0
+            : 0.035,
+      internal: true,
+    }
+  })
+}
+
 export const HOUSING_TEXTURES: HousingTextureEntry[] = [
   // Stone
   {
@@ -230,33 +261,14 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     uvScale: 0.8,
     internal: true,
   },
-  ...[
-    { id: 'limestone', color: 0x89867d, roughness: 0.94 },
-    { id: 'moss', color: 0x6c7362, roughness: 0.88 },
-    { id: 'masonry', color: 0x626763, roughness: 0.93 },
-  ].flatMap(({ id, color, roughness }) =>
-    ['wall', 'floor'].map((surface) => {
-      const masonryWall = id === 'masonry' && surface === 'wall'
-      return {
-        label: `Cave ${id} ${surface}`,
-        glb: '',
-        mapUrl: `/textures/dungeon/cave-${id}-${surface}.webp`,
-        uvScale: masonryWall ? 2 : 1,
-        fallbackColor: color,
-        roughness,
-        vertexColors: masonryWall,
-        ghostOpacity: masonryWall ? 0.22 : undefined,
-        bumpScale: masonryWall
-          ? 0.012
-          : surface === 'wall'
-            ? 0.09
-            : id === 'masonry'
-              ? 0
-              : 0.035,
-        internal: true,
-      }
-    })
-  ),
+  ...caveTextures({ id: 'limestone', color: 0x89867d, roughness: 0.94 }),
+  ...caveTextures({ id: 'moss', color: 0x6c7362, roughness: 0.88 }),
+  ...caveTextures({
+    id: 'masonry',
+    color: 0x626763,
+    roughness: 0.93,
+    masonry: true,
+  }),
   ...['wall-weathering-decals', 'wall-cracks-cobwebs'].map((id) => ({
     label: `Dungeon ${id}`,
     glb: '',
@@ -343,6 +355,13 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     fitSegment: true,
     internal: true,
   },
+  // Appended: persisted texture indices above must not shift.
+  ...caveTextures({
+    id: 'temple',
+    color: 0xb9b0a0,
+    roughness: 0.8,
+    masonry: true,
+  }),
 ]
 
 /** Per-texture-index material cache (module-level singleton). */

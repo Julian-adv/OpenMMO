@@ -81,8 +81,9 @@ pub enum LayoutStyle {
     /// Long corridors between small chambers; every locked floor but the
     /// last forks into three work rooms, one holding the way down.
     Mine,
-    /// `Rooms`, with the final floor's boss in a wide hall of pillars.
-    Hall,
+    /// Wide pillared chambers set wall to wall; the final floor's boss
+    /// stands in a hall of pillars.
+    Temple,
 }
 
 impl DungeonEntranceDef {
@@ -224,7 +225,7 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                 layout_style: match field("layoutStyle") {
                     "" => LayoutStyle::Rooms,
                     "mine" => LayoutStyle::Mine,
-                    "hall" => LayoutStyle::Hall,
+                    "temple" => LayoutStyle::Temple,
                     l => panic!("dungeon '{id}' has an invalid layoutStyle '{l}'"),
                 },
                 nightly_layout: match field("nightlyLayout") {

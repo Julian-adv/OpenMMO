@@ -1,0 +1,33 @@
+{
+  "tool": "OpenAI Codex built-in ImageGen",
+  "tier": "ChatGPT Pro 20x",
+  "generated": "2026-11-23",
+  "license": "Project-owned generated output; OpenAI output terms apply, no separate CC license.",
+  "encoding": "Generated 1254 x 1254 PNG resized to 1024 x 1024 WebP quality 88 with ffmpeg (lanczos); no visual edits.",
+  "status": "Concept B (long-buried temple) chosen by the user over concept A (pale marble). The first marble wall and floor made toward concept A were replaced the same day and are not kept.",
+  "assets": [
+    {
+      "id": "stone-garden-temple-concept",
+      "file": "doc/images/props/stone-garden-temple-concept.jpg",
+      "prompt": "Use the built-in image generation tool to produce exactly one image. Do not write any code or files yourself.\n\nConcept art for a dungeon in an isometric fantasy online RPG, seen from the game camera: a fixed high three-quarter isometric view looking down into the rooms with the near walls cut away, like a classic isometric dungeon crawler. Landscape 3:2.\nSubject: the Garden of Stone, an ancient underground Greek temple that is the lair of Medusa. A sequence of wide rectangular chambers set directly wall to wall and joined by short broad doorways, with almost no corridors. Each chamber is lined with two rows of square stone piers or fluted columns. Thick walls of large dressed stone blocks, a paved floor of big square slabs. Scattered around stand lifelike stone statues of adventurers frozen mid-stride or shielding their faces: the petrified victims. Wall-mounted bronze braziers and torches give the only light, with deep darkness beyond the walls since it is underground. A few tiny adventurer figures for scale.\nStyle: painterly semi-realistic fantasy game concept art, readable shapes at game distance, grounded materials, no text, no UI, no logos, no border.\nMood for this version: a long-buried, forgotten temple. Weathered grey-beige limestone and worn marble stained by centuries of damp, cracked floor slabs with some missing, broken columns, creeping roots and patches of moss, serpent motifs carved on the lintels, cold blue-green gloom cut by a few small orange flames.\n"
+    },
+    {
+      "id": "cave-temple-wall",
+      "file": "client/public/textures/dungeon/cave-temple-wall.webp",
+      "reference": [
+        "client/public/textures/dungeon/cave-masonry-wall.webp (layout)",
+        "doc/images/props/stone-garden-temple-concept.jpg (colour and mood)"
+      ],
+      "prompt": "Use the built-in image generation tool to edit the first attached image and produce exactly one image. Do not write any code or files yourself.\n\nUse case: precise-object-edit\nAsset type: seamless repeating base-color wall texture for an isometric fantasy dungeon game: the walls of a long-buried, forgotten underground Greek temple.\nInput image 1: edit target, the existing texture. Input image 2: concept art, used ONLY as the reference for the stone's colour, weathering and mood; do not copy its composition.\nStyle: believable tactile semi-realistic game material. A flat edge-to-edge opaque RGB square texture swatch, 1024x1024. Keep the existing surface geometry, feature placement, scale, orthographic view and framing of image 1. Material colour only with even diffuse illumination; no baked directional light, no torch glow, no glossy reflections. Seamless periodic wrap on all four edges; no edge border, no bright or dark frame. No text, objects, perspective, carvings, reliefs, symbols or scene.\nPrimary request: Turn the blocks into large dressed ashlar blocks of weathered grey-beige limestone and worn pale marble, as on the walls in image 2: cool grey with warm beige and faint ochre patches, the faces pitted and softened by centuries of damp. Preserve the exact running-bond joint layout and block rectangles of image 1: the game's 3D wall geometry samples these rectangles, so every joint must stay exactly where it is. Joints fairly tight, dark and dirt-filled. Add dark vertical seepage streaks, blotchy damp staining, a few fine cracks and chipped corners, and muted olive moss creeping along some joints and lower edges (about 10 percent coverage). Mid to slightly dark brightness with clearly readable block faces; noticeably lighter and warmer than plain dark dungeon stone, never near-black.\n"
+    },
+    {
+      "id": "cave-temple-floor",
+      "file": "client/public/textures/dungeon/cave-temple-floor.webp",
+      "reference": [
+        "client/public/textures/dungeon/cave-masonry-floor.webp (layout)",
+        "doc/images/props/stone-garden-temple-concept.jpg (colour and mood)"
+      ],
+      "prompt": "Use the built-in image generation tool to edit the first attached image and produce exactly one image. Do not write any code or files yourself.\n\nUse case: precise-object-edit\nAsset type: seamless repeating base-color floor texture for an isometric fantasy dungeon game: the paved floor of a long-buried, forgotten underground Greek temple.\nInput image 1: edit target, the existing texture. Input image 2: concept art, used ONLY as the reference for the stone's colour, weathering and mood; do not copy its composition.\nStyle: believable tactile semi-realistic game material. A flat edge-to-edge opaque RGB square texture swatch, 1024x1024. Keep the existing surface geometry, feature placement, scale, orthographic view and framing of image 1. Material colour only with even diffuse illumination; no baked directional light, no torch glow, no shiny water pools or reflections. Seamless periodic wrap on all four edges; no edge border, no bright or dark frame. No text, objects, perspective, mosaics, symbols, rubble piles or scene.\nPrimary request: Turn the tiles into large square paving slabs of worn grey-beige limestone and dulled marble, as on the floor in image 2: cool blue-grey and warm grey-beige slabs mixed irregularly, foot-worn and matte. Preserve the exact 4 by 4 square tile grid of image 1 with all joints at the same quarter positions, flush and walkable. Joints dark and dirt-filled. Add cracks running across several slabs, a few chipped or broken corners, blotchy dark damp patches, and muted olive moss in some joints and corners (about 10 percent coverage). Mid to slightly dark brightness, a little darker than a wall of the same stone, with slab faces still clearly readable; never near-black.\n"
+    }
+  ]
+}

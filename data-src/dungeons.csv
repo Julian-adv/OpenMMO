@@ -7,4 +7,4 @@ sundered_bastion,Sundered Bastion,-1950,1.1,5456,,25,barkan,5,s,bastion_key,bast
 thieves_den,Thieves' Den,-862,1.2,3822,breastplate;cutthroat_dirk,20,thief_king,4,w,den_key,den,,,true,,,,
 shadow_guild,Shadow Guild,-2384,1.05,5962,,25,shadow_master,5,s,guild_key,guild,shadowfang:0.2,,true,,,,
 blackvein_mine,Blackvein Mine,-1884,1.2,6360,,25,mine_foreman,5,w,mine_key,mine,foreman_pickaxe:0.2,mine,true,,,,
-stone_garden,Garden of Stone,-1836,1.05,6844,,25,medusa,5,w,garden_key,garden,ring_of_teleport_control:0.05,hall,true,20,45,34:4,true
+stone_garden,Garden of Stone,-1836,1.05,6844,,25,medusa,5,w,garden_key,garden,ring_of_teleport_control:0.05,temple,true,20,45,34:4,true

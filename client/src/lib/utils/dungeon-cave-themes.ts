@@ -1,15 +1,33 @@
+import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
 import { HOUSING_TEXTURES } from './housing-textures'
 
-export const DUNGEON_CAVE_THEMES = ['limestone', 'moss', 'masonry'].map(
-  (id) => ({
+function theme(id: string, masonry = false) {
+  const texture = (surface: string) =>
+    HOUSING_TEXTURES.findIndex(
+      (entry) => entry.mapUrl === `/textures/dungeon/cave-${id}-${surface}.webp`
+    )
+  return {
     id,
-    wallTexture: HOUSING_TEXTURES.findIndex(
-      (entry) => entry.mapUrl === `/textures/dungeon/cave-${id}-wall.webp`
-    ),
-    floorTexture: HOUSING_TEXTURES.findIndex(
-      (entry) => entry.mapUrl === `/textures/dungeon/cave-${id}-floor.webp`
-    ),
-  })
+    /** Laid blocks and tiles rather than bare rock. */
+    masonry,
+    wallTexture: texture('wall'),
+    floorTexture: texture('floor'),
+  }
+}
+
+export const DUNGEON_CAVE_THEMES = [
+  theme('limestone'),
+  theme('moss'),
+  theme('masonry', true),
+]
+
+/** Marble for every floor of a `layoutStyle=temple` dungeon, rooms included. */
+export const DUNGEON_TEMPLE_THEME = theme('temple', true)
+
+const TEMPLES = new Set(
+  DUNGEON_ENTRANCES.filter((def) => def.layoutStyle === 'temple').map(
+    (def) => def.id
+  )
 )
 
 export function dungeonCaveSeed(dungeonId: string, depth: number): number {
@@ -21,6 +39,7 @@ export function dungeonCaveSeed(dungeonId: string, depth: number): number {
 }
 
 export function dungeonCaveTheme(dungeonId: string, depth: number) {
+  if (TEMPLES.has(dungeonId)) return DUNGEON_TEMPLE_THEME
   return DUNGEON_CAVE_THEMES[
     dungeonCaveSeed(dungeonId, depth) % DUNGEON_CAVE_THEMES.length
   ]

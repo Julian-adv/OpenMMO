@@ -18,7 +18,8 @@ export interface DungeonEntranceDef {
   spawnGroup?: string
   /** Semicolon-separated `item:chance` rolls only this chest makes. */
   chestRolls?: string
-  /** Floor plan generator; blank = rooms, `mine` = corridors and forks. */
+  /** Floor plan generator; blank = rooms, `mine` = corridors and forks,
+   *  `temple` = wide marble chambers. */
   layoutStyle?: string
 }
 

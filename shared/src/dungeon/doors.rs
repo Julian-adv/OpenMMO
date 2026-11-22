@@ -68,10 +68,10 @@ pub fn door_position(
 }
 
 /// Wall side indices, matching the client's `WALL_N/E/S/W`.
-const WALL_N: u8 = 0;
-const WALL_E: u8 = 1;
-const WALL_S: u8 = 2;
-const WALL_W: u8 = 3;
+pub(super) const WALL_N: u8 = 0;
+pub(super) const WALL_E: u8 = 1;
+pub(super) const WALL_S: u8 = 2;
+pub(super) const WALL_W: u8 = 3;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -95,6 +95,27 @@ pub struct InteriorDoorSpec {
 }
 
 impl InteriorDoorSpec {
+    /// An opening `len` cells from `lat0` in `wall` of room `room`; on a
+    /// locked floor the stair room's is the locked one.
+    pub(super) fn new(
+        wall: u8,
+        lat0: i32,
+        len: i32,
+        wall_line: i32,
+        room: usize,
+        locked_floor: bool,
+    ) -> Self {
+        Self {
+            wall,
+            lat0,
+            len,
+            wall_line,
+            door_id: (wall as u32) * 0x10000 + (lat0 as u32) * 0x100 + wall_line as u32,
+            room,
+            locked: locked_floor && room == 0,
+        }
+    }
+
     /// North/south doors span X; east/west doors span Z.
     pub fn spans_x(&self) -> bool {
         self.wall == WALL_N || self.wall == WALL_S
@@ -135,7 +156,7 @@ fn door_hash(a: i32, b: i32, c: i32, d: i32) -> u32 {
 /// Every corridor mouth on the floor: maximal runs of a room wall whose
 /// outward neighbour is corridor, as door candidates.
 pub(super) fn wall_openings(layout: &FloorLayout) -> Vec<InteriorDoorSpec> {
-    let mut openings = Vec::new();
+    let mut openings = layout.doorways.clone();
     let locked_floor = is_locked_depth(layout.depth);
     for (room_idx, room) in layout.rooms.iter().enumerate() {
         for wall in [WALL_N, WALL_E, WALL_S, WALL_W] {
@@ -170,17 +191,14 @@ pub(super) fn wall_openings(layout: &FloorLayout) -> Vec<InteriorDoorSpec> {
                     start = lat;
                 }
                 if !open && start >= 0 {
-                    openings.push(InteriorDoorSpec {
+                    openings.push(InteriorDoorSpec::new(
                         wall,
-                        lat0: start,
-                        len: lat - start,
+                        start,
+                        lat - start,
                         wall_line,
-                        door_id: (wall as u32) * 0x10000
-                            + (start as u32) * 0x100
-                            + wall_line as u32,
-                        room: room_idx,
-                        locked: locked_floor && room_idx == 0,
-                    });
+                        room_idx,
+                        locked_floor,
+                    ));
                     start = -1;
                 }
             }

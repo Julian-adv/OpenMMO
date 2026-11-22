@@ -15,7 +15,11 @@ import {
 } from './dungeon-geo-masonry'
 import { dungeonFloorClearance } from './dungeon-floor-clearance'
 import { buildDungeonFloorRubble } from './dungeon-geo-rubble'
-import { dungeonCaveSeed, dungeonCaveTheme } from './dungeon-cave-themes'
+import {
+  DUNGEON_TEMPLE_THEME,
+  dungeonCaveSeed,
+  dungeonCaveTheme,
+} from './dungeon-cave-themes'
 import {
   shaftRect,
   rectContains,
@@ -71,6 +75,7 @@ export function buildDungeonFloorGroup(
   const grid = ctx.grid
   const cave = dungeonCaveTheme(dungeonId, layout.depth)
   const caveSeed = dungeonCaveSeed(dungeonId, layout.depth)
+  const temple = cave === DUNGEON_TEMPLE_THEME
   const roomIndexAt = (x: number, z: number) =>
     layout.rooms.findIndex((r) => rectContains(r, x, z))
   const roomAt = (x: number, z: number) => roomIndexAt(x, z) >= 0
@@ -95,18 +100,17 @@ export function buildDungeonFloorGroup(
   // Slab skirts only cover exposed edges, avoiding internal shadow seams.
   const solidAt = (x: number, z: number) => carvedAt(x, z) && !inDownHole(x, z)
   const floorTexAt = (x: number, z: number) =>
-    roomAt(x, z) || inAnyShaft(x, z)
+    !temple && (roomAt(x, z) || inAnyShaft(x, z))
       ? DUNGEON_FLOOR_TEXTURE_IDX
       : cave.floorTexture
   const slabs = new Map<number, ReturnType<typeof quadMeshBuilder>>()
-  const masonryFloor =
-    cave.id === 'masonry'
-      ? masonryFloorDamageBuilder(
-          cave.floorTexture,
-          caveSeed,
-          dungeonFloorClearance(layout, ctx)
-        )
-      : null
+  const masonryFloor = cave.masonry
+    ? masonryFloorDamageBuilder(
+        cave.floorTexture,
+        caveSeed,
+        dungeonFloorClearance(layout, ctx)
+      )
+    : null
   const v = (x: number, y: number, z: number) => new THREE.Vector3(x, y, z)
   const yB = -SLAB_THICKNESS
   for (let z = 0; z < grid; z++) {
@@ -239,9 +243,9 @@ export function buildDungeonFloorGroup(
     const hi = center + length / 2
     const boundary = (alongX ? cz : cx) + inward * WALL_HALF_THICKNESS
     if (texIdx === cave.wallTexture) {
-      const buildWall = cave.id === 'masonry' ? buildMasonryWall : buildCaveWall
+      const buildWall = cave.masonry ? buildMasonryWall : buildCaveWall
       geo = buildWall(alongX, lo, hi, boundary, inward, h, caveSeed)
-      if (cave.id === 'masonry') {
+      if (cave.masonry) {
         ghostGeometry = buildMasonryWallGhost(alongX, lo, hi, boundary, h)
       }
     } else {
@@ -323,7 +327,7 @@ export function buildDungeonFloorGroup(
 
   // Carved cells outside rooms use the corridor texture; shafts emit no walls.
   const wallTexAt = (x: number, z: number) =>
-    roomAt(x, z) ? DUNGEON_WALL_TEXTURE_IDX : cave.wallTexture
+    roomAt(x, z) && !temple ? DUNGEON_WALL_TEXTURE_IDX : cave.wallTexture
   // Trim corridor ends where perpendicular room walls cross.
   const trimCorridorRun = (
     tex: number,
@@ -332,7 +336,7 @@ export function buildDungeonFloorGroup(
     diagLo: [number, number],
     diagHi: [number, number]
   ): [number, number] =>
-    tex !== cave.wallTexture
+    tex !== cave.wallTexture || temple
       ? [lo, hi]
       : [
           roomAt(diagLo[0], diagLo[1]) ? lo + WALL_THICKNESS : lo,
@@ -471,6 +475,73 @@ export function buildDungeonFloorGroup(
       if (west && westStart < 0) {
         westStart = z
         westTex = tex
+      }
+    }
+  }
+  // Rooms set edge to edge share one wall, open at their doorways. Its two
+  // faces fade together with the room it is the south or west wall of.
+  const doorways = layout.doorways ?? []
+  if (doorways.length > 0) {
+    const parted = (a: number, b: number) => a >= 0 && b >= 0 && a !== b
+    const inDoorway = (spansX: boolean, line: number, lat: number) =>
+      doorways.some(
+        (d) =>
+          (d.wall === 0 || d.wall === 2) === spansX &&
+          d.wallLine === line &&
+          lat >= d.lat0 &&
+          lat < d.lat0 + d.len
+      )
+    const y = ctx.wallHeight / 2 + SHADOW_CONTACT_LIFT
+    for (const spansX of [true, false]) {
+      // The room on the low side of the line, then the one on the high side.
+      const rooms = (line: number, lat: number): [number, number] =>
+        spansX
+          ? [roomIndexAt(lat, line - 1), roomIndexAt(lat, line)]
+          : [roomIndexAt(line - 1, lat), roomIndexAt(line, lat)]
+      for (let line = 1; line < grid; line++) {
+        let start = -1
+        let pair: [number, number] = [-1, -1]
+        for (let lat = 0; lat <= grid; lat++) {
+          const [low, high] = lat < grid ? rooms(line, lat) : [-1, -1]
+          const wall = parted(low, high) && !inDoorway(spansX, line, lat)
+          if (start >= 0 && (!wall || low !== pair[0] || high !== pair[1])) {
+            const len = lat - start
+            const mid = start + len / 2
+            const fade = spansX ? pair[0] : pair[1]
+            for (const side of [-1, 1]) {
+              const at = line + side * WALL_HALF_THICKNESS
+              if (spansX)
+                addWallRun(
+                  cave.wallTexture,
+                  len,
+                  ctx.wallHeight,
+                  WALL_THICKNESS,
+                  mid,
+                  y,
+                  at,
+                  fade,
+                  side
+                )
+              else
+                addWallRun(
+                  cave.wallTexture,
+                  WALL_THICKNESS,
+                  ctx.wallHeight,
+                  len,
+                  at,
+                  y,
+                  mid,
+                  fade,
+                  side
+                )
+            }
+            start = -1
+          }
+          if (wall && start < 0) {
+            start = lat
+            pair = [low, high]
+          }
+        }
       }
     }
   }

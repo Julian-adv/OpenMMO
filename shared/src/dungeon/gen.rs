@@ -42,6 +42,7 @@ const PROP_STACK_PCT: i32 = 35;
 const DEPTH_SALT: u64 = 0x9e37_79b9_7f4a_7c15;
 
 pub(super) mod mine;
+pub(super) mod temple;
 
 #[cfg(test)]
 pub fn dungeon_depth(seed: u64) -> u8 {
@@ -133,19 +134,19 @@ fn generate_floor(
     let mut rng = ChaCha8Rng::seed_from_u64(seed ^ (depth as u64).wrapping_mul(DEPTH_SALT));
     let is_last = depth == total;
 
-    let hall = style == LayoutStyle::Hall && is_last;
     let attempts = match style {
         LayoutStyle::Rooms => FLOOR_ATTEMPTS,
-        LayoutStyle::Hall if !hall => FLOOR_ATTEMPTS,
-        LayoutStyle::Hall | LayoutStyle::Mine => mine::FLOOR_ATTEMPTS,
+        LayoutStyle::Mine => mine::FLOOR_ATTEMPTS,
+        LayoutStyle::Temple => temple::FLOOR_ATTEMPTS,
     };
     for _ in 0..attempts {
         let layout = match style {
-            LayoutStyle::Rooms | LayoutStyle::Hall => {
-                try_generate_floor(&mut rng, depth, is_last, up_shaft, table, hall)
-            }
+            LayoutStyle::Rooms => try_generate_floor(&mut rng, depth, is_last, up_shaft, table),
             LayoutStyle::Mine => {
                 mine::try_generate_floor(&mut rng, depth, is_last, up_shaft, table)
+            }
+            LayoutStyle::Temple => {
+                temple::try_generate_floor(&mut rng, depth, is_last, up_shaft, table)
             }
         };
         if let Some(layout) = layout {
@@ -161,7 +162,6 @@ fn try_generate_floor(
     is_last: bool,
     up_shaft: StairShaft,
     table: &[SpawnEntry],
-    hall: bool,
 ) -> Option<FloorLayout> {
     let room_count = rng.gen_range(3..=5) as usize;
 
@@ -172,9 +172,7 @@ fn try_generate_floor(
     // (or the boss + chest on the final floor — same generous sizing).
     let down_along_z = rng.gen_range(0..2) == 1;
     while rooms.len() < room_count {
-        let (w, d) = if hall && rooms.len() == room_count - 1 {
-            (HALL_SIZE, HALL_SIZE)
-        } else if rooms.len() == room_count - 1 {
+        let (w, d) = if rooms.len() == room_count - 1 {
             shaft_room_size(
                 rng,
                 down_along_z,
@@ -200,12 +198,13 @@ fn try_generate_floor(
         down_along_z,
         extra_spawns: 0,
         max_mouths: None,
-        pillars: hall,
+        pillars: Vec::new(),
+        doorways: Vec::new(),
     };
     finish_floor(rng, depth, is_last, up_shaft, table, plan)
 }
 
-/// Side of a pillared boss hall (`LayoutStyle::Hall`).
+/// Side of the pillared boss hall that ends a temple.
 pub(super) const HALL_SIZE: i32 = 23;
 /// Where a hall's 2×2 pillars start, from its centre cell along each axis.
 /// The four nearest the centre are left out, so the boss fights in the open
@@ -272,9 +271,12 @@ struct FloorPlan {
     extra_spawns: usize,
     /// Most corridor mouths each room may show.
     max_mouths: Option<Vec<usize>>,
-    /// The end room is a hall whose pillars stand as uncarved rock, so they
-    /// wall off sight and movement like any other wall.
-    pillars: bool,
+    /// South-west cells of 2×2 pillars left as uncarved rock, so they wall
+    /// off sight and movement like any other wall. One beside the down
+    /// shaft is dropped.
+    pillars: Vec<(i32, i32)>,
+    /// See [`FloorLayout::doorways`].
+    doorways: Vec<super::InteriorDoorSpec>,
 }
 
 /// Carve a plan, reject it if a door or the stair room breaks, then roll
@@ -295,6 +297,7 @@ fn finish_floor(
         extra_spawns,
         max_mouths,
         pillars,
+        doorways,
     } = plan;
     let down_shaft = if is_last {
         None
@@ -315,12 +318,13 @@ fn finish_floor(
         carve_corridor(&mut carved, rooms[a].center(), rooms[b].center(), x_first);
     }
 
-    if pillars {
-        for (x, z) in hall_pillars(&rooms[end_room]) {
-            for (dx, dz) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
-                carved[(x + dx + (z + dz) * GRID) as usize] = false;
-            }
+    let stairs = down_shaft.map(|shaft| shaft.rect().expanded(1));
+    for (x, z) in pillars {
+        let pillar = Room { x, z, w: 2, d: 2 };
+        if stairs.is_some_and(|stairs| pillar.expanded(1).intersects(&stairs)) {
+            continue;
         }
+        carve_rect_as(&mut carved, &pillar, false);
     }
 
     let chest = is_last.then(|| rooms[end_room].center());
@@ -334,6 +338,7 @@ fn finish_floor(
         chest,
         spawns: Vec::new(),
         props: Vec::new(),
+        doorways,
     };
 
     let openings = wall_openings(&layout);
@@ -355,18 +360,19 @@ fn finish_floor(
 /// Room 0: random dims/position constrained to contain the up shaft with
 /// a ≥1-cell margin on every side.
 fn place_room_around_shaft(rng: &mut ChaCha8Rng, shaft: &StairShaft) -> Option<Room> {
+    place_room_around_shaft_in(rng, shaft, ROOM_MIN..=ROOM_MAX, SHAFT_ROOM_AXIAL..=ROOM_MAX)
+}
+
+/// As [`place_room_around_shaft`], sized `cross` across the shaft and `axial`
+/// along it.
+fn place_room_around_shaft_in(
+    rng: &mut ChaCha8Rng,
+    shaft: &StairShaft,
+    cross: RangeInclusive<i32>,
+    axial: RangeInclusive<i32>,
+) -> Option<Room> {
     let r = shaft.rect();
-    let (w, d) = if shaft.along_z {
-        (
-            rng.gen_range(ROOM_MIN..=ROOM_MAX),
-            rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX),
-        )
-    } else {
-        (
-            rng.gen_range(SHAFT_ROOM_AXIAL..=ROOM_MAX),
-            rng.gen_range(ROOM_MIN..=ROOM_MAX),
-        )
-    };
+    let (w, d) = shaft_room_size(rng, shaft.along_z, cross, axial);
 
     let x = range_pick(rng, (r.x + r.w + 1 - w).max(1), (r.x - 1).min(GRID - 1 - w))?;
     let z = range_pick(rng, (r.z + r.d + 1 - d).max(1), (r.z - 1).min(GRID - 1 - d))?;
@@ -453,9 +459,13 @@ fn range_pick(rng: &mut ChaCha8Rng, lo: i32, hi: i32) -> Option<i32> {
 }
 
 fn carve_rect(carved: &mut [bool], r: &Room) {
+    carve_rect_as(carved, r, true);
+}
+
+fn carve_rect_as(carved: &mut [bool], r: &Room, open: bool) {
     for z in r.z.max(0)..(r.z + r.d).min(GRID) {
         for x in r.x.max(0)..(r.x + r.w).min(GRID) {
-            carved[(x + z * GRID) as usize] = true;
+            carved[(x + z * GRID) as usize] = open;
         }
     }
 }
@@ -1181,6 +1191,7 @@ fn fallback_floor(
         chest,
         spawns: Vec::new(),
         props: Vec::new(),
+        doorways: Vec::new(),
     };
     layout.spawns = roll_spawns(rng, &layout, table, 0);
     layout.props = roll_props(rng, &layout);

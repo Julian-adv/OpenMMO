@@ -145,6 +145,9 @@ export interface DungeonFloorLayout {
   chest?: [number, number] | null
   spawns: DungeonSpawn[]
   props: DungeonProp[]
+  /** Openings in the walls rooms share; set only where rooms stand edge to
+   *  edge, and every other edge between two rooms is then a wall. */
+  doorways?: InteriorDoorSpec[]
 }
 
 export interface DungeonConstants {
