@@ -772,6 +772,13 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             "[MonsterSkillReflected] {}'s mirror shield threw {monster_id}'s {skill:?} back for {damage}",
             player_name(state, player_id)
         )),
+        ServerMessage::MonsterStared {
+            monster_id,
+            player_id,
+        } => Some(format!(
+            "[MonsterStared] {monster_id} blinks at {}, about to hold them still",
+            player_name(state, player_id)
+        )),
         ServerMessage::MonsterGroundStrike {
             monster_id,
             target_player_id,

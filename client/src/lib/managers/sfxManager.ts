@@ -111,6 +111,13 @@ const LEVEL_UP_SOUND: SoundSpec = {
   pool: 2,
 }
 
+// Pool 3: one cast can turn several players to stone.
+const PETRIFY_SOUND: SoundSpec = {
+  url: '/sounds/petrify.ogg',
+  volume: 0.55,
+  pool: 3,
+}
+
 const MERGER_BELL_SOUNDS: SoundSpec[] = [1, 2, 3].map((n) => ({
   url: `/sounds/merger-bells-${n}.ogg`,
   volume: 0.45,
@@ -476,7 +483,11 @@ export function playAbilitySound(ability: AbilityId) {
 }
 
 export function preloadLevelUpSound() {
-  preloadSounds({ levelUp: LEVEL_UP_SOUND })
+  preloadSounds({ levelUp: LEVEL_UP_SOUND, petrify: PETRIFY_SOUND })
+}
+
+export function playPetrifySound() {
+  playSound(PETRIFY_SOUND)
 }
 
 export function playLevelUpSound(gain = 1) {

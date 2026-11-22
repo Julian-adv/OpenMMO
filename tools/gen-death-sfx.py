@@ -13,6 +13,21 @@ missing; edit it between a --plan-only run and the real one.
 import argparse, json, os, pathlib, sys, time, urllib.error, urllib.request
 
 PROMPTS = {
+    "petrify": (
+        "A living body turning to solid stone in one second: a fast dry crackling "
+        "creep of rock crusting over cloth and skin, rising quickly, ending in one "
+        "dull heavy stone knock as it sets hard. Close, dry, gritty mineral "
+        "foley with a short tail. No voice, no scream, no magic chime, no "
+        "sparkle, no whoosh, no music, no reverb, no rubble falling."
+    ),
+    "wood_footsteps": (
+        "Six separate footsteps of one person in soft leather boots walking at a "
+        "steady unhurried pace across a solid wooden plank floor. Each step is a "
+        "short dry hollow wooden knock with a faint board creak, clearly "
+        "separated by silence, all on the same floor with the same weight. Close "
+        "dry foley recording. No reverb, no room echo, no voice, no cloth "
+        "rustle, no music, no stone, no gravel, no door."
+    ),
     "merger_bell_strike": (
         "One single strike of a large bronze church tower bell, then nothing "
         "else. A full, round, resonant bong with a clear, pure, bright singing "

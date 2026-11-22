@@ -96,6 +96,8 @@ pub const DEFAULT_BEHAVIOR: &str = "brave";
 /// targets on sight. Selected when `Monster::aggressive` is set, overriding the
 /// monster type's configured behavior.
 pub const AGGRESSIVE_BEHAVIOR: &str = "aggressive";
+/// Behavior tree of a monster that never fights.
+pub const PASSIVE_BEHAVIOR: &str = "passive";
 
 /// Slack inside `attack_range` when picking a standing cell, so the cell
 /// center still passes `bt_attack_target`'s range check. Must stay small:

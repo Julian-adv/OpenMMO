@@ -80,7 +80,7 @@
     눈알 뒤쪽은 생성된 마네킹의 뒷면을 눈꺼풀 색으로 칠해 고정 덮개로 쓰고, 눈꺼풀은 그 밑으로 드나든다(사용자 요청).
     뼈는 7개다: 뿌리, 몸, 위·아래 눈꺼풀, 촉수 3마디. 9,010 triangles, 텍스처 512² WebP.
     덮개를 더 앞으로 내린 판과 눈꺼풀을 네 조각으로 가른 판도 만들어 봤으나 사용자가 이 모양을 골랐다(2026-11-22).
-  - 동작: `idle`(떠 있기, 4초에 한 번 깜빡임), `drift`(이동), `dying`(눈을 감고 떨어져 옆으로 구름).
+  - 동작: `idle`(떠 있기, 4초에 한 번 깜빡임), `drift`(이동), `stare`(맞았을 때 0.7초 동안 한 번 천천히 껌벅임. 뜨는 순간에 때린 쪽이 굳는다), `dying`(눈을 감고 떨어져 옆으로 구름).
     작업 파일은 `assets/monsters/floating_eye/rig_v1/floating_eye.blend`, 게임 모델은 `client/public/models/monsters/floating_eye.glb`.
 
 - medusa — 돌의 정원 보스. [원화](../images/monsters/medusa-concept.png)는 OpenAI Codex ImageGen, ChatGPT Pro 20x로

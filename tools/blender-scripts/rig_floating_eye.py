@@ -225,9 +225,21 @@ def clip_dying(t):
     }
 
 
+def clip_stare(t):
+    """One slow blink at whoever struck it; the hold lands as it reopens."""
+    swell = math.sin(span(t, 0.0, 0.7) * math.pi)
+    return {
+        'lift': 0.04 * swell,
+        'body': (-6 * swell, 0, 0),
+        'shut': span(t, 0.0, 0.2) * (1 - span(t, 0.35, 0.6)),
+        'tendrils': [10 * swell] * TENDRIL_BONES,
+    }
+
+
 CLIPS = [
     ('idle', 4.0, drifting(0, 0, 1.6)),
     ('drift', 2.0, drifting(8, 16, 0.9)),
+    ('stare', 0.7, lambda t, _: clip_stare(t)),
     ('dying', 1.2, lambda t, _: clip_dying(t)),
 ]
 

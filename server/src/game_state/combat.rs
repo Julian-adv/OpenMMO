@@ -67,6 +67,9 @@ fn dagger_cooldown_remaining(last: Option<&u64>, now: u64) -> u64 {
     })
 }
 
+/// The blink of the `stare` clip (tools/blender-scripts/rig_floating_eye.py).
+pub(super) const STARE_BLINK: Duration = Duration::from_millis(600);
+
 // How long into the swing the blade lands.
 pub(super) static PLAYER_ATTACK_IMPACT_DELAY: LazyLock<Duration> =
     LazyLock::new(|| Duration::from_millis(anim_delay_ms("player_attack_impact")));
@@ -1306,16 +1309,43 @@ impl super::GameState {
             .get(&monster_type)
             .and_then(|d| d.stare_debuff.as_deref())
             .filter(|_| !weapon.ranged);
-        if let Some(debuff) = stare.filter(|_| !weapon.covers_eyes) {
-            self.inflict_debuff(player_id, debuff, None).await;
-        }
-        let loot_delay = if dagger_strike.is_some() || charge {
+        let impact_delay = if dagger_strike.is_some() || charge {
             Duration::ZERO
         } else if weapon.ranged {
             *PLAYER_RANGED_IMPACT_DELAY
         } else {
             *PLAYER_ATTACK_IMPACT_DELAY
         };
+        if let Some(debuff) = stare.filter(|_| !weapon.covers_eyes) {
+            let game_state = self.clone();
+            let player_id = *player_id;
+            let monster_id = monster_id.clone();
+            let debuff = debuff.to_string();
+            tokio::spawn(async move {
+                tokio::time::sleep(impact_delay).await;
+                game_state
+                    .publish_nearby(
+                        &monster_position,
+                        monster_floor_level,
+                        ServerMessage::MonsterStared {
+                            monster_id,
+                            player_id,
+                        },
+                        None,
+                    )
+                    .await;
+                tokio::time::sleep(STARE_BLINK).await;
+                let alive = game_state
+                    .players
+                    .read()
+                    .await
+                    .get(&player_id)
+                    .is_some_and(|p| p.health > 0);
+                if alive && game_state.inflict_debuff(&player_id, &debuff, None).await {
+                    game_state.stop_player_attack(&player_id).await;
+                }
+            });
+        }
         self.damage_monster(
             player_id,
             &player_name,
@@ -1327,7 +1357,7 @@ impl super::GameState {
                 level_override: monster_level_override,
             },
             result.damage,
-            loot_delay,
+            impact_delay,
             auth,
         )
         .await

@@ -322,6 +322,9 @@ async fn floating_eyes_drift_only_around_the_garden() {
     assert_eq!(eyes_met_walking_at("eyes_far", -1836.0, 7400.0).await, 0);
 }
 
+/// Long enough for a blow to land and the eye to blink.
+const STARE_LANDS: std::time::Duration = std::time::Duration::from_secs(2);
+
 async fn eye_beside_striker(tag: &str) -> (GameState, PlayerId, DirectRx, crate::types::Monster) {
     let game_state = make_flat_world_game_state(tag);
     let (id, rx) = add_hungry_player(&game_state, "Striker", 100).await;
@@ -344,11 +347,11 @@ async fn eye_beside_striker(tag: &str) -> (GameState, PlayerId, DirectRx, crate:
     (game_state, id, rx, eye)
 }
 
-/// A floating eye struck by hand holds whoever looked at it; a blindfold or
-/// an arrow avoids the stare.
+/// A floating eye struck by hand blinks, then holds whoever looked at it; a
+/// blindfold or an arrow avoids the stare.
 #[tokio::test(start_paused = true)]
 async fn striking_a_floating_eye_by_hand_holds_the_striker_unless_blindfolded() {
-    let (game_state, id, _rx, eye) = eye_beside_striker("eye_stare").await;
+    let (game_state, id, mut rx, eye) = eye_beside_striker("eye_stare").await;
     game_state.inventories.write().await.insert(
         id,
         PlayerInventory {
@@ -362,14 +365,20 @@ async fn striking_a_floating_eye_by_hand_holds_the_striker_unless_blindfolded() 
             if game_state.player_attack(&id, eye.id.clone(), None).await
                 && game_state.monsters.read().await[&eye.id].health < 60
             {
+                tokio::time::sleep(STARE_LANDS).await;
                 return;
             }
             game_state.last_player_attacks.write().await.remove(&id);
         }
     };
+    let mut blinked = || {
+        std::iter::from_fn(|| rx.try_recv().ok())
+            .any(|msg| matches!(msg, ServerMessage::MonsterStared { .. }))
+    };
     game_state.equip_item(&id, 1).await;
     strike_until_hit().await;
     assert!(!held().await, "covered eyes meet no stare");
+    assert!(!blinked());
 
     game_state.unequip_item(&id, EquipSlot::Head).await;
     game_state
@@ -381,10 +390,19 @@ async fn striking_a_floating_eye_by_hand_holds_the_striker_unless_blindfolded() 
         .health = 60;
     strike_until_hit().await;
     assert!(held().await, "open eyes are held");
+    assert!(blinked(), "the eye blinks first");
+
+    let health = || async { game_state.players.read().await[&id].health };
+    let before = health().await;
+    tokio::time::sleep(std::time::Duration::from_secs(20)).await;
+    game_state.tick_debuffs().await;
+    assert!(!held().await);
+    let hurt = before - health().await;
+    assert!((2..=16).contains(&hurt), "the hold hurts 2d8 as it lets go");
 }
 
-/// The stare lands inside the striker's own swing, which holds the attack
-/// session: ending the attack there must not wait on that session.
+/// The stare lands while the striker's auto-attack runs: it ends the attack
+/// and neither it nor the logout after it may hang on the attack session.
 #[tokio::test(start_paused = true)]
 async fn an_auto_attack_on_a_floating_eye_ends_when_the_stare_holds_the_striker() {
     let (game_state, id, _rx, eye) = eye_beside_striker("eye_stare_auto").await;
@@ -393,6 +411,7 @@ async fn an_auto_attack_on_a_floating_eye_ends_when_the_stare_holds_the_striker(
             game_state
                 .start_player_attack(id, eye.id.clone(), false, request, None)
                 .await;
+            tokio::time::sleep(STARE_LANDS).await;
             if game_state.is_petrified(&id).await {
                 break;
             }

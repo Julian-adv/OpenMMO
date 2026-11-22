@@ -95,6 +95,7 @@ import {
   cancelPendingFishingSounds,
   playFishingSound,
   playDungeonSound,
+  playPetrifySound,
   playPlayerDeathSound,
   playPlayerHurtSound,
   playPropSound,
@@ -1799,6 +1800,18 @@ export function handleServerMessage(
       break
     }
 
+    case 'MonsterStared': {
+      const state = get(gameStore)
+      monsterManager.handleMonsterAttackStarted(
+        data.monster_id,
+        0,
+        state.currentPlayer?.id === data.player_id
+          ? state.currentPlayer?.position
+          : remotePlayerManager.players.get(data.player_id)?.position
+      )
+      break
+    }
+
     case 'MonsterAttackedPlayer': {
       const gameState = get(gameStore)
       const isCurrentPlayer = gameState.currentPlayer?.id === data.player_id
@@ -2031,6 +2044,7 @@ export function handleServerMessage(
 
     case 'PlayerPetrifiedToggled': {
       updatePlayer(data.player_id, { petrified: data.petrified })
+      if (data.petrified) playPetrifySound()
       break
     }
 

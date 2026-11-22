@@ -373,6 +373,13 @@ Both were generated and processed exactly like the monster cries above.
   스윙 시작 600 ms 뒤(`player_anim_timing.csv`의 `mining_swing_impact`, 빌린 `great_sword_slash`의 내려찍는 순간)에 재생.
   원본과 처리 기록은 `assets/sfx/pickaxe-ore-2026-11-05/`의 `pickaxe-ore_chunk-take2_2026-11-05.mp3` 및 같은 이름의 `.json`에 보관.
 
+- petrify.ogg — 플레이어가 돌로 굳는 순간의 소리(떠도는 눈, 뱀 시녀, 광산 십장의 석화와 응시로 죽어 석상이 될 때).
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-22 직접 생성. Starter 유료 플랜,
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  프롬프트 `petrify`(1.5초, `prompt_influence=0.4`) 3개 중 사용자가 take 2와 비교해 take 1을 골랐다.
+  1.2초에서 자르고 끝 150 ms 페이드, 모노, 피크 −3 dB, 44.1 kHz OGG Vorbis. `PlayerPetrifiedToggled`가 켜질 때 재생.
+  원본과 처리 기록은 `assets/sfx/petrify-2026-11-22/`.
+
 - cart-roll.ogg, cart-crash.ogg — 검은맥 광산 철로 수레가 굴러가는 소리와 멈출 때 부딪히는 소리.
   [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-06 직접 생성. Starter 유료 플랜,
   [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.

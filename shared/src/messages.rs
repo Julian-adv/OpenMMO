@@ -2004,6 +2004,11 @@ pub enum ServerMessage {
         player_id: PlayerId,
         damage: u32,
     },
+    /// A floating eye blinks at whoever struck it, about to hold them.
+    MonsterStared {
+        monster_id: String,
+        player_id: PlayerId,
+    },
     /// A plain swing at a distant target: the ground where it stood erupts
     /// after `impact_ms`, striking whoever is still within `radius`.
     MonsterGroundStrike {
@@ -3093,6 +3098,7 @@ impl ServerMessage {
             | Self::MonsterSkillStarted { .. }
             | Self::MonsterSkillStruck { .. }
             | Self::MonsterSkillReflected { .. }
+            | Self::MonsterStared { .. }
             | Self::MonsterGroundStrike { .. }
             | Self::MonsterAttackedPlayer { .. }
             | Self::PlayerInstrumentNotes { .. }

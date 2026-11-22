@@ -42,6 +42,9 @@ pub struct DebuffDef {
     /// Turns the player to stone while it lasts (`Player.petrified`).
     #[serde(default)]
     pub petrifies: bool,
+    /// Dice rolled for damage once as it runs out.
+    #[serde(rename = "endDamage", default)]
+    pub end_damage: Option<String>,
 }
 
 static DEFS: LazyLock<HashMap<String, DebuffDef>> = LazyLock::new(|| {
