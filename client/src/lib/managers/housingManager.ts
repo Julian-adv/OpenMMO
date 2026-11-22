@@ -30,6 +30,7 @@ import {
   findHouseAtPoint,
   findNearestDoor,
   findRoomAtPoint,
+  findRoomUnderFeet,
   findSupportingHouse,
   hasFloorSupport,
   houseFloorHeightAt,
@@ -321,6 +322,10 @@ export class HousingManager {
   /** Find the first room containing a world point (fast, no allocation). */
   findRoomAtPoint(x: number, y: number, z: number) {
     return findRoomAtPoint(this.housesById, x, y, z)
+  }
+
+  findRoomUnderFeet(x: number, y: number, z: number) {
+    return findRoomUnderFeet(this.housesById, x, y, z)
   }
 
   /** Check if (x, z) falls inside any house room footprint, ignoring Y. */

@@ -5,6 +5,7 @@ import type {
   ObjectPlacement,
 } from '../stores/editorStore'
 import { rotatedRectAabb } from '../utils/objectFootprint'
+import type { WalkSurface } from '../utils/housing-textures'
 import {
   isNeighbourRegion,
   lerp,
@@ -55,6 +56,9 @@ const DECK_GRID_STEP_M = 0.25
  *  Set to span the full arch height (~1.5m on stone_bridge) so that a player
  *  who entered at the abutment stays snapped to deckY across the arch crown. */
 const DECK_Y_TOLERANCE = 1.5
+/** Feet this close to deck Y are standing on it. The local player walks
+ *  bridge_wood_long 0.32 m above its deck grid. */
+const DECK_STANDING_TOLERANCE = 0.6
 
 /** Minimum vertical clearance from player feet to deck Y for the bridge to be
  *  treated as "walk-under" geometry. Below this, the railing applies (player is
@@ -244,6 +248,13 @@ class BridgeManager {
       return { bridge: b, deckY, lx, lz }
     }
     return null
+  }
+
+  /** Deck surface under feet at `y`, null off a deck or on a silent one. */
+  deckSurfaceAt(wx: number, wz: number, y: number): WalkSurface | null {
+    const hit = this.findBridgeAt(wx, wz, y)
+    if (!hit || Math.abs(y - hit.deckY) > DECK_STANDING_TOLERANCE) return null
+    return hit.bridge.meta.deckSurface ?? null
   }
 
   /** Returns deck Y at (wx, wz) if the player at currentY is on a bridge deck, else null. */

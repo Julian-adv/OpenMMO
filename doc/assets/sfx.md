@@ -380,6 +380,13 @@ Both were generated and processed exactly like the monster cries above.
   1.2초에서 자르고 끝 150 ms 페이드, 모노, 피크 −3 dB, 44.1 kHz OGG Vorbis. `PlayerPetrifiedToggled`가 켜질 때 재생.
   원본과 처리 기록은 `assets/sfx/petrify-2026-11-22/`.
 
+- wood-step-1.ogg ~ wood-step-4.ogg — 나무 바닥(나무 다리, 나무 마루, 나무 계단)을 걷는 발소리.
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-22 직접 생성. Starter 유료 플랜,
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  프롬프트 `wood_footsteps`(4초, `prompt_influence=0.4`)로 걷는 소리 3개를 만들고 take 2에서 걸음 네 개를 잘라 냈다.
+  걸음마다 300 ms, 끝 60 ms 페이드, 모노, 피크 −6 dB, 44.1 kHz OGG Vorbis. 뛸 때는 0.75 m, 걷기 모드에서는 1.55 m마다 하나씩 무작위로 재생.
+  원본과 처리 기록은 `assets/sfx/wood-step-2026-11-22/`.
+
 - cart-roll.ogg, cart-crash.ogg — 검은맥 광산 철로 수레가 굴러가는 소리와 멈출 때 부딪히는 소리.
   [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-06 직접 생성. Starter 유료 플랜,
   [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.

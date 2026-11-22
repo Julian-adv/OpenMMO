@@ -3,6 +3,7 @@ import {
   assistStairMovementDirection,
   findClosedDoorOnSegment,
   findClosedDoorOnPath,
+  findRoomUnderFeet,
   houseFloorHeightAt,
   isHouseWallBlockingSegment,
   resolveHouseInterior,
@@ -73,6 +74,30 @@ function houseWithNorthDoor(isOpen = false): ReadonlyMap<string, HouseData> {
 
 const at = (floor: number, x: number, z: number) =>
   houseFloorHeightAt(house(), floor, x, z)
+
+describe('findRoomUnderFeet', () => {
+  const floors = () => {
+    const houses = house()
+    houses.get('h')!.rooms.forEach((r, i) => (r.floorTexture = i))
+    return houses
+  }
+  const under = (x: number, y: number, z: number) =>
+    findRoomUnderFeet(floors(), x, y, z)?.floorTexture ?? null
+
+  it('picks the storey the feet are on', () => {
+    expect(under(1, at(0, 1, 5)!, 5)).toBe(0)
+    expect(under(1, at(1, 1, 5)!, 5)).toBe(1)
+  })
+
+  it('picks the stairwell on its treads', () => {
+    expect(under(3.5, at(0, 3.5, 2)!, 2)).toBe(2)
+  })
+
+  it('finds nothing in mid-air or outside', () => {
+    expect(under(1, 1.5, 5)).toBeNull()
+    expect(under(20, 0.05, 5)).toBeNull()
+  })
+})
 
 describe('house interior visibility', () => {
   it.each([0, 64, -8])(

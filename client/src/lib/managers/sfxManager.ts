@@ -9,6 +9,8 @@ import {
 import monsterDefs from '../data/monsterDefs'
 import type { Gender } from '../network/networkTypes'
 import type { AbilityId } from '../data/abilities'
+import type { WalkSurface } from '../utils/housing-textures'
+import { FOOTSTEP_HEARING_RANGE_M } from '../effects/footstep-sounds'
 
 const MONSTER_DEATH_VOLUME = 0.5
 const MONSTER_DEATH_POOL_SIZE = 3
@@ -123,6 +125,14 @@ const MERGER_BELL_SOUNDS: SoundSpec[] = [1, 2, 3].map((n) => ({
   volume: 0.45,
   pool: 1,
 }))
+
+const FOOTSTEP_SOUNDS: Record<WalkSurface, SoundSpec[]> = {
+  wood: [1, 2, 3, 4].map((n) => ({
+    url: `/sounds/wood-step-${n}.ogg`,
+    volume: 0.35,
+    pool: 2,
+  })),
+}
 
 const STORAGE_KEY_VOLUME = 'onlinerpg_sfxVolume'
 const STORAGE_KEY_MUTED = 'onlinerpg_sfxMuted'
@@ -426,6 +436,28 @@ export function stopCartSounds() {
 
 export function stopDungeonDripSounds() {
   pauseSounds(DUNGEON_DRIP_SOUNDS)
+}
+
+export function preloadFootstepSounds() {
+  for (const takes of Object.values(FOOTSTEP_SOUNDS)) {
+    for (const { url, volume, pool } of takes) {
+      preloadAudioPool(url, volume, pool)
+    }
+  }
+}
+
+let lastFootstepTake = -1
+
+/** One step on `surface`, `distance` metres from the listener. */
+export function playFootstepSound(surface: WalkSurface, distance = 0) {
+  const gain = distanceGain(distance, FOOTSTEP_HEARING_RANGE_M)
+  if (!canUseAudio() || gain <= 0 || getSfxMultiplier() <= 0) return
+  const takes = FOOTSTEP_SOUNDS[surface]
+  let take = Math.floor(Math.random() * (takes.length - 1))
+  if (take >= lastFootstepTake) take++
+  lastFootstepTake = take
+  const { url, volume, pool } = takes[take]
+  playAudioFromPool(url, volume * gain, pool, 0.94 + Math.random() * 0.12)
 }
 
 export function preloadAbilitySounds() {

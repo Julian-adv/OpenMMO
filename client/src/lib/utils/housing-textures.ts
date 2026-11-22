@@ -4,6 +4,8 @@ import type { MeshStandardNodeMaterial } from 'three/webgpu'
 import { loadSplatLayer } from './splatLayerLoader'
 import { snowyStandardMaterial } from '../shaders/snow-cover-nodes'
 
+export type WalkSurface = 'wood'
+
 export interface HousingTextureEntry {
   label: string
   glb: string
@@ -32,6 +34,8 @@ export interface HousingTextureEntry {
   /** Enable standard alpha-blend transparency (transparent + depthWrite off). */
   transparent?: boolean
   decal?: boolean
+  /** What a walker's steps sound like on it. */
+  surface?: WalkSurface
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
@@ -59,30 +63,35 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
   {
     label: 'Wood',
     glb: 'housing/planks_brown_10_1k',
+    surface: 'wood',
     fallbackColor: 0x8b6914,
     sortOrder: 10,
   },
   {
     label: 'Plank',
     glb: 'housing/wood_planks_1k',
+    surface: 'wood',
     fallbackColor: 0x9e7c4e,
     sortOrder: 11,
   },
   {
     label: 'Dark Wood',
     glb: 'housing/dark_wooden_planks_1k',
+    surface: 'wood',
     fallbackColor: 0x4a3728,
     sortOrder: 12,
   },
   {
     label: 'Weathered',
     glb: 'housing/weathered_planks_1k',
+    surface: 'wood',
     fallbackColor: 0x8a8070,
     sortOrder: 13,
   },
   {
     label: 'Log Wall',
     glb: 'housing/wood_trunk_wall_1k',
+    surface: 'wood',
     fallbackColor: 0x7a5c3a,
     sortOrder: 14,
   },
@@ -95,6 +104,7 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
   {
     label: 'Plank Wall',
     glb: 'housing/wood_plank_wall_1k',
+    surface: 'wood',
     fallbackColor: 0x8b7355,
     sortOrder: 16,
   },

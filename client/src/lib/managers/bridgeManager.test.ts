@@ -70,6 +70,20 @@ describe('bridgeManager deck grid', () => {
     )
   })
 
+  it('reports a wood deck only under feet standing on it', () => {
+    const wood = { ...meta, deckSurface: 'wood' as const }
+    bridgeManager.registerBridgeMesh('wood', archedDeck(), wood)
+    bridgeManager.syncRegion(
+      8,
+      8,
+      [{ ...placement, id: 9, type: 'wood', x: 500 }],
+      new Map([['wood', { ...def, id: 'wood', bridge: wood } as ObjectDef]])
+    )
+    expect(bridgeManager.deckSurfaceAt(500, 200, 7)).toBe('wood')
+    expect(bridgeManager.deckSurfaceAt(500, 200, 6.2)).toBeNull()
+    expect(bridgeManager.deckSurfaceAt(100, 200, 7)).toBeNull()
+  })
+
   it('rejects a point over a deck hole', () => {
     expect(bridgeManager.findDeckYAt(104.5, 200, 6)).toBeNull()
   })

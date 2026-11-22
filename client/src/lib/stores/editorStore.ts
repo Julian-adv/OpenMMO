@@ -1,3 +1,4 @@
+import type { WalkSurface } from '../utils/housing-textures'
 import { writable } from 'svelte/store'
 import type { Position } from '../utils/movementUtils'
 import type { Gender } from '../network/networkTypes'
@@ -132,6 +133,8 @@ export interface BridgeMeta {
    *  load and GLB load; once the model is registered its rasterised deck
    *  grid takes over and these samples are unused. */
   deckYSamples?: number[]
+  /** What a walker's steps sound like on the deck. */
+  deckSurface?: WalkSurface
 }
 
 export interface ObjectDef {

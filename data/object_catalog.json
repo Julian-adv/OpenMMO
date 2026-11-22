@@ -128,6 +128,7 @@
       "deckEndY": 0.4,
       "deckAxis": "z",
       "railOuterOffset": 0.4,
+      "deckSurface": "wood",
       "deckYSamples": [
         2.0824, 2.0578, 2.0008, 1.8872, 1.7115, 1.4986, 1.2119, 0.9122, 0.5851,
         0.3941, 0.3941
@@ -178,6 +179,7 @@
       "deckEndY": 0.35,
       "deckAxis": "z",
       "railOuterOffset": 0.05,
+      "deckSurface": "wood",
       "deckYSamples": [
         0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 0.35
       ]
