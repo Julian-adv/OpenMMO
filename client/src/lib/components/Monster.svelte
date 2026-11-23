@@ -190,6 +190,8 @@
 
   let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
+  /** The clip a dormant statue has fully posed in; its mixer then rests. */
+  let posedAction: THREE.AnimationAction | undefined
   let model: THREE.Group | undefined = $state(undefined)
   let modelReady = $state(false)
   const threlte = useThrelte()
@@ -652,9 +654,16 @@
       corpseTimer = 0
     }
 
-    // 4. Update mixer; a dormant statue holds its pose.
-    if (mixer && !dormant) {
+    // 4. Update mixer; a dormant statue runs it only until its clip's
+    //    first pose has fully faded in, then holds that pose.
+    const posed = dormant && !!currentAction && currentAction === posedAction
+    if (mixer && !posed) {
+      if (dormant && currentAction) currentAction.time = 0
       mixer.update(deltaTime)
+      posedAction =
+        dormant && currentAction && currentAction.getEffectiveWeight() >= 1
+          ? currentAction
+          : undefined
 
       // Update debug info for slow mode
       const currentTS = get(timeScale)

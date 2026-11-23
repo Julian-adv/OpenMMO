@@ -66,6 +66,14 @@
     검증 스크립트를 아직 통과하지 못한다. 무기 위치는 `modular-character-preview.html?monster=mine_remnant`의 슬라이더로 맞추고
     저장하면 `data-src/monsters.csv`에 기록된다. 재현 절차와 해시는 [리깅 보고서](mine-remnant-rig-v1.json)에 있다.
 
+- garden_statue — 돌의 정원 1–5층의 깨어나는 석상. [원화](../../assets/monsters/garden_statue/concepts/front.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(OpenAI 생성 출력물 이용 조건, 프롬프트는 같은 폴더의 `generation.json`). 투구를 쓴 그리스 전사 석상의 T자 정면이다.
+  - 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개). 웹 결과라 +Z 정면·발바닥 원점이어서 방향 보정 없이
+    `tripo_v1/garden_statue.glb`를 그대로 원본으로 썼다. 10,881 triangles, 높이 2.0m(투구 깃 포함, 머리 꼭대기 1.88m).
+  - 도적 왕과 같은 도구로 리깅했다(`rig_spec.json`, `tools/rig-humanoid-monster.py`, `tools/bake-humanoid-monster.mjs`). 무기가 없어
+    공격은 맨손 `claw1|claw2`이고, 손가락 파지는 도적 왕 값(`grip_v1/fit.json`)을 그대로 썼다. 무기 전제인 `validate-humanoid-monster.mjs`는 돌리지 않았다.
+  - 잠든 동안은 `idle1` 첫 자세로 멈춰 서 있다. 사람 크기라 플레이어 석상 사이에 섞인다(2.5m 돌 골렘 대역을 대체).
+
 - floating_eye — 돌의 정원 입구 주변을 떠다니는 눈. [원화](../images/monsters/floating-eye-concept.png)는 OpenAI Codex ImageGen,
   ChatGPT Pro 20x로 2026-11-22 제작했다(OpenAI 생성 출력물 이용 조건). 맨 눈알 시안과 돌 껍질 시안 중 사용자가 맨 눈알을 골랐고,
   두 시안과 프롬프트는 `assets/monsters/floating_eye/concepts/`에 있다.
