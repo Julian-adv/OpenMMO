@@ -150,6 +150,8 @@ export interface DungeonFloorLayout {
   /** Openings in the walls rooms share; set only where rooms stand edge to
    *  edge, and every other edge between two rooms is then a wall. */
   doorways?: InteriorDoorSpec[]
+  /** South-west cells of a boss hall's 2×2 rock pillars. */
+  pillars?: [number, number][]
 }
 
 export interface DungeonConstants {

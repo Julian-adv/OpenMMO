@@ -25,10 +25,6 @@
   import { loadGLB } from '../../utils/gltfCache'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { dungeonCaveTheme } from '../../utils/dungeon-cave-themes'
-  import {
-    templePillarCells,
-    templePillarCorners,
-  } from '../../utils/dungeon-geo-floor'
   import { applyCrystalGlow } from '../../effects/crystal-glow'
   import { translate } from '../../i18n'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
@@ -783,14 +779,12 @@
   async function addHallColumns(
     group: THREE.Group,
     layout: DungeonFloorLayout,
-    grid: number,
     model: string
   ) {
-    const corners = templePillarCorners(templePillarCells(layout, grid), grid)
-    if (!corners.length) return
+    if (!layout.pillars?.length) return
     const template = await loadPropTemplate(model)
     if (!template) return
-    for (const [x, z] of corners) {
+    for (const [x, z] of layout.pillars) {
       const clone = template.clone()
       clone.position.set(x + 1, 0, z + 1)
       clone.scale.set(HALL_COLUMN_GIRTH, 1, HALL_COLUMN_GIRTH)
@@ -913,7 +907,7 @@
           key,
           depth
         ),
-      theme.hallColumn && addHallColumns(group, layout, grid, theme.hallColumn),
+      theme.hallColumn && addHallColumns(group, layout, theme.hallColumn),
     ])
 
     if (stale()) return

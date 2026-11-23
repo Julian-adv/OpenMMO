@@ -577,10 +577,12 @@ pub struct FloorLayout {
     /// Openings in the walls rooms share. Where this is set, rooms stand
     /// edge to edge: every edge between two of them is a wall but these.
     pub doorways: Vec<InteriorDoorSpec>,
+    /// South-west cells of a boss hall's 2×2 rock pillars, drawn as columns.
+    pub pillars: Vec<(i32, i32)>,
 }
 
-/// As derived, less `doorways`: [`layout_hash`] reads this form, and they
-/// follow from the rooms.
+/// As derived, less `doorways` and `pillars`: [`layout_hash`] reads this
+/// form, and they follow from the rooms and the carving.
 impl std::fmt::Debug for FloorLayout {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("FloorLayout")

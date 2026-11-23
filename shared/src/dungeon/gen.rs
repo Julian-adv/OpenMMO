@@ -317,7 +317,7 @@ fn finish_floor(
         carve_corridor(&mut carved, rooms[a].center(), rooms[b].center(), x_first);
     }
 
-    for (x, z) in pillars {
+    for &(x, z) in &pillars {
         carve_rect_as(&mut carved, &Room { x, z, w: 2, d: 2 }, false);
     }
 
@@ -333,6 +333,7 @@ fn finish_floor(
         spawns: Vec::new(),
         props: Vec::new(),
         doorways,
+        pillars,
     };
 
     let openings = wall_openings(&layout);
@@ -1187,6 +1188,7 @@ fn fallback_floor(
         spawns: Vec::new(),
         props: Vec::new(),
         doorways: Vec::new(),
+        pillars: Vec::new(),
     };
     layout.spawns = roll_spawns(rng, &layout, table, 0);
     layout.props = roll_props(rng, &layout);
