@@ -25,6 +25,10 @@
   import { loadGLB } from '../../utils/gltfCache'
   import { getObjectModelPath } from '../../utils/modelPaths'
   import { dungeonCaveTheme } from '../../utils/dungeon-cave-themes'
+  import {
+    templePillarCells,
+    templePillarCorners,
+  } from '../../utils/dungeon-geo-floor'
   import { applyCrystalGlow } from '../../effects/crystal-glow'
   import { translate } from '../../i18n'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
@@ -118,6 +122,8 @@
   const themedModel = (id: string) =>
     dungeonCaveTheme(dungeonManager.dungeonId ?? '', 1).propModels[id] ?? id
   const CHEST_OPEN_CLIP = 'ChestOpen'
+  /** A hall column is widened to fill its 2×2 pillar. */
+  const HALL_COLUMN_GIRTH = 1.9
   /** How far the open lid's rear corner reaches behind the chest origin (along
    *  local −Z): the lid swings up and ~105° back over the hinge. Measured from
    *  chest_animated.glb. The chest is pushed this far (less the half-cell it
@@ -140,6 +146,8 @@
     broken: boolean
     /** Chest only: whether its lid-open animation has been started. */
     opened?: boolean
+    /** Chest only: the catalog model whose open clip it plays. */
+    model?: string
   }
   let propEntries = new Map<number, PropEntry>()
   /** Flame world-positions of the current floor's wall torches. Read every frame
@@ -147,9 +155,10 @@
    *  pool + the unified shadow light. Swapped on floor rebuild, cleared on exit. */
   let wallTorchPositions: THREE.Vector3[] = []
   let crystalGlowPositions: THREE.Vector3[] = []
-  /** The chest lid-open clip, captured once from the animated chest GLB and
-   *  shared by every chest clone (each gets its own AnimationMixer). */
-  let chestOpenClip: THREE.AnimationClip | null = null
+  /** Lid-open clips by chest model, captured as each loads and shared by its
+   *  clones (each gets its own AnimationMixer). */
+  // eslint-disable-next-line svelte/prefer-svelte-reactivity
+  const chestOpenClips = new Map<string, THREE.AnimationClip>()
   /** One-shot prop mixers (the chest lid-open clip), ticked each frame. The
    *  clip is LoopOnce + clampWhenFinished, so it holds its final pose once
    *  done. Cleared with the props on a floor rebuild. The spilled coin pile is
@@ -251,6 +260,7 @@
    *  can reconcile the door visual to the store on the hidden→shown edge. */
   let entranceVisible = false
   let builtKey = ''
+  let propsBuild = 0
   let builtLayoutRevision = 0
   let entranceKey = ''
   let lastPropsResetRevision = 0
@@ -485,7 +495,7 @@
   }
 
   /** Resolve a catalog id to its loaded GLB template, or null on any failure.
-   *  Latches the shared lid-open clip the first time the animated chest loads. */
+   *  Latches a chest model's lid-open clip the first time it loads. */
   async function loadPropTemplate(
     catalogId: string
   ): Promise<THREE.Object3D | null> {
@@ -493,15 +503,8 @@
     if (!def?.model) return null
     try {
       const gltf = await loadGLB(getObjectModelPath(def.model))
-      if (
-        catalogId === CHEST_ANIMATED_ID &&
-        !chestOpenClip &&
-        gltf.animations.length
-      ) {
-        chestOpenClip =
-          gltf.animations.find((a) => a.name === CHEST_OPEN_CLIP) ??
-          gltf.animations[0]
-      }
+      const openClip = gltf.animations.find((a) => a.name === CHEST_OPEN_CLIP)
+      if (openClip) chestOpenClips.set(catalogId, openClip)
       if (catalogId === 'mine_crystal_cluster') applyCrystalGlow(gltf.scene)
       return gltf.scene
     } catch {
@@ -729,25 +732,27 @@
       rotationDeg: prop.rotation,
       broken: false,
       opened: false,
+      model: modelId,
     })
   }
 
   /** Place the final floor's treasure chest into `group`/`entries` under its
-   *  sentinel id: the same animated chest GLB as the clutter chests, seated on
-   *  the chest cell, facing south (+Z) so the open lid shows the inside,
+   *  sentinel id: the animated chest GLB, or the theme's own treasure chest,
+   *  seated on the chest cell, facing south (+Z) so the open lid shows the inside,
    *  and clickable to open. The lid plays on the DungeonChestOpened broadcast;
    *  the loot the server ejects lands as pickable ground items around it. */
   async function addTreasureChest(
     group: THREE.Group,
     entries: Map<number, PropEntry>,
     chest: [number, number],
+    model: string,
     key: string,
     depth: number
   ) {
-    const template = await loadPropTemplate(CHEST_ANIMATED_ID)
+    const template = await loadPropTemplate(model)
     if (!template) return
     if (key !== builtKey) return
-    const m = measureProp('chest', template)
+    const m = measureProp(model, template)
     const clone = template.clone()
     clone.position.set(chest[0] + 0.5, m.seatY, chest[1] + 0.5)
     clone.rotation.y = 0
@@ -770,7 +775,28 @@
       rotationDeg: 0,
       broken: false,
       opened: false,
+      model,
     })
+  }
+
+  /** The theme's column drawn over each 2×2 hall pillar. */
+  async function addHallColumns(
+    group: THREE.Group,
+    layout: DungeonFloorLayout,
+    grid: number,
+    model: string
+  ) {
+    const corners = templePillarCorners(templePillarCells(layout, grid), grid)
+    if (!corners.length) return
+    const template = await loadPropTemplate(model)
+    if (!template) return
+    for (const [x, z] of corners) {
+      const clone = template.clone()
+      clone.position.set(x + 1, 0, z + 1)
+      clone.scale.set(HALL_COLUMN_GIRTH, 1, HALL_COLUMN_GIRTH)
+      tagDecorative(clone)
+      group.add(clone)
+    }
   }
 
   /** Load + seat a kind's broken-debris variant (single, cell-centered) clone.
@@ -838,6 +864,10 @@
   ) {
     const specs = layout.props ?? []
     if (specs.length === 0 && !layout.chest) return
+    // A newer build of the same floor (a maze variant swapped in mid-load)
+    // must win, even when this one's loads finish last.
+    const build = ++propsBuild
+    const stale = () => key !== builtKey || build !== propsBuild
 
     const group = new THREE.Group()
     group.position.set(
@@ -869,14 +899,24 @@
           torchPositions
         )
       }
-      if (key !== builtKey) return // floor changed mid-load — abandon
+      if (stale()) return // floor changed mid-load — abandon
     }
 
-    if (layout.chest) {
-      await addTreasureChest(group, entries, layout.chest, key, depth)
-    }
+    const theme = dungeonCaveTheme(dungeonManager.dungeonId ?? '', depth)
+    await Promise.all([
+      layout.chest &&
+        addTreasureChest(
+          group,
+          entries,
+          layout.chest,
+          theme.treasureChest ?? CHEST_ANIMATED_ID,
+          key,
+          depth
+        ),
+      theme.hallColumn && addHallColumns(group, layout, grid, theme.hallColumn),
+    ])
 
-    if (key !== builtKey) return
+    if (stale()) return
     clearProps()
     // Move the freshly built clones into the stable props group, matching its
     // offset to the temp group's so world positions are preserved.
@@ -990,13 +1030,14 @@
     const clone = entry.clones[0]
     if (!clone) return
     entry.opened = true
-    if (chestOpenClip) {
+    const clip = entry.model && chestOpenClips.get(entry.model)
+    if (clip) {
       const mixer = new THREE.AnimationMixer(clone)
-      const action = mixer.clipAction(chestOpenClip)
+      const action = mixer.clipAction(clip)
       action.loop = THREE.LoopOnce
       action.clampWhenFinished = true // hold the lid open after the clip ends
       action.play()
-      if (instant) mixer.setTime(chestOpenClip.duration) // already-open: skip the swing
+      if (instant) mixer.setTime(clip.duration) // already-open: skip the swing
       propMixers.push(mixer)
     }
   }

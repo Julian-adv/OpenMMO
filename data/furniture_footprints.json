@@ -97,6 +97,12 @@
     "minZ": 0,
     "maxZ": 0.634
   },
+  "garden_relic_chest": {
+    "minX": -0.563,
+    "maxX": 0.563,
+    "minZ": -0.578,
+    "maxZ": 0.578
+  },
   "terraclash_dormant": {
     "minX": -5.248,
     "maxX": 4.967,

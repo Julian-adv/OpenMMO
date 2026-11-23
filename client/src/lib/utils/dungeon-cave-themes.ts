@@ -3,8 +3,17 @@ import { HOUSING_TEXTURES } from './housing-textures'
 
 function theme(
   id: string,
-  masonry = false,
-  propModels: Record<string, string> = {}
+  {
+    masonry = false,
+    propModels = {},
+    treasureChest,
+    hallColumn,
+  }: {
+    masonry?: boolean
+    propModels?: Record<string, string>
+    treasureChest?: string
+    hallColumn?: string
+  } = {}
 ) {
   const texture = (surface: string) =>
     HOUSING_TEXTURES.findIndex(
@@ -18,19 +27,28 @@ function theme(
     floorTexture: texture('floor'),
     /** Catalog ids drawn in place of a prop's usual model. */
     propModels,
+    /** The final floor's chest, when not the plain animated one. */
+    treasureChest,
+    /** Drawn over a hall's rock pillars, which still block as rock. */
+    hallColumn,
   }
 }
 
 export const DUNGEON_CAVE_THEMES = [
   theme('limestone'),
   theme('moss'),
-  theme('masonry', true),
+  theme('masonry', { masonry: true }),
 ]
 
 /** Marble for every floor of a `layoutStyle=temple` dungeon, rooms included. */
-export const DUNGEON_TEMPLE_THEME = theme('temple', true, {
-  barrel: 'temple_amphora',
-  barrel_broken: 'temple_amphora_broken',
+export const DUNGEON_TEMPLE_THEME = theme('temple', {
+  masonry: true,
+  propModels: {
+    barrel: 'temple_amphora',
+    barrel_broken: 'temple_amphora_broken',
+  },
+  treasureChest: 'garden_relic_chest',
+  hallColumn: 'temple_column',
 })
 
 const TEMPLES = new Set(

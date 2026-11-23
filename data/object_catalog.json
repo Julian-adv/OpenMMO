@@ -396,6 +396,12 @@
     "model": "objects/temple_amphora_broken.glb"
   },
   {
+    "id": "garden_relic_chest",
+    "name": "Excavator's Relic",
+    "model": "objects/garden_relic_chest.glb",
+    "solid": true
+  },
+  {
     "id": "health_potion",
     "name": "Greater Healing Potion",
     "model": "objects/greater_healing_potion.glb"

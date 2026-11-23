@@ -203,6 +203,7 @@ Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
 
 - temple_column — 홈이 파인 도리아식 기둥. 원화 `assets/props/temple_column/concepts/column.png`, 생성 기록 `tripo_v1/`. `tools/blender-scripts/build_temple_column.py`가 받침을 0.9m로 맞춰(높이 3.11m, 4,090 triangles, 텍스처 512² WebP) `objects/temple_column.glb`로 내보내고, 같은 메시를 눕힌 `objects/temple_fallen_column.glb`(세 칸 길이)도 함께 만든다.
 - temple_amphora, temple_amphora_broken — 통과 깨진 통 대신 그리는 항아리와 그 조각. 한 장의 원화(`assets/props/temple_amphora/concepts/amphora.png`)에 온전한 항아리와 깨진 항아리를 나란히 그려 한 번에 생성한 뒤, `tools/blender-scripts/build_temple_amphora.py`가 떨어진 조각 단위로 둘을 가른다. 손잡이는 항아리와 따로 떨어진 조각으로 나와 항아리 쪽에 붙였고, 항아리 발치에 생긴 조각 하나는 버렸다. 항아리 높이 0.95m(3,036 triangles), 조각 더미 4,962 triangles, 텍스처 512² WebP.
+- garden_relic_chest — 돌의 정원 마지막 층의 상자. 상자를 붙든 채 무릎 꿇고 돌이 된 발굴단원. 원화(`assets/props/garden_relic_chest/concepts/relic.png`, Codex ImageGen, 정면 한 장)로 사용자가 Tripo 웹에서 face limit 10,000으로 생성(`tripo/relic_tripo.glb`). `tools/blender-scripts/build_garden_relic_chest.py`가 이음매(높이 0.232) 위 상자 부분을 뚜껑으로 잘라 뒤쪽 모서리에 경첩을 달고, 80°까지 열리는 `ChestOpen` 클립을 넣는다. 숙인 머리와 팔에 닿지 않게 일반 상자(105°)보다 덜 연다(사용자 결정 2026-11-23, 앞으로 열리던 첫 시안 대신). 속이 빈 상자 입구와 뚜껑 밑면은 같은 돌 텍스처를 0.35배로 어둡게 한 판으로 막았다. 높이 1.15m, 10,872 triangles(뚜껑 415), 텍스처 512² WebP.
 
 갈색 셰일은 이끼 암반과 분위기가 비슷하다는 사용자 피드백에 따라 벽돌·타일 세트로 교체했다. 기존 셰일 이미지는 시안으로 보관한다.
 

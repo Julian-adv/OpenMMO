@@ -66,6 +66,33 @@ export interface DungeonFloorGroup {
   doors: InteriorDoor[]
 }
 
+/** Cells of a temple hall's rock pillars: uncarved cells inside a room. They
+ *  block like rock but are drawn as round columns over a paved floor. */
+export function templePillarCells(
+  layout: DungeonFloorLayout,
+  grid: number
+): Set<number> {
+  const cells = new Set<number>()
+  for (const room of layout.rooms) {
+    for (let z = room.z; z < room.z + room.d; z++) {
+      for (let x = room.x; x < room.x + room.w; x++) {
+        if (!layout.carved[x + z * grid]) cells.add(x + z * grid)
+      }
+    }
+  }
+  return cells
+}
+
+/** South-west cells of the 2×2 pillars among `cells`. */
+export function templePillarCorners(
+  cells: Set<number>,
+  grid: number
+): [number, number][] {
+  return [...cells]
+    .filter((i) => !cells.has(i - 1) && !cells.has(i - grid))
+    .map((i) => [i % grid, Math.floor(i / grid)])
+}
+
 export function buildDungeonFloorGroup(
   layout: DungeonFloorLayout,
   ctx: DungeonGeoCtx,
@@ -79,8 +106,13 @@ export function buildDungeonFloorGroup(
   const roomIndexAt = (x: number, z: number) =>
     layout.rooms.findIndex((r) => rectContains(r, x, z))
   const roomAt = (x: number, z: number) => roomIndexAt(x, z) >= 0
+  const pillars = temple ? templePillarCells(layout, grid) : null
   const carvedAt = (x: number, z: number) =>
-    x >= 0 && x < grid && z >= 0 && z < grid && layout.carved[x + z * grid]
+    x >= 0 &&
+    x < grid &&
+    z >= 0 &&
+    z < grid &&
+    (layout.carved[x + z * grid] || !!pillars?.has(x + z * grid))
 
   const entries: GeoEntry[] = []
 
