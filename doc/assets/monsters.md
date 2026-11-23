@@ -66,6 +66,15 @@
     검증 스크립트를 아직 통과하지 못한다. 무기 위치는 `modular-character-preview.html?monster=mine_remnant`의 슬라이더로 맞추고
     저장하면 `data-src/monsters.csv`에 기록된다. 재현 절차와 해시는 [리깅 보고서](mine-remnant-rig-v1.json)에 있다.
 
+- garden_serpent — 돌의 정원 6–10층의 돌비늘 뱀. [원화](../../assets/monsters/garden_serpent/concepts/side.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 몸 길이가 드러나도록 옆모습 한 장으로 그렸고,
+  몸통 뒤 2/3는 바닥에 일자로, 앞부분만 들었다. 3D 원본은 같은 날 사용자가 Tripo 웹에서 이 한 장으로 만들었다(면 5천 개, `tripo_v1/`).
+  - 리깅과 동작은 `tools/blender-scripts/rig_garden_serpent.py` 하나로 다시 만든다. 길이 4m, 원점은 주둥이 0.8m 뒤(목)이다. 뿌리 뼈가 목에 있고
+    앞으로 머리까지 3마디, 뒤로 꼬리 끝까지 `Tail1`–`Tail10`이 이어지며, 중심선을 따라 길이 비율로 가중치를 준다.
+  - 게임에서는 몸통이 목이 지나온 길을 따라 눕는다(`effects/body-trail.ts`, `monsters.csv`의 `bodyTrail`). 길은 목 위치를 0.25초로 부드럽게 따라간 점이 30cm(뒤로는 80cm) 움직일 때마다 늘어나서, 서버 위치 보정이나 피격 때의 작은 튐에 몸이 꺾이지 않는다. 뿌리는 그 길의 방향을 보고(초당 180° 상한), 대상 쪽으로는 목과 머리만 최대 80°까지 돌린다. 제자리에서 대상이 더 뒤에 있으면 몸 전체가 초당 90°로 돈다. 동작이 뼈를 다시 쓰지 않은 프레임에는 지난 프레임의 회전을 되돌린 뒤 적용한다.
+  - 동작은 모두 스크립트로 쓴 것이다: `idle1`, `combat_idle`, `walk`·`run`(머리에서 꼬리로 흐르는 옆 물결), `bite`(뒤로 당겼다가 0.5초에 내지름), `hit`, `dying`(옆으로 눕음).
+    원본은 객체 회전(`rotation_mode='XYZ'`)으로 돌린 뒤 적용한다. 정점을 직접 돌리면 glTF에서 들어온 노멀이 그대로 남고, 회전 모드를 바꾸지 않으면 쿼터니언 모드라 각도가 무시되어 머리가 옆을 본다.
+
 - garden_breaker — 돌의 정원 16–24층의 돌깎이. [원화](../../assets/monsters/garden_breaker/concepts/front.png)는 OpenAI Codex ImageGen,
   ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개, `tripo_v1/`).
   - 같은 인간형 리그(`rig_spec.json`, 높이 2.4m, 11,304 triangles). 외눈 거인 대역의 전용 클립 대신 공용 팩 동작을 쓰고, 공격은 오우거와 같은 `slash1`, 무기는 그대로 `greatclub`(`weaponOffset` 0.1, 손바닥 가운데)다.

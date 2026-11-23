@@ -82,6 +82,7 @@
   import { warmupPipelines } from '../utils/pipelineWarmup'
   import { shake, sleepSink, STATUE_WAKE_MS } from '../effects/dormant-sleep'
   import { DeathCrumble } from '../effects/death-crumble'
+  import { BodyTrail } from '../effects/body-trail'
   import {
     disposeMeshMaterials,
     disposeObjectTree,
@@ -190,6 +191,7 @@
 
   let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
+  let bodyTrail: BodyTrail | undefined
   /** The clip a dormant statue has fully posed in; its mixer then rests. */
   let posedAction: THREE.AnimationAction | undefined
   let model: THREE.Group | undefined = $state(undefined)
@@ -563,9 +565,12 @@
     const slept = sinkAt === undefined ? 0 : Date.now() - sinkAt
     const sink = sleepSink(slept)
     const sunk = sink * nametagHeight
+    const yaw =
+      bodyTrail?.track(position.x, position.z, rotation, performance.now()) ??
+      rotation
     if (group) {
       group.position.set(position.x, position.y - sunk, position.z)
-      group.rotation.y = rotation
+      group.rotation.y = yaw
       if (sink > 0) shake(group, slept / 1000, 0.12 * (1 - sink))
       const woke = wokeAt === undefined ? STATUE_WAKE_MS : Date.now() - wokeAt
       if (woke < STATUE_WAKE_MS)
@@ -579,7 +584,7 @@
     }
     if (hoverProxyGroup) {
       hoverProxyGroup.position.set(position.x, position.y - sunk, position.z)
-      hoverProxyGroup.rotation.y = rotation
+      hoverProxyGroup.rotation.y = yaw
     }
 
     // 1. Sync animation with state
@@ -664,6 +669,7 @@
         dormant && currentAction && currentAction.getEffectiveWeight() >= 1
           ? currentAction
           : undefined
+      if (monsterState !== 'dead') bodyTrail?.pose(yaw, rotation)
 
       // Update debug info for slow mode
       const currentTS = get(timeScale)
@@ -759,6 +765,7 @@
         })
         // Setup mixer on the cloned scene
         mixer = new THREE.AnimationMixer(clonedScene)
+        if (initialDef?.bodyTrail) bodyTrail = new BodyTrail(clonedScene)
 
         mixer.addEventListener('finished', (e) => {
           const finishedClipName = e.action.getClip().name
