@@ -310,6 +310,9 @@ pub struct Monster {
     /// retaliating when hit. Selects the server behavior tree.
     #[serde(default)]
     pub aggressive: bool,
+    /// Stands as stone until a player comes close or strikes it.
+    #[serde(default)]
+    pub dormant: bool,
     /// Server-only; never on the wire.
     #[serde(skip)]
     pub lifecycle: MonsterLifecycle,

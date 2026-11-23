@@ -9,7 +9,7 @@ use super::tree::BehaviorStatus;
 use super::{
     cell_of, AiCommand, AiState, BehaviorTree, ChaseAim, NearbyMonster, NearbyPlayer, PathProvider,
     DEFAULT_ATTACK_RANGE, DEFAULT_CHASE_RANGE, DEFAULT_HIT_STAGGER_MS, DEFAULT_MAX_MOVE_DIST,
-    DEFAULT_MIN_MOVE_DIST, NETWORK_SYNC_INTERVAL_MS,
+    DEFAULT_MIN_MOVE_DIST, NETWORK_SYNC_INTERVAL_MS, RESETTLE_MS, RESETTLE_RADIUS, WAKE_MS,
 };
 use crate::pathfinding::PathWaypoint;
 use crate::{MonsterState, PlayerId, Position};
@@ -121,6 +121,12 @@ pub struct MonsterBrain {
     pub(super) aggro: Option<Box<super::aggro::Aggro>>,
     /// Time left standing by players who are all stone (`SkillSet::shatter`).
     pub(super) stone_wait_left_ms: Option<f32>,
+    /// Sleeps as stone until a player comes this close or strikes it; 0 never.
+    pub(super) ambush_range: f32,
+    pub(super) dormant: bool,
+    pub(super) waking_left_ms: f32,
+    /// Time spent home with nobody to fight, toward sleeping again.
+    pub(super) rest_ms: f32,
 }
 
 impl MonsterBrain {
@@ -213,7 +219,20 @@ impl MonsterBrain {
             aggro: super::aggro_for(monster_type)
                 .map(|rules| Box::new(super::aggro::Aggro::new(rules))),
             stone_wait_left_ms: None,
+            ambush_range: 0.0,
+            dormant: false,
+            waking_left_ms: 0.0,
+            rest_ms: 0.0,
         }
+    }
+
+    pub fn set_ambush(&mut self, range: f32, dormant: bool) {
+        self.ambush_range = range;
+        self.dormant = dormant && range > 0.0;
+    }
+
+    pub fn is_dormant(&self) -> bool {
+        self.dormant
     }
 
     /// The path just changed direction here — force the next tick to sync.
@@ -350,6 +369,7 @@ impl MonsterBrain {
         }
         self.stagger_left_ms = (self.stagger_left_ms - delta_ms).max(0.0);
         self.slow_left_ms = (self.slow_left_ms - delta_ms).max(0.0);
+        self.waking_left_ms = (self.waking_left_ms - delta_ms).max(0.0);
         if let Some((_, left)) = &mut self.noticing {
             *left = (*left - delta_ms).max(0.0);
         }
@@ -758,6 +778,10 @@ impl MonsterBrain {
             self.state_timer_ms = 0.0;
         }
 
+        if self.ambush_range > 0.0 && self.tick_ambush(delta_ms, nearby_players, &mut commands) {
+            return commands;
+        }
+
         let targets = self.targetable(nearby_players);
         let nearby_players = &*targets;
         self.update_aggro_target(nearby_players, path_provider, rng);
@@ -791,6 +815,60 @@ impl MonsterBrain {
         }
 
         commands
+    }
+
+    /// Wakes a dormant ambusher on the nearest player in reach, holds it still
+    /// while it wakes, and puts it back to sleep after a rest at home. True
+    /// while it holds.
+    fn tick_ambush(
+        &mut self,
+        delta_ms: f32,
+        players: &[NearbyPlayer],
+        commands: &mut Vec<AiCommand>,
+    ) -> bool {
+        if self.dormant {
+            let reach = self.ambush_range * self.ambush_range;
+            if let Some(waker) = players
+                .iter()
+                .filter(|p| !p.petrified && p.health > 0)
+                .map(|p| (p, self.position.dist_xz_sq(&p.position)))
+                .filter(|(_, d)| *d <= reach)
+                .min_by(|a, b| a.1.total_cmp(&b.1))
+                .map(|(p, _)| p)
+            {
+                self.wake(waker.id, Some(&waker.position), commands);
+            }
+            return true;
+        }
+        if self.waking_left_ms > 0.0 {
+            return true;
+        }
+        let home =
+            self.position.dist_xz_sq(&self.spawn_position) <= RESETTLE_RADIUS * RESETTLE_RADIUS;
+        if self.current_target(players).is_none() && self.state == AiState::Idle && home {
+            self.rest_ms += delta_ms;
+            if self.rest_ms >= RESETTLE_MS {
+                self.rest_ms = 0.0;
+                self.dormant = true;
+                self.pause_chase();
+                commands.push(AiCommand::Dormant { dormant: true });
+                return true;
+            }
+        } else {
+            self.rest_ms = 0.0;
+        }
+        false
+    }
+
+    fn wake(&mut self, waker: PlayerId, at: Option<&Position>, commands: &mut Vec<AiCommand>) {
+        self.dormant = false;
+        self.waking_left_ms = WAKE_MS;
+        self.resume_chase(waker);
+        commands.push(AiCommand::Dormant { dormant: false });
+        if let Some(at) = at {
+            self.set_facing(self.position.bearing_xz_to(at));
+            commands.push(self.make_move_cmd());
+        }
     }
 
     // =========================================================================
@@ -858,6 +936,11 @@ impl MonsterBrain {
         let previous_target = self.target_player_id;
         if !self.apply_hit(attacker_id, hit, damage) {
             return vec![];
+        }
+        if self.dormant {
+            let mut commands = Vec::new();
+            self.wake(*attacker_id, None, &mut commands);
+            return commands;
         }
 
         if previous_target != self.target_player_id {

@@ -139,6 +139,8 @@
     lastDamageInfo={monster.lastDamageInfo}
     droppedWeaponItemDefId={monster.droppedWeaponItemDefId}
     sinkAt={monster.sinkAt}
+    dormant={monster.dormant}
+    wokeAt={monster.wokeAt}
     health={monster.health}
     maxHealth={monster.maxHealth}
     {showHealth}

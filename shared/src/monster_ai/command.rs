@@ -131,4 +131,6 @@ pub enum AiCommand {
         rotation: f32,
         spots: Vec<Position>,
     },
+    /// An ambusher woke (`false`) or settled back into stone (`true`).
+    Dormant { dormant: bool },
 }

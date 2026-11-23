@@ -1800,6 +1800,10 @@ export function handleServerMessage(
       break
     }
 
+    case 'MonsterDormant':
+      monsterManager.handleMonsterDormant(data.monster_id, data.dormant)
+      break
+
     case 'MonsterStared': {
       const state = get(gameStore)
       monsterManager.handleMonsterAttackStarted(

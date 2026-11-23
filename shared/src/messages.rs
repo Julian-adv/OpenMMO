@@ -2004,6 +2004,11 @@ pub enum ServerMessage {
         player_id: PlayerId,
         damage: u32,
     },
+    /// A waking statue came to life, or settled back into stone.
+    MonsterDormant {
+        monster_id: String,
+        dormant: bool,
+    },
     /// A floating eye blinks at whoever struck it, about to hold them.
     MonsterStared {
         monster_id: String,
@@ -3082,7 +3087,8 @@ impl ServerMessage {
             | Self::MealEaten { .. }
             | Self::MealRemoved { .. }
             | Self::PlayerRadianceToggled { .. }
-            | Self::PlayerRageToggled { .. } => DeliveryClass::NearbyState,
+            | Self::PlayerRageToggled { .. }
+            | Self::MonsterDormant { .. } => DeliveryClass::NearbyState,
             Self::PlayerTeleportEffect { .. }
             | Self::DungeonChestOpened { .. }
             | Self::ChatMessage { .. }

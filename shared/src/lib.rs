@@ -319,7 +319,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v172: the `stone_gaze` and `tail_sweep` monster skills, `MonsterSkillReflected` and
 /// `DungeonStatues`.
 /// v173: `MonsterStared`.
-pub const PROTOCOL_VERSION: u32 = 173;
+/// v174: `Monster::dormant` and `MonsterDormant`.
+pub const PROTOCOL_VERSION: u32 = 174;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -694,6 +695,7 @@ mod tests {
                 floor_level: 0,
                 level_override: None,
                 aggressive: true,
+                dormant: true,
                 lifecycle: MonsterLifecycle::Ambient,
                 last_attack_at: 0,
             },

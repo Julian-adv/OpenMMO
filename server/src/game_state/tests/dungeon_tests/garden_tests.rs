@@ -727,3 +727,57 @@ async fn a_floor_keeps_its_newest_statues_across_a_restart() {
     restarted.send_floor_statues(&watcher, "old_crypt", 1).await;
     assert!(drain(&mut rx).is_empty());
 }
+
+async fn spawn_statue(game_state: &GameState, at: Position, dx: f32) -> String {
+    game_state
+        .spawn_monster(
+            "garden_statue".into(),
+            Position { x: at.x + dx, ..at },
+            0.0,
+            0,
+            MonsterLifecycle::Ambient,
+            None,
+            true,
+        )
+        .await
+        .unwrap()
+        .id
+}
+
+/// A waking statue stands as stone until a player comes within three metres,
+/// then wakes on them; one struck from afar wakes too.
+#[tokio::test]
+async fn a_waking_statue_wakes_when_approached_or_struck() {
+    let game_state = make_flat_world_game_state("statue_ambush");
+    let (id, mut rx) = add_hungry_player(&game_state, "Passerby", 100).await;
+    let at = game_state.players.read().await[&id].position;
+    let near = spawn_statue(&game_state, at, 6.0).await;
+    let far = spawn_statue(&game_state, at, -10.0).await;
+    let dormant = |statue: &str| {
+        let statue = statue.to_owned();
+        let game_state = game_state.clone();
+        async move { game_state.monsters.read().await[&statue].dormant }
+    };
+    let start = game_state.monsters.read().await[&near].position;
+    for _ in 0..10 {
+        game_state.tick_monster_ai_by(200.0).await;
+    }
+    assert!(dormant(&near).await && dormant(&far).await);
+    assert_eq!(game_state.monsters.read().await[&near].position, start);
+
+    game_state
+        .players
+        .write()
+        .await
+        .get_mut(&id)
+        .unwrap()
+        .position
+        .x = at.x + 4.0;
+    game_state.tick_monster_ai_by(200.0).await;
+    assert!(!dormant(&near).await);
+    assert!(std::iter::from_fn(|| rx.try_recv().ok())
+        .any(|msg| matches!(msg, ServerMessage::MonsterDormant { dormant: false, .. })));
+
+    game_state.brain_hit(&far, &id, true, 1).await;
+    assert!(!dormant(&far).await);
+}

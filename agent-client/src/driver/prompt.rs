@@ -772,6 +772,14 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             "[MonsterSkillReflected] {}'s mirror shield threw {monster_id}'s {skill:?} back for {damage}",
             player_name(state, player_id)
         )),
+        ServerMessage::MonsterDormant {
+            monster_id,
+            dormant,
+        } => Some(if *dormant {
+            format!("[MonsterDormant] {monster_id} settles back into stone")
+        } else {
+            format!("[MonsterDormant] {monster_id} wakes from stone and attacks")
+        }),
         ServerMessage::MonsterStared {
             monster_id,
             player_id,

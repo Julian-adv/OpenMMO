@@ -24,6 +24,9 @@ export function sleepRise(elapsedMs: number) {
   return 1 - (1 - t) ** 3
 }
 
+/** A waking statue shakes off the stone this long (server `WAKE_MS`). */
+export const STATUE_WAKE_MS = 800
+
 /** The tremor a dormant boss and its stand-in share. */
 export function shake(object: Object3D, t: number, amp: number) {
   object.position.x += Math.sin(t * 53) * amp

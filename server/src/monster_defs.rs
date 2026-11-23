@@ -85,6 +85,9 @@ pub struct MonsterDefinition {
     /// uncovered (a floating eye's stare).
     #[serde(rename = "stareDebuff", default)]
     pub stare_debuff: Option<String>,
+    /// Spawns as stone and wakes when a player comes this close; 0 never sleeps.
+    #[serde(rename = "ambushRange", default)]
+    pub ambush_range: f32,
     #[serde(default)]
     pub weapon: Option<String>,
     #[serde(rename = "weaponDropChance", default = "default_weapon_drop_chance")]

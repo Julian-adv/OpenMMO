@@ -98,6 +98,13 @@ pub const DEFAULT_BEHAVIOR: &str = "brave";
 pub const AGGRESSIVE_BEHAVIOR: &str = "aggressive";
 /// Behavior tree of a monster that never fights.
 pub const PASSIVE_BEHAVIOR: &str = "passive";
+/// Behavior tree of a waking statue.
+pub const AMBUSH_BEHAVIOR: &str = "ambush";
+/// How long a woken ambusher stands shaking off the stone before it acts.
+pub const WAKE_MS: f32 = 800.0;
+/// Time at its spawn with nobody to fight before an ambusher sleeps again.
+const RESETTLE_MS: f32 = 30_000.0;
+const RESETTLE_RADIUS: f32 = 1.5;
 
 /// Slack inside `attack_range` when picking a standing cell, so the cell
 /// center still passes `bt_attack_target`'s range check. Must stay small:

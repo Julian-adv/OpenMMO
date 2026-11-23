@@ -189,6 +189,7 @@ impl super::GameState {
             floor_level,
             level_override,
             aggressive,
+            dormant: def.is_some_and(|d| d.ambush_range > 0.0),
             lifecycle,
             last_attack_at: 0,
         };

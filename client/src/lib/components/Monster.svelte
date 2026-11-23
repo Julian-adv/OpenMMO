@@ -80,7 +80,7 @@
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import TargetRing from './TargetRing.svelte'
   import { warmupPipelines } from '../utils/pipelineWarmup'
-  import { shake, sleepSink } from '../effects/dormant-sleep'
+  import { shake, sleepSink, STATUE_WAKE_MS } from '../effects/dormant-sleep'
   import { DeathCrumble } from '../effects/death-crumble'
   import {
     disposeMeshMaterials,
@@ -103,6 +103,8 @@
     lastDamageInfo?: MonsterData['lastDamageInfo']
     droppedWeaponItemDefId?: string
     sinkAt?: number
+    dormant?: boolean
+    wokeAt?: number
     health: number
     maxHealth: number
     showHealth?: boolean
@@ -125,6 +127,8 @@
     lastDamageInfo,
     droppedWeaponItemDefId,
     sinkAt,
+    dormant = false,
+    wokeAt,
     health,
     maxHealth,
     showHealth = false,
@@ -132,6 +136,7 @@
   }: Props = $props()
 
   const def = $derived(getMonsterDef(type))
+  const labelled = $derived(monsterState !== 'dead' && !dormant)
   const attackClips = $derived(attackClipNames(def))
   // Re-rolled at the start of every swing, so this is only a seed — `untrack`
   // says that out loud, the way the model resolution below does, instead of
@@ -560,6 +565,9 @@
       group.position.set(position.x, position.y - sunk, position.z)
       group.rotation.y = rotation
       if (sink > 0) shake(group, slept / 1000, 0.12 * (1 - sink))
+      const woke = wokeAt === undefined ? STATUE_WAKE_MS : Date.now() - wokeAt
+      if (woke < STATUE_WAKE_MS)
+        shake(group, woke / 1000, 0.06 * (1 - woke / STATUE_WAKE_MS))
     }
     advanceCorpseShift(deltaTime)
     // Nothing left of a crumbled body to animate.
@@ -644,8 +652,8 @@
       corpseTimer = 0
     }
 
-    // 4. Update mixer
-    if (mixer) {
+    // 4. Update mixer; a dormant statue holds its pose.
+    if (mixer && !dormant) {
       mixer.update(deltaTime)
 
       // Update debug info for slow mode
@@ -907,7 +915,7 @@
   </T.Group>
 {/if}
 
-{#if monsterState !== 'dead' && $hoveredMonsterId === id && ringRadius > 0}
+{#if labelled && $hoveredMonsterId === id && ringRadius > 0}
   <TargetRing
     {heightManager}
     x={position.x}
@@ -941,7 +949,7 @@
 
 <!-- Name tag / Debug info -->
 <T.Group bind:ref={nametagGroup}>
-  {#if monsterState !== 'dead' && (isBoss || $hoveredMonsterId === id)}
+  {#if labelled && (isBoss || $hoveredMonsterId === id)}
     <!-- Boss: permanent gold nameplate. Others: hover-only name, sized to
          match the ground-item hover label. -->
     <TextLabel
@@ -957,7 +965,7 @@
       renderOrder={nameOnTop ? ON_TOP_RENDER_ORDER : undefined}
     />
   {/if}
-  {#if showHealth && monsterState !== 'dead' && maxHealth > 0}
+  {#if showHealth && labelled && maxHealth > 0}
     <ResourceBar
       y={-RESOURCE_BAR_HEIGHT}
       ratio={Math.max(0.001, health / maxHealth)}

@@ -66,6 +66,7 @@ pub(crate) fn monster(id: &str) -> Monster {
         floor_level: 0,
         level_override: None,
         aggressive: false,
+        dormant: false,
         lifecycle: Default::default(),
         last_attack_at: 0,
     }
