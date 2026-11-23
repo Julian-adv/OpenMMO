@@ -66,6 +66,21 @@
     검증 스크립트를 아직 통과하지 못한다. 무기 위치는 `modular-character-preview.html?monster=mine_remnant`의 슬라이더로 맞추고
     저장하면 `data-src/monsters.csv`에 기록된다. 재현 절차와 해시는 [리깅 보고서](mine-remnant-rig-v1.json)에 있다.
 
+- garden_breaker — 돌의 정원 16–24층의 돌깎이. [원화](../../assets/monsters/garden_breaker/concepts/front.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개, `tripo_v1/`).
+  - 같은 인간형 리그(`rig_spec.json`, 높이 2.4m, 11,304 triangles). 외눈 거인 대역의 전용 클립 대신 공용 팩 동작을 쓰고, 공격은 오우거와 같은 `slash1`, 무기는 그대로 `greatclub`(`weaponOffset` 0.1, 손바닥 가운데)다.
+    이동 속도는 대역 때 값을 그대로 두었다.
+
+- garden_handmaiden — 돌의 정원 16–24층의 뱀머리 시녀. [원화](../../assets/monsters/garden_handmaiden/concepts/front.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개, `tripo_v1/`).
+  - 같은 인간형 리그(`rig_spec.json`, 높이 1.8m, 10,230 triangles). 다리를 덮는 긴 치마는 다리 본에 따라 늘어난다. 뱀 머리카락은 머리에 붙어 따로 움직이지 않는다.
+  - 오크 여성 대역의 전용 클립 대신 공용 팩 동작을 쓰고, 공격은 `slash1`, 무기는 그대로 `goblin_sword`다.
+
+- garden_excavator — 돌의 정원 11–15층의 반쯤 굳은 발굴꾼. [원화](../../assets/monsters/garden_excavator/concepts/front.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개, `tripo_v1/`).
+  - 깨어나는 석상과 같은 인간형 리그(`rig_spec.json`, 높이 1.8m, 10,645 triangles). 무기와 동작은 광부 잔존자 대역 때와 같다(곡괭이, `great_sword_slash`).
+    손가락 파지는 도적 왕 값을 그대로 써서 `validate-humanoid-monster.mjs`의 엄지 맞섬 검사를 통과하지 못한다(광부 잔존자와 같음).
+
 - garden_statue — 돌의 정원 1–5층의 깨어나는 석상. [원화](../../assets/monsters/garden_statue/concepts/front.png)는 OpenAI Codex ImageGen,
   ChatGPT Pro 20x로 2026-11-23 제작했다(OpenAI 생성 출력물 이용 조건, 프롬프트는 같은 폴더의 `generation.json`). 투구를 쓴 그리스 전사 석상의 T자 정면이다.
   - 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개). 웹 결과라 +Z 정면·발바닥 원점이어서 방향 보정 없이
