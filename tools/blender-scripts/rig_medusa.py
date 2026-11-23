@@ -435,29 +435,32 @@ def clip_gaze(t):
 
 
 def clip_tail_sweep(t):
-    gather = span(t, 0.03, 1.04) * (1 - span(t, 1.32, 1.71))
-    follow = span(t, 1.32, 1.71) * (1 - span(t, 1.94, 2.6))
+    drive = span(t, 1.41, 1.62)
+    gather = span(t, 0.06, 1.19) * (1 - drive)
+    follow = drive * (1 - span(t, 1.79, 2.52))
     motion = clip_combat_idle(0, gather + follow)
     pose = motion.bones
-    pose['Col3'] = rot('X', 5 + 9 * gather) @ rot('Y', -8 * gather + 7 * follow)
-    pose['Hips'] = pose['Hips'] @ rot('Z', -19 * gather + 16 * follow)
-    pose['Chest'] = rot('Z', 40 * gather - 38 * follow)
+    pose['Col3'] = rot('X', 5 + 12 * gather) @ rot('Y', -11 * gather + 13 * follow)
+    pose['Hips'] = pose['Hips'] @ rot('Z', -25 * gather + 22 * follow)
+    pose['Chest'] = rot('Z', 48 * gather - 52 * follow)
     pose['Head'] = rot('X', -8) @ rot('Z', 43 * gather - 12 * follow)
     aim_arm(pose, 'Left', (-13, 28), (12, -8), gather)
     aim_arm(pose, 'Right', (38, 28), (108, -16), gather)
     aim_arm(pose, 'Right', (-19, 24), (14, 6), follow)
     curled = [40, 16, -8, -20, -3, 26, 63, 103]
-    crossed = [138, 149, 160, 168, 174, 178, 184, 197]
+    crossed = [142, 154, 166, 174, 180, 186, 194, 205]
     elevations = []
     for i, neutral in enumerate(motion.headings):
-        lag = 0.019 * i
-        wind = span(t - lag, 0, 1.04)
-        lash = span(t - lag, 1.30, 1.83)
-        relax = span(t - lag, 1.88, 2.44)
+        lag = 0.010 * i
+        wind = span(t - lag, 0.04, 1.18)
+        lash = span(t - lag, 1.475, 1.685)
+        rebound = span(t - lag, 1.71, 1.84)
+        relax = span(t - lag, 1.92, 2.48)
         start = neutral + (math.radians(curled[i]) - neutral) * wind
         swept = start + (math.radians(crossed[i]) - start) * lash
+        swept -= math.radians(2 * i) * rebound
         motion.headings[i] = swept + (neutral - swept) * relax
-        elevations.append((3 + i * 1.3) * wind * (1 - relax))
+        elevations.append(((3 + i * 1.3) * wind - (1 + i * 0.8) * lash) * (1 - relax))
     motion.elevation = tuple(elevations)
     return motion
 
