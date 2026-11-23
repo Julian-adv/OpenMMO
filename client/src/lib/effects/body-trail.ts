@@ -5,6 +5,7 @@ const REVERSE = 0.8
 const TELEPORT = 6
 const LEAD_SECONDS = 0.25
 const TURN_RATE = Math.PI
+const ATTACK_TURN_RATE = 3 * Math.PI
 const LOOK_RATE = Math.PI * 1.5
 const MAX_BEND = THREE.MathUtils.degToRad(45)
 const MAX_LOOK = THREE.MathUtils.degToRad(80)
@@ -24,6 +25,7 @@ function wrap(angle: number) {
 }
 
 type Point = { x: number; z: number }
+type Steering = 'crawl' | 'travel' | 'face'
 
 /** Steer the animated bones along the neck's recent path after the mixer runs. */
 export class BodyTrail {
@@ -43,6 +45,7 @@ export class BodyTrail {
     { clip: THREE.Quaternion; out: THREE.Quaternion }
   >()
   private last = 0
+  private steering: Steering = 'crawl'
 
   constructor(root: THREE.Object3D) {
     const tail: THREE.Bone[] = []
@@ -73,25 +76,53 @@ export class BodyTrail {
     }
   }
 
-  /** Record where the neck is and return the heading the root should show. */
-  track(neckX: number, neckZ: number, facing: number, now: number): number {
+  private startPath(x: number, z: number, yaw: number) {
+    this.path = [
+      { x, z },
+      { x: x - Math.sin(yaw) * this.reach, z: z - Math.cos(yaw) * this.reach },
+    ]
+  }
+
+  track(
+    neckX: number,
+    neckZ: number,
+    facing: number,
+    now: number,
+    steering: Steering = 'crawl'
+  ): number {
     this.dt = Math.max(0, now - this.last) / 1000
     this.last = now
+    const wasFacing = this.steering === 'face'
+    this.steering = steering
     const lead = this.lead
     if (!lead || Math.hypot(neckX - lead.x, neckZ - lead.z) > TELEPORT) {
       this.lead = { x: neckX, z: neckZ }
       this.heading = this.shown = facing
       this.lookAngle = this.dt = 0
       for (const span of this.spans) span.yaw = facing
-      this.path = [
-        { x: neckX, z: neckZ },
-        {
-          x: neckX - Math.sin(facing) * this.reach,
-          z: neckZ - Math.cos(facing) * this.reach,
-        },
-      ]
+      this.startPath(neckX, neckZ, facing)
       return this.shown
     }
+    if (steering === 'face') {
+      lead.x = neckX
+      lead.z = neckZ
+      this.heading = facing
+    } else {
+      if (wasFacing) {
+        this.heading = this.shown
+        this.startPath(lead.x, lead.z, this.shown)
+      }
+      this.advance(lead, neckX, neckZ, facing)
+    }
+    const limit = (steering === 'face' ? ATTACK_TURN_RATE : TURN_RATE) * this.dt
+    this.shown = wrap(
+      this.shown +
+        THREE.MathUtils.clamp(wrap(this.heading - this.shown), -limit, limit)
+    )
+    return this.shown
+  }
+
+  private advance(lead: Point, neckX: number, neckZ: number, facing: number) {
     const pull = 1 - Math.exp(-this.dt / LEAD_SECONDS)
     lead.x += (neckX - lead.x) * pull
     lead.z += (neckZ - lead.z) * pull
@@ -104,19 +135,13 @@ export class BodyTrail {
       this.path.unshift({ x: lead.x, z: lead.z })
       this.heading = Math.atan2(dx, dz)
       this.trim()
-    } else {
+    } else if (this.steering === 'crawl') {
       // At rest the body only swings round when the head can't reach.
       const gap = wrap(facing - this.heading)
       const beyond = Math.abs(gap) - MAX_LOOK
       if (beyond > 0)
         this.swing(Math.sign(gap) * Math.min(beyond, REST_TURN_RATE * this.dt))
     }
-    const limit = TURN_RATE * this.dt
-    this.shown = wrap(
-      this.shown +
-        THREE.MathUtils.clamp(wrap(this.heading - this.shown), -limit, limit)
-    )
-    return this.shown
   }
 
   /** Lay the tail along the path behind a root turned to `rootYaw`, and turn
@@ -125,11 +150,13 @@ export class BodyTrail {
     this.restore()
     const limit = TURN_RATE * this.dt
     let parentYaw = rootYaw
-    let near = this.at(this.spans[0]?.from ?? 0)
+    const follow = this.steering !== 'face'
+    let near = follow ? this.at(this.spans[0]?.from ?? 0) : undefined
     this.tail.forEach((bone, i) => {
       const span = this.spans[i]
-      const far = this.at(span.from + span.length)
-      const target = Math.atan2(near.x - far.x, near.z - far.z)
+      const far = follow ? this.at(span.from + span.length) : undefined
+      const target =
+        near && far ? Math.atan2(near.x - far.x, near.z - far.z) : rootYaw
       const yaw =
         span.yaw + THREE.MathUtils.clamp(wrap(target - span.yaw), -limit, limit)
       const step = THREE.MathUtils.clamp(
@@ -141,6 +168,7 @@ export class BodyTrail {
       near = far
       this.turn(bone, step)
     })
+    if (this.steering !== 'crawl') return
     const look = THREE.MathUtils.clamp(
       wrap(facing - rootYaw),
       -MAX_LOOK,

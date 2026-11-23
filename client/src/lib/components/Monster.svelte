@@ -560,6 +560,28 @@
     }
   }
 
+  function visualYaw() {
+    if (!bodyTrail) return rotation
+    const now = performance.now()
+    if (initialDef?.bodyTrail !== 'locomotion')
+      return bodyTrail.track(position.x, position.z, rotation, now)
+    if (monsterState === 'dead') return displayedYaw
+    const cast = skill && MONSTER_SKILLS[skill.id]
+    const casting = skill && cast && now - skill.startedAt < cast.durationMs
+    const moving =
+      !casting && (monsterState === 'walk' || monsterState === 'run')
+    const facing = casting
+      ? skill.rotation + (cast.rear ? Math.PI : 0)
+      : rotation
+    return bodyTrail.track(
+      position.x,
+      position.z,
+      facing,
+      now,
+      moving ? 'travel' : 'face'
+    )
+  }
+
   export function update(deltaTime: number, camera?: THREE.Camera) {
     if (speech && (speechLeft -= deltaTime) <= 0) speech = null
     // 0. Sync Three.js group position imperatively so the refraction render
@@ -569,9 +591,7 @@
     const slept = sinkAt === undefined ? 0 : Date.now() - sinkAt
     const sink = sleepSink(slept)
     const sunk = sink * nametagHeight
-    displayedYaw =
-      bodyTrail?.track(position.x, position.z, rotation, performance.now()) ??
-      rotation
+    displayedYaw = visualYaw()
     if (group) {
       group.position.set(position.x, position.y - sunk, position.z)
       group.rotation.y = displayedYaw

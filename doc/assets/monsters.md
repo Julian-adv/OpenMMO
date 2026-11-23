@@ -122,10 +122,12 @@
   - 3D 원본은 같은 날 Tripo API(`tools/outfits/tripo.py`, P2 모델, PBR, 면 1만 개 목표)로 원화 정면 한 장에서 만들었다.
     120크레딧, Tripo 이용 약관 적용. 요청과 결과 기록은 `assets/monsters/medusa/tripo_v1/`의 `build.json`·`generation.json`.
   - 리깅과 동작은 `tools/blender-scripts/rig_medusa.py` 하나로 다시 만든다(Blender 5.2.0 LTS). 이마 앞의 실 같은 조각 252점을
-    지우고 높이 2.4m로 맞춘 뒤 뼈 26개를 넣는다. 몸통을 세우는 기둥 4마디, 상체, 팔, 바닥에 누운 꼬리 8마디다. 가중치는
-    높이·팔 길이·꼬리 중심선을 따라 직접 계산한다. 10,548 triangles, 텍스처 1024² WebP.
-  - 동작은 모두 스크립트로 쓴 것이다: `idle1`, `combat_idle`, `walk`, `run`, `claw`(평타, 0.36초에 닿음), `gaze`(응시, 3.0초에 내지름),
-    `tail_sweep`(꼬리 휘두르기, 왼쪽에서 감았다가 1.6초에 등 뒤를 쓸고 지남), `dying`. 꼬리는 원본에서 왼쪽 뒤로 누워 있고 동작에서는 몸 뒤로 편다.
+    지우고 높이 2.4m로 맞췄다. 뼈는 29개다. 뱀 하반신은 몸통 4마디와 꼬리 8마디로 나뉘고, 머리뱀은 양옆과 정수리 세 곳에서 움직인다.
+    꼬리 정점은 굽은 중심선에서 가장 가까운 마디에 연결한다. 10,548 triangles, 텍스처 1024² WebP.
+  - 2026-11-23 기존 모델에 이동과 전투 동작을 새로 제작했다. `walk`(1.4초)와 `run`(0.8초)은 몸 아래에서 꼬리 끝으로 굴곡이 흐르고 어깨와 골반이 반대 방향으로 돌아간다.
+    이동 중에는 몸통과 꼬리가 지나온 경로를 따라 돈다. 멈추면 경로에 맞춘 꼬리 회전이 풀리고, 응시와 꼬리치기는 시전 시 정해진 방향을 향한다.
+    평타 `claw`는 머리뱀이 0.36초 타격에 맞춰 앞으로 물고 빠진다. `tail_sweep`은 한쪽에 꼬리를 모은 뒤 1.6초에 등 뒤를 가로지른다.
+    `gaze`는 얼굴 앞으로 모은 팔을 벌리고 머리뱀을 세운 뒤 3초에 정면을 응시한다. 일반 대기(`idle1`)와 전투 대기(`combat_idle`)에서는 상체를 살짝 뒤로 젖히고 정면을 본다. 세 공격은 전투 대기의 첫 자세로 시작하고 끝난다. 사망은 `dying`이다.
     작업 파일은 `assets/monsters/medusa/rig_v1/medusa.blend`, 게임 모델은 `client/public/models/monsters/medusa.glb`.
 
 - shadow_master — 그림자 길드 보스. [원화](../images/monsters/shadow-master-concept.png)는 OpenAI Codex ImageGen,

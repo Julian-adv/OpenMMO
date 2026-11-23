@@ -36,12 +36,13 @@ function frame(
   x: number,
   z: number,
   facing: number,
-  now = 0
+  now = 0,
+  steering?: Parameters<BodyTrail['track']>[4]
 ) {
   group.traverse((o) => {
     if (o instanceof THREE.Bone) o.quaternion.identity()
   })
-  const yaw = trail.track(x, z, facing, now)
+  const yaw = trail.track(x, z, facing, now, steering)
   group.position.set(x, 0, z)
   group.rotation.y = yaw
   trail.pose(yaw, facing)
@@ -135,6 +136,54 @@ describe('BodyTrail', () => {
     frame(group, trail, 10, 10, -1, 32)
     for (const name of ['Head', 'Tail1', 'Tail10'])
       expect(heading(group, name)).toBeCloseTo(-1, 5)
+  })
+
+  it('keeps a travelling boss on course through brief facing corrections', () => {
+    const group = serpent()
+    const trail = new BodyTrail(group)
+    const course = 0.9
+    for (let i = 0; i < 90; i++) {
+      const d = (i * 4.6) / 30
+      const facing = i % 12 === 6 ? course - Math.PI : course
+      frame(
+        group,
+        trail,
+        d * Math.sin(course),
+        d * Math.cos(course),
+        facing,
+        (i * 1000) / 30,
+        'travel'
+      )
+      for (const bone of ['Head', 'Tail1', 'Tail10'])
+        expect(heading(group, bone)).toBeCloseTo(course, 5)
+    }
+  })
+
+  it('releases a curved trail for a rear strike and resumes from the new heading', () => {
+    const group = serpent()
+    const trail = new BodyTrail(group)
+    let t = 0
+    frame(group, trail, 0, 0, 0, t, 'travel')
+    for (let i = 1; i <= 30; i++)
+      frame(group, trail, 0, i * 0.1, 0, (t += 1000 / 60), 'travel')
+    for (let i = 1; i <= 24; i++)
+      frame(group, trail, i * 0.1, 3, Math.PI / 2, (t += 1000 / 60), 'travel')
+    expect(
+      Math.abs(heading(group, 'Tail1') - heading(group, 'Tail10'))
+    ).toBeGreaterThan(0.4)
+    const facing = -Math.PI / 2
+    for (let i = 0; i < 96; i++) {
+      const prev = group.rotation.y
+      frame(group, trail, 2.4, 3, facing, (t += 1000 / 60), 'face')
+      const delta = group.rotation.y - prev
+      expect(
+        Math.abs(Math.atan2(Math.sin(delta), Math.cos(delta)))
+      ).toBeLessThanOrEqual(Math.PI / 20 + 1e-6)
+    }
+    for (const bone of ['Head', 'Tail1', 'Tail10'])
+      expect(heading(group, bone)).toBeCloseTo(facing, 5)
+    frame(group, trail, 2.3, 3, facing, (t += 1000 / 60), 'travel')
+    expect(heading(group, 'Tail10')).toBeCloseTo(facing, 5)
   })
 
   it('does not stack turns on bones no clip rewrote', () => {
