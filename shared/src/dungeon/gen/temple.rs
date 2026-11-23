@@ -1,6 +1,6 @@
 //! Temple floors: wide chambers set edge to edge with one wall between
 //! them, each joined to the next by a doorway through it and lined with two
-//! rows of piers. Some floors stand in two or three such suites with a long
+//! rows of columns. Some floors stand in two or three such suites with a long
 //! passage from each to the next. The last floor ends in the pillared boss
 //! hall.
 
@@ -11,12 +11,13 @@ use rand_chacha::ChaCha8Rng;
 
 use super::{
     corridor_cells, corridor_legs, finish_floor, hall_pillars, place_room_around_shaft_in,
-    place_room_free, range_pick, shaft_room_size, Corridor, FloorPlan, Spacing, HALL_SIZE,
-    ROOM_PLACE_ATTEMPTS,
+    place_room_free, range_pick, shaft_room_size, Corridor, FloorPlan, PropPlacer, Spacing,
+    HALL_SIZE, ROOM_PLACE_ATTEMPTS,
 };
 use crate::dungeon::doors::{WALL_E, WALL_N, WALL_S, WALL_W};
 use crate::dungeon::{
-    is_locked_depth, FloorLayout, InteriorDoorSpec, Room, SpawnEntry, StairShaft, GRID,
+    is_locked_depth, FloorLayout, InteriorDoorSpec, PropKind, PropSpec, Room, SpawnEntry,
+    StairShaft, GRID,
 };
 
 /// A chamber that finds no free side is redrawn with the whole floor.
@@ -25,9 +26,12 @@ const CHAMBER: RangeInclusive<i32> = 15..=23;
 const DOORWAY: i32 = 2;
 /// A doorway opens at least this far from the corners of the chamber it enters.
 const DOOR_INSET: i32 = 3;
-/// Piers stand this far in from the walls, one every `PIER_STEP` cells.
-const PIER_INSET: i32 = 3;
-const PIER_STEP: i32 = 5;
+/// Columns stand this far in from the walls, one every `COLUMN_STEP` cells.
+const COLUMN_INSET: i32 = 2;
+const COLUMN_STEP: i32 = 4;
+/// Percent of chambers where one more column lies fallen.
+const FALLEN_PCT: i32 = 35;
+const FALLEN_ATTEMPTS: u32 = 8;
 /// Percent of draws laid out as three suites of one or two chambers, and as
 /// two suites of two or three; the rest are one suite of three to five. A
 /// plan with passages fails and is redrawn more often, so fewer floors than
@@ -71,7 +75,7 @@ pub(super) fn try_generate_floor(
     )?];
     let down_along_z = rng.gen_range(0..2) == 1;
     // Within a suite no rock lies between chambers: there these only keep
-    // the piers off the way from one doorway to the next.
+    // the columns off the way from one doorway to the next.
     let mut corridors: Vec<Corridor> = Vec::new();
     let mut doorways = Vec::new();
     let mut passages: Vec<Corridor> = Vec::new();
@@ -133,27 +137,18 @@ pub(super) fn try_generate_floor(
         return None;
     }
 
-    let legs =
-        |&(a, b, x_first): &Corridor| corridor_legs(rooms[a].center(), rooms[b].center(), x_first);
-    let end_room = rooms.len() - 1;
-    let clear = up_shaft.rect().expanded(1);
-    let mut pillars: Vec<(i32, i32)> = rooms
+    let ways: Vec<Room> = corridors
         .iter()
-        .take(if is_last { end_room } else { rooms.len() })
-        .flat_map(piers)
-        .filter(|&(x, z)| {
-            let around = Room { x, z, w: 2, d: 2 }.expanded(1);
-            !around.intersects(&clear)
-                && !corridors
-                    .iter()
-                    .flat_map(legs)
-                    .any(|leg| around.intersects(&leg))
-        })
+        .flat_map(|&(a, b, x_first)| corridor_legs(rooms[a].center(), rooms[b].center(), x_first))
         .collect();
-    if is_last {
-        pillars.extend(hall_pillars(&rooms[end_room]));
-    }
-
+    let end_room = rooms.len() - 1;
+    // The hall keeps rock pillars, which break the boss's line of sight.
+    let chambers = rooms.len() - usize::from(is_last);
+    let pillars = if is_last {
+        hall_pillars(&rooms[end_room]).collect()
+    } else {
+        Vec::new()
+    };
     let plan = FloorPlan {
         rooms,
         corridors,
@@ -164,7 +159,64 @@ pub(super) fn try_generate_floor(
         pillars,
         doorways,
     };
-    finish_floor(rng, depth, is_last, up_shaft, table, plan)
+    let mut layout = finish_floor(rng, depth, is_last, up_shaft, table, plan)?;
+
+    let shafts = [Some(up_shaft), layout.down_shaft].map(|s| s.map(|s| s.rect().expanded(1)));
+    let mut taken: Vec<(i32, i32)> = layout
+        .props
+        .iter()
+        .flat_map(PropSpec::cells)
+        .chain(layout.spawns.iter().map(|s| (s.x, s.z)))
+        .collect();
+    // A column keeps a cell clear all round it.
+    let crowded = |spec: &PropSpec, taken: &[(i32, i32)]| {
+        let (w, d) = spec.size();
+        let around = Room {
+            x: spec.x,
+            z: spec.z,
+            w,
+            d,
+        }
+        .expanded(1);
+        shafts.iter().flatten().any(|s| around.intersects(s))
+            || ways.iter().any(|leg| around.intersects(leg))
+            || taken.iter().any(|&(x, z)| around.contains(x, z))
+    };
+    let column = |x, z, kind, rotation| PropSpec {
+        x,
+        z,
+        kind,
+        stack: 1,
+        rotation,
+    };
+    let mut placer = PropPlacer::new(&layout);
+    for (x, z) in layout.rooms[..chambers].iter().flat_map(colonnade) {
+        let standing = column(x, z, PropKind::TempleColumn, 0);
+        if !crowded(&standing, &taken) && placer.fits(&standing) && placer.place(standing) {
+            taken.push((x, z));
+        }
+    }
+    for room in &layout.rooms[..chambers] {
+        if rng.gen_range(0..100) >= FALLEN_PCT {
+            continue;
+        }
+        for _ in 0..FALLEN_ATTEMPTS {
+            let rotation = if rng.gen_range(0..2) == 1 { 90 } else { 0 };
+            let (w, d) = column(0, 0, PropKind::TempleFallenColumn, rotation).size();
+            let fallen = column(
+                rng.gen_range(room.x + 2..=room.x + room.w - 2 - w),
+                rng.gen_range(room.z + 2..=room.z + room.d - 2 - d),
+                PropKind::TempleFallenColumn,
+                rotation,
+            );
+            if !crowded(&fallen, &taken) && placer.fits(&fallen) && placer.place(fallen) {
+                break;
+            }
+        }
+    }
+    let columns = placer.placed;
+    layout.props.extend(columns);
+    Some(layout)
 }
 
 /// A `w`×`d` chamber against a free side of the last one, placed so the
@@ -201,17 +253,17 @@ fn adjoin(rng: &mut ChaCha8Rng, w: i32, d: i32, rooms: &[Room]) -> Option<(Room,
     None
 }
 
-/// South-west cells of the 2×2 piers lining a chamber's long sides.
-fn piers(room: &Room) -> Vec<(i32, i32)> {
+/// The cells of the columns lining a chamber's long sides.
+fn colonnade(room: &Room) -> Vec<(i32, i32)> {
     let wide = room.w >= room.d;
     let (long, short) = if wide {
         (room.w, room.d)
     } else {
         (room.d, room.w)
     };
-    let rows = [PIER_INSET, short - PIER_INSET - 2];
-    (PIER_INSET..=long - PIER_INSET - 2)
-        .step_by(PIER_STEP as usize)
+    let rows = [COLUMN_INSET, short - COLUMN_INSET - 1];
+    (COLUMN_INSET..long - COLUMN_INSET)
+        .step_by(COLUMN_STEP as usize)
         .flat_map(|along| rows.map(|across| (along, across)))
         .map(|(along, across)| {
             if wide {

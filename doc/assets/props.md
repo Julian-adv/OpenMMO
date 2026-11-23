@@ -199,6 +199,11 @@ Poly Haven에서 받은 .gltf를 Blender에서 .glb로 다시 export
 
 2026-11-23 신전 석재: 돌의 정원(`layoutStyle=temple`) 전용 벽 `cave-temple-wall.webp`와 바닥 `cave-temple-floor.webp`. OpenAI Codex built-in ImageGen, ChatGPT Pro 20x. 먼저 [원화](../images/props/stone-garden-temple-concept.jpg)를 두 장(온전한 대리석 신전, 오래 묻힌 폐허 신전) 그렸고 사용자가 폐허 쪽을 골랐다. 벽과 바닥은 기존 `cave-masonry-*`를 편집 대상으로, 원화를 색과 풍화의 참고로 넣어 만들었다. 블록 메시가 텍스처의 줄눈 배치를 그대로 읽으므로 줄눈 위치(벽 4단 엇갈림, 바닥 4×4)는 유지했다. 프롬프트와 처리 기록은 [dungeon-temple-prompts.json](dungeon-temple-prompts.json).
 
+2026-11-23 신전 소품(돌의 정원 전용). 원화는 모두 OpenAI Codex built-in ImageGen, ChatGPT Pro 20x로 그렸고 신전 원화를 색과 분위기의 참고로 넣었다. 모델은 Tripo API(P2-20260801, 정면 한 장, 유료 API 크레딧 120씩, Tripo 이용 약관 적용)로 만들었다. 원본과 기록은 Hugging Face 관리 대상인 `assets/props/` 아래에 있다.
+
+- temple_column — 홈이 파인 도리아식 기둥. 원화 `assets/props/temple_column/concepts/column.png`, 생성 기록 `tripo_v1/`. `tools/blender-scripts/build_temple_column.py`가 받침을 0.9m로 맞춰(높이 3.11m, 4,090 triangles, 텍스처 512² WebP) `objects/temple_column.glb`로 내보내고, 같은 메시를 눕힌 `objects/temple_fallen_column.glb`(세 칸 길이)도 함께 만든다.
+- temple_amphora, temple_amphora_broken — 통과 깨진 통 대신 그리는 항아리와 그 조각. 한 장의 원화(`assets/props/temple_amphora/concepts/amphora.png`)에 온전한 항아리와 깨진 항아리를 나란히 그려 한 번에 생성한 뒤, `tools/blender-scripts/build_temple_amphora.py`가 떨어진 조각 단위로 둘을 가른다. 손잡이는 항아리와 따로 떨어진 조각으로 나와 항아리 쪽에 붙였고, 항아리 발치에 생긴 조각 하나는 버렸다. 항아리 높이 0.95m(3,036 triangles), 조각 더미 4,962 triangles, 텍스처 512² WebP.
+
 갈색 셰일은 이끼 암반과 분위기가 비슷하다는 사용자 피드백에 따라 벽돌·타일 세트로 교체했다. 기존 셰일 이미지는 시안으로 보관한다.
 
 2026-09-18: 세 세트의 벽·바닥 6장을 기존 이미지 참조 편집으로 교체했다. 석회암에는 검게 밴 습기와 세로 물자국, 틈새의 흙·소량의 이끼를 추가했고, 이끼 암반에는 짙은 올리브색 이끼와 불규칙한 젖은 얼룩을 늘렸다. 벽돌 세트는 붉은 점토색을 회색 석재 블록으로, 밝은 베이지 타일을 어두운 회색 타일로 바꿨다. 벽의 블록 배열과 바닥의 4×4 격자는 유지하며, 때·광물 침전·물자국은 색상 텍스처에 표현한다. 기존 물웅덩이·물방울 효과와 함께 사용한다.

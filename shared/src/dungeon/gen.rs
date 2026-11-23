@@ -272,8 +272,7 @@ struct FloorPlan {
     /// Most corridor mouths each room may show.
     max_mouths: Option<Vec<usize>>,
     /// South-west cells of 2×2 pillars left as uncarved rock, so they wall
-    /// off sight and movement like any other wall. One beside the down
-    /// shaft is dropped.
+    /// off sight and movement like any other wall.
     pillars: Vec<(i32, i32)>,
     /// See [`FloorLayout::doorways`].
     doorways: Vec<super::InteriorDoorSpec>,
@@ -318,13 +317,8 @@ fn finish_floor(
         carve_corridor(&mut carved, rooms[a].center(), rooms[b].center(), x_first);
     }
 
-    let stairs = down_shaft.map(|shaft| shaft.rect().expanded(1));
     for (x, z) in pillars {
-        let pillar = Room { x, z, w: 2, d: 2 };
-        if stairs.is_some_and(|stairs| pillar.expanded(1).intersects(&stairs)) {
-            continue;
-        }
-        carve_rect_as(&mut carved, &pillar, false);
+        carve_rect_as(&mut carved, &Room { x, z, w: 2, d: 2 }, false);
     }
 
     let chest = is_last.then(|| rooms[end_room].center());
@@ -944,8 +938,8 @@ impl<'a> PropPlacer<'a> {
             .all(|(x, z)| prop_cell_ok(self.layout, &self.landings, &self.taken, x, z))
     }
 
-    /// Keeps a fitting `spec` unless it closes a route.
-    pub fn place(&mut self, spec: PropSpec) {
+    /// Keeps a fitting `spec` unless it closes a route; true when kept.
+    pub fn place(&mut self, spec: PropSpec) -> bool {
         debug_assert!(self.fits(&spec));
         let idx: Vec<usize> = spec.cells().map(|(x, z)| (x + z * GRID) as usize).collect();
         let saved: Vec<u8> = idx.iter().map(|&i| self.cells[i]).collect();
@@ -957,12 +951,13 @@ impl<'a> PropPlacer<'a> {
             for (&i, &c) in idx.iter().zip(&saved) {
                 self.cells[i] = c;
             }
-            return;
+            return false;
         }
         for i in idx {
             self.taken[i] = true;
         }
         self.placed.push(spec);
+        true
     }
 }
 

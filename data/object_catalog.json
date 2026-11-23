@@ -376,6 +376,26 @@
     "model": "objects/mine_crystal_cluster.glb"
   },
   {
+    "id": "temple_column",
+    "name": "Temple Column",
+    "model": "objects/temple_column.glb"
+  },
+  {
+    "id": "temple_fallen_column",
+    "name": "Fallen Column",
+    "model": "objects/temple_fallen_column.glb"
+  },
+  {
+    "id": "temple_amphora",
+    "name": "Amphora",
+    "model": "objects/temple_amphora.glb"
+  },
+  {
+    "id": "temple_amphora_broken",
+    "name": "Broken Amphora",
+    "model": "objects/temple_amphora_broken.glb"
+  },
+  {
     "id": "health_potion",
     "name": "Greater Healing Potion",
     "model": "objects/greater_healing_potion.glb"

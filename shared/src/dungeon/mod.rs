@@ -287,6 +287,12 @@ pub enum PropKind {
     /// Black-violet crystal cluster over 2×2 mine room cells; the client
     /// grows it with depth.
     MineCrystalCluster,
+    /// Fluted column standing free in a temple chamber. It bars the way but
+    /// not the view.
+    TempleColumn,
+    /// A temple column lying where it fell, three cells long: along Z at
+    /// yaw 0, along X at 90.
+    TempleFallenColumn,
 }
 
 impl PropKind {
@@ -321,6 +327,7 @@ impl PropKind {
         match self {
             PropKind::MineCart | PropKind::MineRail | PropKind::MineRailCart => (1, 2),
             PropKind::MineToolRack => (2, 1),
+            PropKind::TempleFallenColumn => (1, 3),
             PropKind::MineOreHeap | PropKind::MineRubble | PropKind::MineCrystalCluster => (2, 2),
             _ => (1, 1),
         }
@@ -340,8 +347,8 @@ pub struct PropSpec {
     /// for `TorchWall` it's the room-facing direction the client mounts it by
     /// (north wall → 0, east wall → 270); for `MineTimberPost` it's the
     /// corridor-facing direction (wall on −Z → 0, +X → 270, +Z → 180, −X → 90);
-    /// for `MineRail` it's 0 along Z and 90 along X; mine fixtures see their
-    /// [`PropKind`] variants.
+    /// for `MineRail` and `TempleFallenColumn` it's 0 along Z and 90 along X;
+    /// mine fixtures see their [`PropKind`] variants.
     pub rotation: u16,
 }
 

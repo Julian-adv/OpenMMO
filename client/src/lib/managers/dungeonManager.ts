@@ -80,6 +80,8 @@ export interface DungeonProp {
     | 'mine_ore_heap'
     | 'mine_rubble'
     | 'mine_crystal_cluster'
+    | 'temple_column'
+    | 'temple_fallen_column'
   /** Vertical stack count (1 or 2); chests are always 1. */
   stack: number
   /** Yaw in whole degrees (0..360). */

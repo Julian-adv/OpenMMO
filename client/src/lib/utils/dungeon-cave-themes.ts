@@ -1,7 +1,11 @@
 import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
 import { HOUSING_TEXTURES } from './housing-textures'
 
-function theme(id: string, masonry = false) {
+function theme(
+  id: string,
+  masonry = false,
+  propModels: Record<string, string> = {}
+) {
   const texture = (surface: string) =>
     HOUSING_TEXTURES.findIndex(
       (entry) => entry.mapUrl === `/textures/dungeon/cave-${id}-${surface}.webp`
@@ -12,6 +16,8 @@ function theme(id: string, masonry = false) {
     masonry,
     wallTexture: texture('wall'),
     floorTexture: texture('floor'),
+    /** Catalog ids drawn in place of a prop's usual model. */
+    propModels,
   }
 }
 
@@ -22,7 +28,10 @@ export const DUNGEON_CAVE_THEMES = [
 ]
 
 /** Marble for every floor of a `layoutStyle=temple` dungeon, rooms included. */
-export const DUNGEON_TEMPLE_THEME = theme('temple', true)
+export const DUNGEON_TEMPLE_THEME = theme('temple', true, {
+  barrel: 'temple_amphora',
+  barrel_broken: 'temple_amphora_broken',
+})
 
 const TEMPLES = new Set(
   DUNGEON_ENTRANCES.filter((def) => def.layoutStyle === 'temple').map(

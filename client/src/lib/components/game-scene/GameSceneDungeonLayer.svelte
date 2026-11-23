@@ -24,6 +24,7 @@
   } from '../../managers/dungeonManager'
   import { loadGLB } from '../../utils/gltfCache'
   import { getObjectModelPath } from '../../utils/modelPaths'
+  import { dungeonCaveTheme } from '../../utils/dungeon-cave-themes'
   import { applyCrystalGlow } from '../../effects/crystal-glow'
   import { translate } from '../../i18n'
   import { rotatedRectAabb } from '../../utils/objectFootprint'
@@ -112,6 +113,10 @@
     chest: CHEST_ANIMATED_ID,
     mine_rail_cart: 'mine_cart',
   }
+  /** The model a catalog id takes in this dungeon's theme. Only the temple
+   *  theme renames models, and it covers every depth alike. */
+  const themedModel = (id: string) =>
+    dungeonCaveTheme(dungeonManager.dungeonId ?? '', 1).propModels[id] ?? id
   const CHEST_OPEN_CLIP = 'ChestOpen'
   /** How far the open lid's rear corner reaches behind the chest origin (along
    *  local −Z): the lid swings up and ~105° back over the hinge. Measured from
@@ -520,11 +525,13 @@
     torchPositions: THREE.Vector3[]
   ) {
     // Chests render from the animated GLB (lid rigged for the open clip); the
-    // other props use their own catalog model.
-    const template = await loadPropTemplate(TEMPLATE_ID[prop.kind] ?? prop.kind)
+    // other props use their own catalog model, or the theme's stand-in.
+    const baseId = TEMPLATE_ID[prop.kind] ?? prop.kind
+    const modelId = themedModel(baseId)
+    const template = await loadPropTemplate(modelId)
     if (!template) return
     if (key !== builtKey) return // floor changed mid-load — abandon
-    const m = measureProp(prop.kind, template)
+    const m = measureProp(modelId, template)
 
     // Wall decor: the model's wall side is its local −Z=0 face, reaching into
     // the room along +Z, base at local y=0. The generator hands us the facing
@@ -623,7 +630,8 @@
 
     const breakable = isBreakable(prop.kind)
     const clones: THREE.Object3D[] = []
-    const count = Math.max(1, prop.stack)
+    // A themed stand-in (an amphora for a barrel) is not built to stack.
+    const count = modelId !== baseId ? 1 : Math.max(1, prop.stack)
     for (let i = 0; i < count; i++) {
       const clone = template.clone()
 
@@ -775,7 +783,7 @@
     rotationDeg: number,
     key: string
   ): Promise<THREE.Object3D | null> {
-    const variantId = BROKEN_VARIANT[kind]
+    const variantId = BROKEN_VARIANT[kind] && themedModel(BROKEN_VARIANT[kind])
     const template = variantId ? await loadPropTemplate(variantId) : null
     if (!template) return null
     if (key !== builtKey) return null

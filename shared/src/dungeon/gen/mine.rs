@@ -277,7 +277,7 @@ fn place_one(
     if turn > 0 {
         spec.rotation += turn * rng.gen_range(0..u32::from(360 / turn)) as u16;
     }
-    placer.place(spec);
+    let _ = placer.place(spec);
 }
 
 fn room_cells(room: &Room) -> impl Iterator<Item = (i32, i32)> + '_ {
