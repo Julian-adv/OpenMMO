@@ -192,6 +192,10 @@
   let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
   let bodyTrail: BodyTrail | undefined
+  let displayedYaw = untrack(() => rotation)
+  function initFacing(ref: THREE.Group) {
+    ref.rotation.y = displayedYaw
+  }
   /** The clip a dormant statue has fully posed in; its mixer then rests. */
   let posedAction: THREE.AnimationAction | undefined
   let model: THREE.Group | undefined = $state(undefined)
@@ -565,12 +569,12 @@
     const slept = sinkAt === undefined ? 0 : Date.now() - sinkAt
     const sink = sleepSink(slept)
     const sunk = sink * nametagHeight
-    const yaw =
+    displayedYaw =
       bodyTrail?.track(position.x, position.z, rotation, performance.now()) ??
       rotation
     if (group) {
       group.position.set(position.x, position.y - sunk, position.z)
-      group.rotation.y = yaw
+      group.rotation.y = displayedYaw
       if (sink > 0) shake(group, slept / 1000, 0.12 * (1 - sink))
       const woke = wokeAt === undefined ? STATUE_WAKE_MS : Date.now() - wokeAt
       if (woke < STATUE_WAKE_MS)
@@ -584,7 +588,7 @@
     }
     if (hoverProxyGroup) {
       hoverProxyGroup.position.set(position.x, position.y - sunk, position.z)
-      hoverProxyGroup.rotation.y = yaw
+      hoverProxyGroup.rotation.y = displayedYaw
     }
 
     // 1. Sync animation with state
@@ -669,7 +673,7 @@
         dormant && currentAction && currentAction.getEffectiveWeight() >= 1
           ? currentAction
           : undefined
-      if (monsterState !== 'dead') bodyTrail?.pose(yaw, rotation)
+      if (monsterState !== 'dead') bodyTrail?.pose(displayedYaw, rotation)
 
       // Update debug info for slow mode
       const currentTS = get(timeScale)
@@ -891,8 +895,8 @@
 {#if model && modelReady}
   <T.Group
     bind:ref={group}
+    oncreate={initFacing}
     position={[position.x, position.y, position.z]}
-    rotation={[0, rotation, 0]}
     scale={[initialScale, initialScale, initialScale]}
   >
     <T is={model} castShadow receiveShadow />
@@ -905,8 +909,8 @@
        out of the model group so clicks still hit the actual silhouette. -->
   <T.Group
     bind:ref={hoverProxyGroup}
+    oncreate={initFacing}
     position={[position.x, position.y, position.z]}
-    rotation={[0, rotation, 0]}
     scale={[initialScale, initialScale, initialScale]}
     userData={{ monsterId: id }}
   >

@@ -2,10 +2,6 @@
 
     blender -b -P tools/blender-scripts/rig_garden_serpent.py -- [--review DIR]
 
-Two chains leave the root at the neck, one forward to the head and one back
-to the tail tip, so the game can turn the head first and let the body follow
-segment by segment (`Tail*` bones). Clips give each segment an absolute
-heading (yaw) and tip (pitch); +pitch lowers a forward-pointing segment.
 """
 import argparse
 import json
@@ -22,17 +18,12 @@ SOURCE = ROOT / 'assets/monsters/garden_serpent/tripo_v1/garden_serpent.glb'
 RIG_DIR = ROOT / 'assets/monsters/garden_serpent/rig_v1'
 GAME = ROOT / 'client/public/models/monsters/garden_serpent.glb'
 LENGTH = 4.0
-# The origin sits this far behind the snout, so the monster's cell is its neck
-# and the bite reaches past it.
 ORIGIN_BEHIND_HEAD = 0.8
 FPS = 30
 TEXTURE = 1024
-# Segment boundaries as shares of the length from the snout. ROOT_SHARE is
-# the origin; head-side segments are short, body ones long.
 ROOT_SHARE = ORIGIN_BEHIND_HEAD / LENGTH
 CUTS = [0.0, 0.07, 0.13, ROOT_SHARE, 0.26, 0.32, 0.40, 0.48, 0.56, 0.64, 0.72, 0.80, 0.88, 1.0]
 BLEND = 0.025
-# Segments in order from the snout back; their bone names.
 FRONT = ['Head', 'Neck2', 'Neck1']
 BACK = [f'Tail{i + 1}' for i in range(len(CUTS) - 1 - len(FRONT))]
 SEGMENTS = FRONT + BACK
@@ -55,8 +46,7 @@ def load_mesh():
     bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
     mesh.name = mesh.data.name = 'StonescaleSerpent'
     co = np.array([v.co for v in mesh.data.vertices])
-    # The source lies along X with the head at -X; turn it to face -Y. Done as
-    # an object transform so the imported custom normals turn with it.
+    # Rotate the imported normals with the mesh.
     scale = LENGTH / np.ptp(co[:, 0])
     mesh.rotation_mode = 'XYZ'
     mesh.rotation_euler = (0, 0, math.pi / 2)
@@ -136,19 +126,24 @@ class Poser:
         self.parent = {b.name: b.parent.name if b.parent else None for b in rig.data.bones}
         self.previous = {}
 
-    def key(self, frame, pose, root_turn=Matrix.Identity(3), drop=0.0):
+    def key(self, frame, pose, root_turn, offset, anchor=None):
         world_rot, world_head, matrices = {}, {}, {}
         for name in self.order:
             parent = self.parent[name]
             delta = pose.get(name, Matrix.Identity(3))
             if parent:
                 world_rot[name] = world_rot[parent] @ delta
-                offset = self.rest[name].translation - self.rest[parent].translation
-                world_head[name] = world_head[parent] + world_rot[parent] @ offset
+                rest_offset = self.rest[name].translation - self.rest[parent].translation
+                world_head[name] = world_head[parent] + world_rot[parent] @ rest_offset
             else:
                 world_rot[name] = root_turn @ delta
-                world_head[name] = self.rest[name].translation + Vector((0, 0, -drop))
-            matrices[name] = Matrix.Translation(world_head[name]) @ (world_rot[name] @ self.rest[name].to_3x3()).to_4x4()
+                world_head[name] = self.rest[name].translation.copy()
+        if anchor:
+            if frame == 0:
+                self.anchor_start = world_head[anchor].copy()
+            offset += self.anchor_start - world_head[anchor]
+        for name in self.order:
+            matrices[name] = Matrix.Translation(world_head[name] + offset) @ (world_rot[name] @ self.rest[name].to_3x3()).to_4x4()
         for name in self.order:
             bone = self.rig.pose.bones[name]
             parent = self.parent[name]
@@ -219,10 +214,42 @@ def idle(t, period, sway, lift):
     return yaws, lifted(-lift + 2 * s, -s)
 
 
+def slither(t, period, wavelength, amplitude):
+    phase = math.tau * t / period
+    lateral = []
+    for share in CUTS:
+        depth = share * LENGTH
+        width = 0.12 + 0.88 * ease(depth / 1.55)
+        lateral.append(amplitude * width * math.sin(phase - math.tau * depth / wavelength))
+    yaws = []
+    for k, (near, far) in enumerate(zip(lateral, lateral[1:])):
+        length = LENGTH * (CUTS[k + 1] - CUTS[k])
+        yaws.append(math.degrees(math.asin((near - far) / length)))
+    return yaws, lifted(-3), lateral[NECK]
+
+
 def bite(t):
-    back = span(t, 0.0, 0.35) * (1 - span(t, 0.38, 0.5))
-    strike = span(t, 0.38, 0.5) * (1 - span(t, 0.7, 1.1))
-    return [0.0] * len(SEGMENTS), lifted(-6 - 24 * back + 30 * strike, 10 * back - 8 * strike)
+    u = min(t / 0.34, 1.0)
+    gather = u ** 3 * (10 - 15 * u + 6 * u ** 2)
+    release = span(t, 0.34, 0.50)
+    load = gather * (1 - release)
+    thrust = release * (1 - span(t, 0.50, 0.98))
+    yaws, pitches = idle(0, 2, 6, 8)
+    coil = [0, -35, -35, 26, 52, 28, -25, -38, -10, 5, 9, 5, 0]
+    rise = [2, -22, -34, -19, -7]
+    snap = [6, 19, 16]
+    for k in range(len(SEGMENTS)):
+        yaws[k] = yaws[k] * (1 - thrust) + coil[k] * load
+        if k < len(rise):
+            pitches[k] += rise[k] * load
+        if k < len(snap):
+            pitches[k] += (snap[k] - pitches[k]) * thrust
+    for k in range(NECK + 5, len(SEGMENTS)):
+        delay = (k - NECK - 5) * 0.055
+        pulse = span(t - delay, 0.38, 0.55) - span(t - delay, 0.55, 0.93)
+        yaws[k] += 17 * pulse
+    brace = gather ** 2 * (1 - span(t, 0.55, 1.12))
+    return yaws, pitches, -0.28 * brace
 
 
 def hit(t):
@@ -247,22 +274,24 @@ def bake(rig):
     actions = {}
     for clip, seconds in CLIPS:
         action = bpy.data.actions.new(clip)
+        action.use_fake_user = True
         rig.animation_data.action = action
         poser.previous = {}
         frames = round(seconds * FPS)
         for f in range(frames + 1):
             t = f / FPS
-            root_turn, drop = Matrix.Identity(3), 0.0
+            root_turn, offset, anchor = Matrix.Identity(3), Vector((0, 0, 0)), None
             if clip == 'idle1':
                 yaws, pitches = idle(t, seconds, 4, 0)
             elif clip == 'combat_idle':
                 yaws, pitches = idle(t, seconds, 6, 8)
             elif clip == 'walk':
-                yaws, pitches = wave(t, seconds, 14), lifted(-4)
+                yaws, pitches, offset.x = slither(t, seconds, 2.8, 0.25)
             elif clip == 'run':
-                yaws, pitches = wave(t, seconds, 18), lifted(-2)
+                yaws, pitches, offset.x = slither(t, seconds, 4.5, 0.43)
             elif clip == 'bite':
-                yaws, pitches = bite(t)
+                yaws, pitches, offset.y = bite(t)
+                anchor = 'Tail6'
             elif clip == 'hit':
                 yaws, pitches = hit(t)
             else:
@@ -270,9 +299,9 @@ def bake(rig):
                 yaws = [v * fall for v in wave(0.3, 1.0, 10)]
                 pitches = lifted(30 * fall, 20 * fall)
                 root_turn = rot('Y', 75 * fall)
-                drop = 0.05 * fall
+                offset.z = -0.05 * fall
             pose = to_pose(yaws, pitches, rig)
-            poser.key(f + 1, pose, root_turn, drop)
+            poser.key(f, pose, root_turn, offset, anchor)
         actions[clip] = action
     return actions
 
@@ -300,7 +329,7 @@ def review(rig, actions, out):
     for clip, seconds in CLIPS:
         rig.animation_data.action = actions[clip]
         for share in (0.0, 0.45):
-            scene.frame_set(1 + round(seconds * FPS * share))
+            scene.frame_set(round(seconds * FPS * share))
             scene.render.filepath = str(out / f'{clip}-{int(share * 100):02d}.png')
             bpy.ops.render.render(write_still=True)
 
@@ -314,11 +343,11 @@ def main():
     rig = build_armature(centreline(points))
     skin(mesh, rig)
     actions = bake(rig)
-    if args.review:
-        review(rig, actions, args.review)
+    bpy.context.scene.frame_start = 0
+    bpy.context.scene.frame_end = round(max(dict(CLIPS).values()) * FPS)
     rig.animation_data.action = None
     for bone in rig.pose.bones:
-        bone.matrix_basis.identity()
+        bone.matrix_basis = Matrix.Identity(4)
     RIG_DIR.mkdir(parents=True, exist_ok=True)
     bpy.ops.wm.save_as_mainfile(filepath=str(RIG_DIR / 'garden_serpent.blend'))
     bpy.ops.object.select_all(action='DESELECT')
@@ -337,6 +366,8 @@ def main():
         'joints': len(rig.data.bones), 'bytes': GAME.stat().st_size,
         'clips': dict(CLIPS),
     }))
+    if args.review:
+        review(rig, actions, args.review)
 
 
 main()

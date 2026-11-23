@@ -52,9 +52,10 @@ describe('BodyTrail', () => {
     const group = serpent()
     const trail = new BodyTrail(group)
     frame(group, trail, 0, 0, 0)
-    frame(group, trail, 0, 0, Math.PI / 2)
+    const facing = THREE.MathUtils.degToRad(80)
+    for (let t = 16; t <= 480; t += 16) frame(group, trail, 0, 0, facing, t)
     expect(heading(group, 'Tail5')).toBeCloseTo(0, 5)
-    expect(heading(group, 'Head')).toBeCloseTo(THREE.MathUtils.degToRad(80), 5)
+    expect(heading(group, 'Head')).toBeCloseTo(facing, 5)
   })
 
   it('swings round slowly at rest when the target is behind', () => {
@@ -89,15 +90,51 @@ describe('BodyTrail', () => {
     expect(heading(group, 'Tail10')).toBeCloseTo(0, 5)
   })
 
+  it('limits frame-to-frame steering through a chase corner and target reversal', () => {
+    const group = serpent()
+    const trail = new BodyTrail(group)
+    frame(group, trail, 0, 0, 0)
+    const bones = [
+      'Head',
+      ...Array.from({ length: 10 }, (_, i) => `Tail${i + 1}`),
+    ]
+    let previous = bones.map((bone) => heading(group, bone))
+    for (let i = 1; i <= 90; i++) {
+      const x = Math.min(Math.max(i - 15, 0), 20) * 0.1
+      const z = Math.min(i, 15) * 0.1
+      const facing = i < 16 ? 0 : i < 36 ? Math.PI / 2 : -Math.PI / 2
+      frame(group, trail, x, z, facing, (i * 1000) / 60)
+      const current = bones.map((bone) => heading(group, bone))
+      current.forEach((yaw, k) => {
+        const delta = yaw - previous[k]
+        const step = Math.abs(Math.atan2(Math.sin(delta), Math.cos(delta)))
+        expect(step).toBeLessThanOrEqual(
+          ((k === 0 ? 2.5 : 1) * Math.PI) / 60 + 1e-6
+        )
+      })
+      previous = current
+    }
+  })
+
   it('ignores a neck that wobbles in place', () => {
     const group = serpent()
     const trail = new BodyTrail(group)
     frame(group, trail, 0, 0, 0)
     for (let i = 0; i < 60; i++) {
       const wobble = i % 2 ? 0.2 : -0.2
-      frame(group, trail, wobble, wobble * 0.5, 0)
+      frame(group, trail, wobble, wobble * 0.5, 0, (i + 1) * 16)
     }
     expect(heading(group, 'Tail10')).toBeCloseTo(0, 5)
+  })
+
+  it('starts a fresh trail and facing on teleport', () => {
+    const group = serpent()
+    const trail = new BodyTrail(group)
+    frame(group, trail, 0, 0, 0)
+    frame(group, trail, 0.1, 0, 1, 16)
+    frame(group, trail, 10, 10, -1, 32)
+    for (const name of ['Head', 'Tail1', 'Tail10'])
+      expect(heading(group, name)).toBeCloseTo(-1, 5)
   })
 
   it('does not stack turns on bones no clip rewrote', () => {
@@ -105,8 +142,8 @@ describe('BodyTrail', () => {
     const trail = new BodyTrail(group)
     frame(group, trail, 0, 0, 0)
     // No reset between frames, as when an action has stopped.
-    for (let i = 0; i < 30; i++) {
-      const yaw = trail.track(0, 0, 1, i)
+    for (let i = 1; i <= 30; i++) {
+      const yaw = trail.track(0, 0, 1, i * 16)
       group.rotation.y = yaw
       trail.pose(yaw, 1)
     }

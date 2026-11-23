@@ -1,25 +1,14 @@
 import * as THREE from 'three'
 
-/** How far the neck must move before the path takes a new point; shorter
- *  wobbles from position corrections and hit reactions are ignored. */
 const STEP = 0.3
-/** A step back toward the body this short is a wobble, not a reversal. */
 const REVERSE = 0.8
-/** A jump this long is a teleport: the body is laid out straight again. */
 const TELEPORT = 6
-/** The path follows the neck through this much smoothing, so a position
- *  snap from the server glides instead of kinking the body. */
 const LEAD_SECONDS = 0.25
-/** Fastest the body as a whole turns, radians a second. */
 const TURN_RATE = Math.PI
-/** The most one joint may bend, so the body never folds. */
+const LOOK_RATE = Math.PI * 1.5
 const MAX_BEND = THREE.MathUtils.degToRad(45)
-/** How far the head may turn from the body to face its target. */
 const MAX_LOOK = THREE.MathUtils.degToRad(80)
-/** How fast a body at rest swings round when its target is behind it,
- *  radians a second. */
 const REST_TURN_RATE = Math.PI / 2
-/** Shares of the look turn taken by the neck and head bones, root first. */
 const LOOK_SHARES: [string, number][] = [
   ['Neck1', 0.4],
   ['Neck2', 0.35],
@@ -36,25 +25,18 @@ function wrap(angle: number) {
 
 type Point = { x: number; z: number }
 
-/**
- * A long body that crawls along the ground it has covered instead of swinging
- * round its neck. The root faces along the path at the neck; each `Tail<n>`
- * segment lies along the path further back; only the neck and head turn
- * toward the facing the monster is given. Applied after the mixer, on top of
- * the clip's pose.
- */
+/** Steer the animated bones along the neck's recent path after the mixer runs. */
 export class BodyTrail {
   private readonly tail: THREE.Bone[]
   private readonly look: [THREE.Bone, number][] = []
-  /** Distance from the root back to the start of each tail segment, and the
-   *  segment's length. */
-  private readonly spans: { from: number; length: number }[] = []
+  private readonly spans: { from: number; length: number; yaw: number }[] = []
   private readonly reach: number
   /** The neck's path, newest first. */
   private path: Point[] = []
   private heading = 0
-  /** The root's shown heading, turned toward `heading` at `TURN_RATE`. */
   private shown = 0
+  private lookAngle = 0
+  private dt = 0
   private lead: Point | undefined
   private readonly applied = new Map<
     THREE.Bone,
@@ -81,7 +63,7 @@ export class BodyTrail {
       const length = next
         ? Math.hypot(next.x - head.x, next.z - head.z)
         : (this.spans[i - 1]?.length ?? 0.3)
-      this.spans.push({ from, length })
+      this.spans.push({ from, length, yaw: 0 })
       from += length
     })
     this.reach = from + 0.5
@@ -93,12 +75,14 @@ export class BodyTrail {
 
   /** Record where the neck is and return the heading the root should show. */
   track(neckX: number, neckZ: number, facing: number, now: number): number {
-    const dt = Math.max(0, now - this.last) / 1000
+    this.dt = Math.max(0, now - this.last) / 1000
     this.last = now
     const lead = this.lead
     if (!lead || Math.hypot(neckX - lead.x, neckZ - lead.z) > TELEPORT) {
       this.lead = { x: neckX, z: neckZ }
       this.heading = this.shown = facing
+      this.lookAngle = this.dt = 0
+      for (const span of this.spans) span.yaw = facing
       this.path = [
         { x: neckX, z: neckZ },
         {
@@ -108,7 +92,7 @@ export class BodyTrail {
       ]
       return this.shown
     }
-    const pull = 1 - Math.exp(-dt / LEAD_SECONDS)
+    const pull = 1 - Math.exp(-this.dt / LEAD_SECONDS)
     lead.x += (neckX - lead.x) * pull
     lead.z += (neckZ - lead.z) * pull
     const [head] = this.path
@@ -125,9 +109,9 @@ export class BodyTrail {
       const gap = wrap(facing - this.heading)
       const beyond = Math.abs(gap) - MAX_LOOK
       if (beyond > 0)
-        this.swing(Math.sign(gap) * Math.min(beyond, REST_TURN_RATE * dt))
+        this.swing(Math.sign(gap) * Math.min(beyond, REST_TURN_RATE * this.dt))
     }
-    const limit = TURN_RATE * dt
+    const limit = TURN_RATE * this.dt
     this.shown = wrap(
       this.shown +
         THREE.MathUtils.clamp(wrap(this.heading - this.shown), -limit, limit)
@@ -139,18 +123,22 @@ export class BodyTrail {
    *  the head toward `facing`. */
   pose(rootYaw: number, facing: number) {
     this.restore()
-    let previous = 0
+    const limit = TURN_RATE * this.dt
+    let parentYaw = rootYaw
+    let near = this.at(this.spans[0]?.from ?? 0)
     this.tail.forEach((bone, i) => {
-      const { from, length } = this.spans[i]
-      const near = this.at(from)
-      const far = this.at(from + length)
-      const offset = wrap(Math.atan2(near.x - far.x, near.z - far.z) - rootYaw)
+      const span = this.spans[i]
+      const far = this.at(span.from + span.length)
+      const target = Math.atan2(near.x - far.x, near.z - far.z)
+      const yaw =
+        span.yaw + THREE.MathUtils.clamp(wrap(target - span.yaw), -limit, limit)
       const step = THREE.MathUtils.clamp(
-        wrap(offset - previous),
+        wrap(yaw - parentYaw),
         -MAX_BEND,
         MAX_BEND
       )
-      previous += step
+      span.yaw = parentYaw = wrap(parentYaw + step)
+      near = far
       this.turn(bone, step)
     })
     const look = THREE.MathUtils.clamp(
@@ -158,7 +146,14 @@ export class BodyTrail {
       -MAX_LOOK,
       MAX_LOOK
     )
-    for (const [bone, share] of this.look) this.turn(bone, look * share)
+    const lookStep = LOOK_RATE * this.dt
+    this.lookAngle += THREE.MathUtils.clamp(
+      look - this.lookAngle,
+      -lookStep,
+      lookStep
+    )
+    for (const [bone, share] of this.look)
+      this.turn(bone, this.lookAngle * share)
   }
 
   /** Turn the heading and the path behind the neck about the neck. */
