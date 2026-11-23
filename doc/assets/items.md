@@ -11,6 +11,13 @@
 - 정리(2026-10-25): 미리보기 PNG 3개·상세 검증 보고서 3개·재생성 가능한 중간 4K GLB·Blender 백업을 삭제했다. 최종 모델·아이콘, 원화·Tripo 원본·현재 Blender 파일·원본 텍스처와 간결한 검증·출처 기록은 보존했다.
 - 재현: `blender -b --python-exit-code 1 -P assets/items/rift_ring/tripo_v1/prepare.py`로 4K 원본과 임시 GLB를 생성한다. `tools/blender-scripts/export_item_asset.py`에 `--source assets/items/rift_ring/tripo_v1/rift_ring.glb --name rift_ring --size 0.15 --category accessory --icon-rotation 28 -8 -102`를 주어 바닥 모델·아이콘·Blender 작업 파일을 출력하고, `tools/optimize-modular-part.mjs`에 `--ktx2 --size=512`를 주어 원본 GLB에서 런타임 모델을 압축한다.
 
+## Mirror Shield — 거울 방패
+
+- [concept_v1](../../assets/items/mirror_shield/concept_v1/concept.png) — 돌의 정원 메두사의 응시를 되비치는 방패. 둥근 그리스 청동 아스피스, 거울처럼 닦은 가운데와 메안더 무늬·녹청 테두리. OpenAI Codex ImageGen, ChatGPT Pro 20x, 2026-11-23(프롬프트·생성 기록은 같은 폴더).
+  - 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 한 장으로 만들었다(`tripo_v1/source/model.glb`, 2,756 triangles).
+  - `tools/blender-scripts/build_mirror_shield.py`가 대지의 방패와 같은 좌표계(앞 −Z, 원점은 뒤쪽 손잡이)로 돌리고 지름 0.85m로 맞춘 뒤, 게임 모델(`client/public/models/armor/mirror_shield.glb`, 텍스처 1024² WebP)과 128² 아이콘을 만든다.
+  - 게임 세계에는 환경 맵이 없어 금속면이 비출 것이 없으면 검게 보인다. 그래서 재질에 glTF extras `envReflect`(반사 세기 1.4)를 넣고, 클라이언트가 GLB를 불러올 때 그런 재질에만 반사 맵을 붙인다(`effects/metal-reflection.ts`). 반사 맵은 플레이어 주변을 64² 큐브맵으로 찍은 것이다(`effects/ground-reflection.ts`). 3m 움직이거나 3초마다 다시 찍고, 지형·던전 바닥과 벽·조명만 그린다(레이어 7). 지상에선 위쪽에 그린 하늘을 주변광 밝기로, 던전에선 던전 배경을 쓴다. 금속도 0.9, 거칠기 계수 0.25. 손 파지는 `handFits.json`에 대지의 방패 값을 그대로 넣었다.
+
 ## Shield of the Earth — 대지의 방패
 
 - [concept_v1](../../assets/items/earth_shield/concept_v1/concept.png) — 이졸데의 테라클래시 파편 교환 장비 원화. 거친 화강암 돌판을 검게 그을린 철제 테두리와 십자 띠로 고정하고, 중앙 봉인 문양·주황빛 균열·소량의 이끼로 테라클래시와 대지의 아뮬렛의 외형을 잇는다. [설계](../TIER5_FIELD_RAID.md#증표-교환과-장비-공급량).

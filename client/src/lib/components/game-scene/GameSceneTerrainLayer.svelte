@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { REFLECTION_LAYER } from '../../effects/ground-reflection'
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import type { MeshStandardNodeMaterial, WebGPURenderer } from 'three/webgpu'
@@ -308,6 +309,7 @@
     const mesh = new THREE.Mesh(geo, mat)
     mesh.receiveShadow = true
     mesh.frustumCulled = false
+    mesh.layers.enable(REFLECTION_LAYER)
     return mesh
   }
 

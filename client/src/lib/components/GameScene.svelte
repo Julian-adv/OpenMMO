@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { GroundReflection } from '../effects/ground-reflection'
   import { setupPointShadow } from '../utils/pointShadow'
   import { deferShaderBuilds } from '../utils/deferredShaderBuild'
   import { T, useTask, useThrelte } from '@threlte/core'
@@ -282,6 +283,7 @@
   let waterCamDir = $state<THREE.Vector3 | null>(null)
   let waterMoonBrightness = $state(0)
   let waterTorchLight = $state<THREE.PointLight | null>(null)
+  const groundReflection = new GroundReflection()
   let waterGroup = $state<THREE.Group | undefined>(undefined)
   let waterLayerRef = $state<GameSceneWaterFieldLayer | undefined>(undefined)
   let riverRocksRef = $state<GameSceneRiverRocksLayer | undefined>(undefined)
@@ -791,6 +793,15 @@
         const tl = playersLayer?.getUnifiedTorchLight()
         if (tl) waterTorchLight = tl
       }
+
+      if (currentPlayer && camera)
+        groundReflection.update(
+          renderer,
+          scene,
+          camera,
+          currentPlayer.position,
+          $isUnderground
+        )
 
       // Update monster animations
       const monsterAnimationStart = performance.now()
@@ -1360,6 +1371,7 @@
       asyncPipelines?.dispose()
       scene.environment?.dispose()
       scene.environment = null
+      groundReflection.dispose()
       unsubscribeViewportSize()
       unsubscribeCameraReset()
       unsubscribeServerGameTime()

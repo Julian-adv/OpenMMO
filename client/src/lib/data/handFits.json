@@ -15,6 +15,9 @@
     "model:armor/earth_shield.glb": {
       "rotation": [0.170659, 0.002636, 1.657126]
     },
+    "model:armor/mirror_shield.glb": {
+      "rotation": [0.170659, 0.002636, 1.657126]
+    },
     "item:snow_shovel": {
       "rotation": [-2.898, -0.072, -0.316]
     },

@@ -3,6 +3,10 @@
   import * as THREE from 'three'
   import { PMREMGenerator, type WebGPURenderer } from 'three/webgpu'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+  import {
+    setReflectionSource,
+    stageReflection,
+  } from '../effects/metal-reflection'
   import { onMount } from 'svelte'
   import { interactivity, type IntersectionEvent } from '@threlte/extras'
   import type { AccountCharacter } from '../network/socket'
@@ -183,6 +187,7 @@
 
     // Set scene background to match the character select gradient
     scene.background = new THREE.Color('#1a2a40')
+    setReflectionSource(stageReflection())
 
     renderer.init().then(() => {
       const pmremGenerator = new PMREMGenerator(renderer)
@@ -205,6 +210,7 @@
       window.removeEventListener('pointerup', endSlotDrag)
       window.removeEventListener('pointercancel', endSlotDrag)
       scene.background = null
+      setReflectionSource(null)
       scene.environment?.dispose()
       scene.environment = null
       unsubscribe()

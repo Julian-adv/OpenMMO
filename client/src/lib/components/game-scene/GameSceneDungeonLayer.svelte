@@ -3,6 +3,7 @@
   // Build only the current floor; adjacent floors share matching stair geometry.
   import { T } from '@threlte/core'
   import * as THREE from 'three'
+  import { REFLECTION_LAYER } from '../../effects/ground-reflection'
   import { onDestroy } from 'svelte'
   import { SvelteMap } from 'svelte/reactivity'
   import {
@@ -1228,6 +1229,7 @@
       id!
     )
     currentGroup = built.group
+    currentGroup.traverse((o) => o.layers.enable(REFLECTION_LAYER))
     currentGroup.position.set(
       dungeonManager.originX,
       dungeonManager.floorY(depth),
