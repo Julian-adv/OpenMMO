@@ -1,58 +1,15 @@
-mod bgm_defs;
-mod claude;
-mod codex;
-mod driver;
-mod dungeon;
-mod geom;
-mod google_auth;
-mod item_defs;
-mod llm_scheduler;
-mod minimax;
-mod monster_defs;
-mod openai;
-mod openrouter;
-mod orchestrator;
-mod process_group;
-mod shop_info;
-mod splat;
-mod state;
-mod tales;
-mod terrain_http;
-mod terrain_snapshots;
-mod title_defs;
-mod transcript;
-mod update;
-mod watch;
-mod weather;
-mod ws;
+use agent_client::{
+    claude, codex, google_auth, llm_scheduler, minimax, openai, openrouter, orchestrator, session,
+    shop_info, transcript, update, watch,
+};
 
 use std::sync::Arc;
 use std::time::Duration;
 
-use onlinerpg_terrain::height::HeightSampler;
-use onlinerpg_terrain::io::TerrainIO;
-use orchestrator::{AuthSource, NpcConfig, SharedResources};
+use orchestrator::{NpcConfig, SharedResources};
 use serde::Deserialize;
-use tracing::{info, warn};
-
-/// Which LLM backend to use for the agent driver.
-#[derive(Debug, Clone, Default, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum LlmType {
-    /// No LLM driver: schedule and monster AI drive the NPC on their own.
-    #[default]
-    None,
-    /// Claude CLI (stdio subprocess)
-    Claude,
-    /// OpenRouter API (HTTP)
-    Openrouter,
-    /// Codex CLI (stdio subprocess)
-    Codex,
-    /// Any OpenAI-compatible chat completions endpoint (HTTP)
-    Openai,
-    /// MiniMax API (HTTP)
-    Minimax,
-}
+use session::AuthSource;
+use tracing::warn;
 
 /// Config parsed from TOML. Uses `[[npcs]]` array for multi-NPC orchestrator.
 #[derive(Deserialize)]
@@ -148,34 +105,6 @@ fn default_terrain_cache() -> String {
     "data/cache/height".to_string()
 }
 
-fn is_http_source(terrain: &str) -> bool {
-    terrain.starts_with("http://") || terrain.starts_with("https://")
-}
-
-pub fn default_min_interval_secs() -> u64 {
-    5
-}
-
-pub fn default_urgent_min_interval_secs() -> u64 {
-    2
-}
-
-// No debounce by default: the pacing floors already batch a stream of
-// events (and an in-flight call batches whatever lands during it), so a
-// leading debounce only delayed the first response. Set debounce_secs per
-// NPC to re-merge sub-second bursts if an NPC ever needs it.
-pub fn default_debounce_secs() -> u64 {
-    0
-}
-
-pub fn default_idle_interval_secs() -> u64 {
-    3600
-}
-
-pub fn default_activity_window_secs() -> u64 {
-    30
-}
-
 fn default_max_concurrent() -> usize {
     4
 }
@@ -265,20 +194,7 @@ async fn main() -> anyhow::Result<()> {
         }
     }
 
-    let height_sampler = Arc::new(create_height_sampler(
-        &config.terrain,
-        &config.terrain_cache,
-    ));
-    let splat_sampler = Arc::new(create_splat_sampler(&config.terrain, &config.terrain_cache));
-
-    // NPC patrols keep loading tiles; sweep idle ones like the server does.
-    let height_sampler_for_sweep = Arc::clone(&height_sampler);
-    tokio::spawn(async move {
-        loop {
-            tokio::time::sleep(onlinerpg_terrain::TILE_CACHE_SWEEP_PERIOD).await;
-            height_sampler_for_sweep.sweep_stale_tiles().await;
-        }
-    });
+    let world = session::World::open(&config.terrain, &config.terrain_cache);
 
     // No hub when the panel is off, so sessions record nothing for it.
     let watch_hub = (config.watch_port != 0).then(|| {
@@ -294,12 +210,6 @@ async fn main() -> anyhow::Result<()> {
         hub
     });
 
-    let world_cache = {
-        let mut cache = state::WorldCache::new();
-        cache.register_dungeons();
-        Arc::new(std::sync::RwLock::new(cache))
-    };
-
     let maid_names = npcs
         .iter()
         .filter(|n| n.serves_tables())
@@ -307,13 +217,7 @@ async fn main() -> anyhow::Result<()> {
         .collect();
     let shared = Arc::new(SharedResources {
         maid_names,
-        terrain_snapshots: Arc::new(terrain_snapshots::TerrainSnapshots::new(
-            &config.terrain,
-            &config.terrain_cache,
-        )),
-        height_sampler,
-        splat_sampler,
-        world_cache,
+        world,
         scheduler: llm_scheduler::LlmScheduler::new(
             config.max_concurrent,
             Duration::from_secs(config.request_timeout_secs),
@@ -371,27 +275,6 @@ fn check_google_mode_config(npcs: &[NpcConfig]) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn create_height_sampler(terrain: &str, cache_dir: &str) -> HeightSampler {
-    if is_http_source(terrain) {
-        info!("Heightmaps over HTTP from {terrain} (cache: {cache_dir})");
-        return HeightSampler::new(terrain_http::HttpHeightTiles::new(
-            terrain,
-            std::path::PathBuf::from(cache_dir),
-        ));
-    }
-    HeightSampler::new(TerrainIO::new(std::path::PathBuf::from(terrain)))
-}
-
-fn create_splat_sampler(terrain: &str, cache_dir: &str) -> splat::SplatSampler {
-    if is_http_source(terrain) {
-        return splat::SplatSampler::new(splat::HttpSplatTiles::new(
-            terrain,
-            std::path::PathBuf::from(cache_dir),
-        ));
-    }
-    splat::SplatSampler::new(TerrainIO::new(std::path::PathBuf::from(terrain)))
-}
-
 /// Fill an `[[npcs]]` entry from the game-data registry (`data-src/npcs.csv`,
 /// the single source of truth for who an NPC is). `id` selects the registry
 /// row; the character name and class come from it, and the prompt/schedule
@@ -444,257 +327,10 @@ fn resolve_from_registry(npc: &mut NpcConfig) -> anyhow::Result<()> {
     Ok(())
 }
 
-pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
-    use onlinerpg_shared::ServerMessage;
-    match msg {
-        ServerMessage::DungeonPropState { .. } => "DungeonPropState",
-        ServerMessage::TerrainTileVersion { .. } => "TerrainTileVersion",
-        ServerMessage::WorldUpdate { .. } => "WorldUpdate",
-        ServerMessage::EquipmentEnchantSucceeded { .. } => "EquipmentEnchantSucceeded",
-        ServerMessage::PlayerLeveledUp { .. } => "PlayerLeveledUp",
-        ServerMessage::AuthSuccess { .. } => "AuthSuccess",
-        ServerMessage::AuthError { .. } => "AuthError",
-        ServerMessage::JoinSuccess { .. } => "JoinSuccess",
-        ServerMessage::CharacterCreated { .. } => "CharacterCreated",
-        ServerMessage::CharacterStatsRolled { .. } => "CharacterStatsRolled",
-        ServerMessage::CharacterDeleted { .. } => "CharacterDeleted",
-        ServerMessage::CharacterDeletionScheduled { .. } => "CharacterDeletionScheduled",
-        ServerMessage::CharacterDeletionCancelled { .. } => "CharacterDeletionCancelled",
-        ServerMessage::CharacterError { .. } => "CharacterError",
-        ServerMessage::PlayerJoined { .. } => "PlayerJoined",
-        ServerMessage::PlayerLeft { .. } => "PlayerLeft",
-        ServerMessage::PlayerAppeared { .. } => "PlayerAppeared",
-        ServerMessage::PlayerDisappeared { .. } => "PlayerDisappeared",
-        ServerMessage::PlayerMovePath { .. } => "PlayerMovePath",
-        ServerMessage::PlayerMoveProgress { .. } => "PlayerMoveProgress",
-        ServerMessage::PlayerMoved { .. } => "PlayerMoved",
-        ServerMessage::PlayerTeleported { .. } => "PlayerTeleported",
-        ServerMessage::PlayerTeleportEffect { .. } => "PlayerTeleportEffect",
-        ServerMessage::DungeonChestOpened { .. } => "DungeonChestOpened",
-        ServerMessage::DungeonPropBroken { .. } => "DungeonPropBroken",
-        ServerMessage::DungeonCartPushed { .. } => "DungeonCartPushed",
-        ServerMessage::CartStruckPlayer { .. } => "CartStruckPlayer",
-        ServerMessage::DungeonPropOpened { .. } => "DungeonPropOpened",
-        ServerMessage::DungeonPropsState { .. } => "DungeonPropsState",
-        ServerMessage::DungeonStatues { .. } => "DungeonStatues",
-        ServerMessage::DoorState { .. } => "DoorState",
-        ServerMessage::DungeonDiscoveries { .. } => "DungeonDiscoveries",
-        ServerMessage::ChatMessage { .. } => "ChatMessage",
-        ServerMessage::Recital { .. } => "Recital",
-        ServerMessage::WhisperMessage { .. } => "WhisperMessage",
-        ServerMessage::ShoutMessage { .. } => "ShoutMessage",
-        ServerMessage::PartyChatMessage { .. } => "PartyChatMessage",
-        ServerMessage::SystemMessage { .. } => "SystemMessage",
-        ServerMessage::GameState { .. } => "GameState",
-        ServerMessage::GameTimeSync { .. } => "GameTimeSync",
-        ServerMessage::WeatherSync { .. } => "WeatherSync",
-        ServerMessage::PricingNotice(_) => "PricingNotice",
-        ServerMessage::MonsterSpawned { .. } => "MonsterSpawned",
-        ServerMessage::MonsterMoved { .. } => "MonsterMoved",
-        ServerMessage::MonsterRemoved { .. } => "MonsterRemoved",
-        ServerMessage::MonsterDead { .. } => "MonsterDead",
-        ServerMessage::MonsterHealthUpdate { .. } => "MonsterHealthUpdate",
-        ServerMessage::PlayerAttacked { .. } => "PlayerAttacked",
-        ServerMessage::DaggerDoubleSlashStarted { .. } => "DaggerDoubleSlashStarted",
-        ServerMessage::DaggerDoubleSlashRejected { .. } => "DaggerDoubleSlashRejected",
-        ServerMessage::DaggerDoubleSlashSkipped { .. } => "DaggerDoubleSlashSkipped",
-        ServerMessage::PlayerAttackRejected { .. } => "PlayerAttackRejected",
-        ServerMessage::PlayerAttackStopped { .. } => "PlayerAttackStopped",
-        ServerMessage::MonsterSkillStarted { .. } => "MonsterSkillStarted",
-        ServerMessage::MonsterSkillStruck { .. } => "MonsterSkillStruck",
-        ServerMessage::MonsterSkillReflected { .. } => "MonsterSkillReflected",
-        ServerMessage::MonsterStared { .. } => "MonsterStared",
-        ServerMessage::MonsterDormant { .. } => "MonsterDormant",
-        ServerMessage::AdminFollowChanged { .. } => "AdminFollowChanged",
-        ServerMessage::MonsterGroundStrike { .. } => "MonsterGroundStrike",
-        ServerMessage::MonsterAttackedPlayer { .. } => "MonsterAttackedPlayer",
-        ServerMessage::PlayerDead { .. } => "PlayerDead",
-        ServerMessage::PlayerRespawned { .. } => "PlayerRespawned",
-        ServerMessage::PlayerHealthUpdate { .. } => "PlayerHealthUpdate",
-        ServerMessage::XpGained { .. } => "XpGained",
-        ServerMessage::SkillsUpdate { .. } => "SkillsUpdate",
-        ServerMessage::FishingCasted { .. } => "FishingCasted",
-        ServerMessage::FishingBite { .. } => "FishingBite",
-        ServerMessage::FishingFight { .. } => "FishingFight",
-        ServerMessage::FishingEnded { .. } => "FishingEnded",
-        ServerMessage::FishingError { .. } => "FishingError",
-        ServerMessage::Kicked { .. } => "Kicked",
-        ServerMessage::ServerNotice { .. } => "ServerNotice",
-        ServerMessage::ServerAnnouncement { .. } => "ServerAnnouncement",
-        ServerMessage::OperatorNotice { .. } => "OperatorNotice",
-        ServerMessage::PlayerTorchToggled { .. } => "PlayerTorchToggled",
-        ServerMessage::PlayerMountChanged { .. } => "PlayerMountChanged",
-        ServerMessage::PlayerWetToggled { .. } => "PlayerWetToggled",
-        ServerMessage::PlayerPetrifiedToggled { .. } => "PlayerPetrifiedToggled",
-        ServerMessage::PlayerTitleChanged { .. } => "PlayerTitleChanged",
-        ServerMessage::PlayerAppearanceChanged { .. } => "PlayerAppearanceChanged",
-        ServerMessage::AppearanceChangeResult { .. } => "AppearanceChangeResult",
-        ServerMessage::TitleEarned { .. } => "TitleEarned",
-        ServerMessage::PlayerTitles { .. } => "PlayerTitles",
-        ServerMessage::PlayerMainHandChanged { .. } => "PlayerMainHandChanged",
-        ServerMessage::PlayerBackChanged { .. } => "PlayerBackChanged",
-        ServerMessage::PlayerArmorChanged { .. } => "PlayerArmorChanged",
-        ServerMessage::Bookmarks { .. } => "Bookmarks",
-        ServerMessage::BookmarkRefused { .. } => "BookmarkRefused",
-        ServerMessage::BlessResult { .. } => "BlessResult",
-        ServerMessage::CapeDyePrompt { .. } => "CapeDyePrompt",
-        ServerMessage::LandClaimPrompt { .. } => "LandClaimPrompt",
-        ServerMessage::LandscapingMode { .. } => "LandscapingMode",
-        ServerMessage::LandscapingPaletteUnlocked { .. } => "LandscapingPaletteUnlocked",
-        ServerMessage::LandscapeChanged { .. } => "LandscapeChanged",
-        ServerMessage::LandscapeInvalidated { .. } => "LandscapeInvalidated",
-        ServerMessage::LandscapeEditResult { .. } => "LandscapeEditResult",
-        ServerMessage::FenceVisibility { .. } => "FenceVisibility",
-        ServerMessage::FenceEditResult { .. } => "FenceEditResult",
-        ServerMessage::PatrolSweepResult { .. } => "PatrolSweepResult",
-        ServerMessage::PatrolScouted { .. } => "PatrolScouted",
-        ServerMessage::PatrolShovelled { .. } => "PatrolShovelled",
-        ServerMessage::PlayerShovelled { .. } => "PlayerShovelled",
-        ServerMessage::RoadSnowCleared { .. } => "RoadSnowCleared",
-        ServerMessage::PatrolBrokeOut { .. } => "PatrolBrokeOut",
-        ServerMessage::PlayerSwung { .. } => "PlayerSwung",
-        ServerMessage::ImpoundState { .. } => "ImpoundState",
-        ServerMessage::LandClaimed { .. } => "LandClaimed",
-        ServerMessage::LandRejected { .. } => "LandRejected",
-        ServerMessage::LandAccountState { .. } => "LandAccountState",
-        ServerMessage::CapeTexturePrompt { .. } => "CapeTexturePrompt",
-        ServerMessage::HouseSpawned { .. } => "HouseSpawned",
-        ServerMessage::HousePlacementStarted { .. } => "HousePlacementStarted",
-        ServerMessage::HousePlacementResult { .. } => "HousePlacementResult",
-        ServerMessage::HouseDemolitionResult { .. } => "HouseDemolitionResult",
-        ServerMessage::HouseUpdated { .. } => "HouseUpdated",
-        ServerMessage::HeightTilesInvalidated { .. } => "HeightTilesInvalidated",
-        ServerMessage::TreeTilesInvalidated { .. } => "TreeTilesInvalidated",
-        ServerMessage::GrassTilesInvalidated { .. } => "GrassTilesInvalidated",
-        ServerMessage::HouseRemoved { .. } => "HouseRemoved",
-        ServerMessage::HousesInArea { .. } => "HousesInArea",
-        ServerMessage::PlayerInteractionChanged { .. } => "PlayerInteractionChanged",
-        ServerMessage::PlayerMusicStarted { .. } => "PlayerMusicStarted",
-        ServerMessage::PlayerInstrumentStarted { .. } => "PlayerInstrumentStarted",
-        ServerMessage::PlayerDanceSync { .. } => "PlayerDanceSync",
-        ServerMessage::PlayerInstrumentNotes { .. } => "PlayerInstrumentNotes",
-        ServerMessage::InteractionRejected { .. } => "InteractionRejected",
-        ServerMessage::AltarStatus { .. } => "AltarStatus",
-        ServerMessage::NoticeBoard { .. } => "NoticeBoard",
-        ServerMessage::NoticePostView { .. } => "NoticePostView",
-        ServerMessage::NoticeBoardRefused { .. } => "NoticeBoardRefused",
-        ServerMessage::NoticeBoardPapers { .. } => "NoticeBoardPapers",
-        ServerMessage::NoticesTakenDown { .. } => "NoticesTakenDown",
-        ServerMessage::NoticePostRemoved { .. } => "NoticePostRemoved",
-        ServerMessage::Mailbox { .. } => "Mailbox",
-        ServerMessage::MailLetter { .. } => "MailLetter",
-        ServerMessage::MailSent { .. } => "MailSent",
-        ServerMessage::MailRefused { .. } => "MailRefused",
-        ServerMessage::MailNotice { .. } => "MailNotice",
-        ServerMessage::FieldRaidNotice { .. } => "FieldRaidNotice",
-        ServerMessage::FieldBossWaking { .. } => "FieldBossWaking",
-        ServerMessage::FieldBossSleeping { .. } => "FieldBossSleeping",
-        ServerMessage::InventoryState { .. } => "InventoryState",
-        ServerMessage::InventoryUpdated { .. } => "InventoryUpdated",
-        ServerMessage::GroundItemSpawned { .. } => "GroundItemSpawned",
-        ServerMessage::GroundItemAppeared { .. } => "GroundItemAppeared",
-        ServerMessage::GroundItemRemoved { .. } => "GroundItemRemoved",
-        ServerMessage::GroundItemQuantityChanged { .. } => "GroundItemQuantityChanged",
-        ServerMessage::GroundItemClaimEnded { .. } => "GroundItemClaimEnded",
-        ServerMessage::ShopState { .. } => "ShopState",
-        ServerMessage::GoldUpdate { .. } => "GoldUpdate",
-        ServerMessage::EffectiveStatsUpdated { .. } => "EffectiveStatsUpdated",
-        ServerMessage::GoldGained { .. } => "GoldGained",
-        ServerMessage::TradeError { .. } => "TradeError",
-        ServerMessage::DealUpdated { .. } => "DealUpdated",
-        ServerMessage::BuybackUpdated { .. } => "BuybackUpdated",
-        ServerMessage::DealResult { .. } => "DealResult",
-        ServerMessage::OutfitStatus { .. } => "OutfitStatus",
-        ServerMessage::OutfitOffered { .. } => "OutfitOffered",
-        ServerMessage::TradeNotice { .. } => "TradeNotice",
-        ServerMessage::TradeDeclined { .. } => "TradeDeclined",
-        ServerMessage::TradeBusy { .. } => "TradeBusy",
-        ServerMessage::PartyInviteReceived { .. } => "PartyInviteReceived",
-        ServerMessage::PartyInviteResult { .. } => "PartyInviteResult",
-        ServerMessage::PartySummonReceived { .. } => "PartySummonReceived",
-        ServerMessage::PartyState { .. } => "PartyState",
-        ServerMessage::PartyPositions { .. } => "PartyPositions",
-        ServerMessage::PartyVitals { .. } => "PartyVitals",
-        ServerMessage::FriendList { .. } => "FriendList",
-        ServerMessage::FriendsOnline { .. } => "FriendsOnline",
-        ServerMessage::FriendRequestReceived { .. } => "FriendRequestReceived",
-        ServerMessage::FamilyState { .. } => "FamilyState",
-        ServerMessage::FamilyInviteReceived { .. } => "FamilyInviteReceived",
-        ServerMessage::PlayerFamilyChanged { .. } => "PlayerFamilyChanged",
-        ServerMessage::FamilyChatMessage { .. } => "FamilyChatMessage",
-        ServerMessage::FamilyStorageLog { .. } => "FamilyStorageLog",
-        ServerMessage::FamilyMergeProposal { .. } => "FamilyMergeProposal",
-        ServerMessage::HungerUpdate { .. } => "HungerUpdate",
-        ServerMessage::ManaUpdate { .. } => "ManaUpdate",
-        ServerMessage::TempHealthUpdate { .. } => "TempHealthUpdate",
-        ServerMessage::DebuffUpdate { .. } => "DebuffUpdate",
-        ServerMessage::AbilityCooldowns { .. } => "AbilityCooldowns",
-        ServerMessage::BuffUpdate { .. } => "BuffUpdate",
-        ServerMessage::PlayerRadianceToggled { .. } => "PlayerRadianceToggled",
-        ServerMessage::PlayerRageToggled { .. } => "PlayerRageToggled",
-        ServerMessage::MonsterStunned { .. } => "MonsterStunned",
-        ServerMessage::MonsterSlowed { .. } => "MonsterSlowed",
-        ServerMessage::PlayerCharged { .. } => "PlayerCharged",
-        ServerMessage::HealingPrayed { .. } => "HealingPrayed",
-        ServerMessage::BattleHymnStarted { .. } => "BattleHymnStarted",
-        ServerMessage::BowMarkUpdate { .. } => "BowMarkUpdate",
-        ServerMessage::InvisibilityChanged { .. } => "InvisibilityChanged",
-        ServerMessage::InspectionResult { .. } => "InspectionResult",
-        ServerMessage::AbilityRejected { .. } => "AbilityRejected",
-        ServerMessage::AbilityUsed { .. } => "AbilityUsed",
-        ServerMessage::CampfireSpawned { .. } => "CampfireSpawned",
-        ServerMessage::CampfireAppeared { .. } => "CampfireAppeared",
-        ServerMessage::CampfireRemoved { .. } => "CampfireRemoved",
-        ServerMessage::StallPlaced { .. } => "StallPlaced",
-        ServerMessage::StallAppeared { .. } => "StallAppeared",
-        ServerMessage::StallRemoved { .. } => "StallRemoved",
-        ServerMessage::StallState { .. } => "StallState",
-        ServerMessage::StallSignChanged { .. } => "StallSignChanged",
-        ServerMessage::TipHatPlaced { .. } => "TipHatPlaced",
-        ServerMessage::TipHatAppeared { .. } => "TipHatAppeared",
-        ServerMessage::TipHatRemoved { .. } => "TipHatRemoved",
-        ServerMessage::SongRequested { .. } => "SongRequested",
-        ServerMessage::MealPlaced { .. } => "MealPlaced",
-        ServerMessage::MealAppeared { .. } => "MealAppeared",
-        ServerMessage::MealEaten { .. } => "MealEaten",
-        ServerMessage::MealRemoved { .. } => "MealRemoved",
-        ServerMessage::GrillStarted => "GrillStarted",
-        ServerMessage::MiningStarted { .. } => "MiningStarted",
-        ServerMessage::MiningEnded { .. } => "MiningEnded",
-        ServerMessage::GrillEnded { .. } => "GrillEnded",
-        ServerMessage::PlayerTradeRequested { .. } => "PlayerTradeRequested",
-        ServerMessage::PlayerTradeRequestResult { .. } => "PlayerTradeRequestResult",
-        ServerMessage::PlayerTradeUpdate { .. } => "PlayerTradeUpdate",
-        ServerMessage::PlayerTradeEnded { .. } => "PlayerTradeEnded",
-        ServerMessage::PlayerTradeError { .. } => "PlayerTradeError",
-        ServerMessage::DungeonReset => "DungeonReset",
-        ServerMessage::DungeonLayoutVariants { .. } => "DungeonLayoutVariants",
-        ServerMessage::CharacterRenameRequired { .. } => "CharacterRenameRequired",
-        ServerMessage::CharacterRenamed { .. } => "CharacterRenamed",
-        ServerMessage::EstateChestMode { .. } => "EstateChestMode",
-        ServerMessage::EstateFurnitureMoveMode { .. } => "EstateFurnitureMoveMode",
-        ServerMessage::EstateChestVisibility { .. } => "EstateChestVisibility",
-        ServerMessage::EstateChestEditResult { .. } => "EstateChestEditResult",
-        ServerMessage::EstateChestState { .. } => "EstateChestState",
-        ServerMessage::FurniturePurchaseResult { .. } => "FurniturePurchaseResult",
-        ServerMessage::FurnitureSelectionNotice { .. } => "FurnitureSelectionNotice",
-        ServerMessage::MergerRiteCue { .. } => "MergerRiteCue",
-        ServerMessage::MergerCelebrated { .. } => "MergerCelebrated",
-        ServerMessage::MergerPledgeOffered => "MergerPledgeOffered",
-        ServerMessage::BlessingOffered { .. } => "BlessingOffered",
-        ServerMessage::ImpoundOffered { .. } => "ImpoundOffered",
-        ServerMessage::PatrolRollCalled { .. } => "PatrolRollCalled",
-        ServerMessage::WatchOffered { .. } => "WatchOffered",
-        ServerMessage::WatchVerdict { .. } => "WatchVerdict",
-        ServerMessage::WatchRackState { .. } => "WatchRackState",
-        ServerMessage::WatchDuty { .. } => "WatchDuty",
-        ServerMessage::FamilyEmblemShown { .. } => "FamilyEmblemShown",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use agent_client::{is_http_source, LlmType};
 
     fn parse(config: &str) -> Config {
         toml::from_str(config).expect("config should parse")

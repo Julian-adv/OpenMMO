@@ -14,7 +14,7 @@ mod world_tests;
 use super::*;
 use onlinerpg_shared::housing::{RoomData, RoomType};
 
-struct NoTiles;
+pub(crate) struct NoTiles;
 
 #[async_trait::async_trait]
 impl onlinerpg_terrain::height::HeightTiles for NoTiles {

@@ -18,12 +18,12 @@ COPY tools/terrain-gen/ tools/terrain-gen/
 COPY tools/cargo-build-data.rs tools/
 COPY data-src/ data-src/
 
-# agent-client is a workspace member, so cargo needs its manifest to resolve the
-# workspace at all. Stub the sources instead of copying them: a stub keeps this
-# image's cache from busting on unrelated agent-client edits.
+# Cargo needs every workspace member's manifest. Stubs keep this image's cache
+# from busting on unrelated agent-client and openmmo-mcp edits.
 COPY agent-client/Cargo.toml agent-client/
+COPY openmmo-mcp/Cargo.toml openmmo-mcp/
 COPY docker/stub-members.sh docker/
-RUN sh docker/stub-members.sh agent-client
+RUN sh docker/stub-members.sh agent-client openmmo-mcp
 
 # The cache mounts keep dependency compiles out of the layer, so the binaries
 # must be copied out within the same RUN.

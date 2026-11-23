@@ -37,10 +37,11 @@ COPY agent-client/data/animation_durations.json agent-client/data/
 # wasm-pack resolves the whole cargo workspace before building shared/, so the
 # members we do not compile still need manifests. Stub their sources.
 COPY agent-client/Cargo.toml agent-client/
+COPY openmmo-mcp/Cargo.toml openmmo-mcp/
 COPY server/Cargo.toml server/
 COPY tools/terrain-gen/Cargo.toml tools/terrain-gen/
 COPY docker/stub-members.sh docker/
-RUN sh docker/stub-members.sh agent-client server tools/terrain-gen
+RUN sh docker/stub-members.sh agent-client openmmo-mcp server tools/terrain-gen
 
 # The public assets are ~750 MB and change rarely; keeping them (and their
 # checksum pass) in their own layers means source edits reuse the cache.

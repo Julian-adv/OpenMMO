@@ -617,7 +617,7 @@ pub enum ClientMessage {
     /// refused, so extra data goes in a new message, never in here.
     ClientInfo {
         protocol_version: u32,
-        /// Which client program: "web" (browser) or "cli" (agent-client).
+        /// Which client program: `ClientKind::as_str` ("web", "cli", "mcp").
         /// Self-reported, used only for the `/who` breakdown — never for
         /// permissions, or clients would have a reason to lie.
         client_kind: String,

@@ -50,6 +50,12 @@ pub struct WorldCache {
     estate_chest_deleted: HashSet<i64>,
 }
 
+impl Default for WorldCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl WorldCache {
     pub fn world_epoch(&self) -> &str {
         &self.world_epoch

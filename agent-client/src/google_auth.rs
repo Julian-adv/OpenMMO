@@ -95,48 +95,38 @@ impl GoogleAuth {
     /// Reuse the cached refresh token, or run the device flow — which blocks
     /// on the person completing sign-in in a browser.
     pub async fn sign_in(config: GoogleAuthConfig) -> anyhow::Result<Self> {
-        let client_secret = config
-            .client_secret
-            .clone()
-            .or_else(|| std::env::var("GOOGLE_CLI_CLIENT_SECRET").ok());
-        let cache_path = resolve_cache_path(config.token_cache.as_deref());
-        let http = reqwest::Client::new();
+        if let Some(auth) = Self::cached(config.clone()).await {
+            return Ok(auth);
+        }
+        let pending = DeviceSignIn::begin(config).await?;
+        // Printed rather than logged: this is the one thing the runner must act on.
+        println!();
+        println!("  Sign in to continue:");
+        println!("    1. open {}", pending.verification_url);
+        println!("    2. enter code {}", pending.user_code);
+        println!("  (expires in {} minutes)", pending.expires_in_secs / 60);
+        println!();
+        pending.finish().await
+    }
 
+    fn new(config: GoogleAuthConfig, refresh_token: String) -> Self {
+        Self {
+            client_secret: resolve_client_secret(&config),
+            cache_path: resolve_cache_path(config.token_cache.as_deref()),
+            config,
+            refresh_token: Mutex::new(refresh_token),
+            http: reqwest::Client::new(),
+        }
+    }
+
+    /// The cached credential, without prompting anyone.
+    pub async fn cached(config: GoogleAuthConfig) -> Option<Self> {
+        let cache_path = resolve_cache_path(config.token_cache.as_deref());
         let cached = read_cache(&cache_path)
             .await
-            .filter(|c| c.client_id == config.client_id);
-
-        let refresh_token = match cached {
-            Some(cached) => {
-                info!(
-                    "Google sign-in: reusing cached credential ({:?})",
-                    cache_path
-                );
-                cached.refresh_token
-            }
-            None => {
-                let token =
-                    run_device_flow(&http, &config.client_id, client_secret.as_deref()).await?;
-                write_cache(
-                    &cache_path,
-                    &CachedToken {
-                        client_id: config.client_id.clone(),
-                        refresh_token: token.clone(),
-                    },
-                )
-                .await?;
-                info!("Google sign-in complete; credential cached at {cache_path:?}");
-                token
-            }
-        };
-
-        Ok(Self {
-            config,
-            client_secret,
-            cache_path,
-            refresh_token: Mutex::new(refresh_token),
-            http,
-        })
+            .filter(|c| c.client_id == config.client_id)?;
+        info!("Google sign-in: reusing cached credential ({cache_path:?})");
+        Some(Self::new(config, cached.refresh_token))
     }
 
     /// A freshly minted ID token for `ClientMessage::Authenticate`.
@@ -181,75 +171,116 @@ impl GoogleAuth {
     }
 }
 
-/// Prompt-and-poll half of the device flow. Returns the refresh token.
-async fn run_device_flow(
-    http: &reqwest::Client,
-    client_id: &str,
-    client_secret: Option<&str>,
-) -> anyhow::Result<String> {
-    let device: DeviceCodeResponse = http
-        .post(DEVICE_CODE_URL)
-        .form(&[("client_id", client_id), ("scope", SCOPE)])
-        .send()
-        .await?
-        .error_for_status()
-        .map_err(|e| {
-            anyhow::anyhow!(
-                "Google refused the device-code request ({e}). Is {client_id} an OAuth client \
-                 of type \"TV and Limited Input devices\"?"
-            )
-        })?
-        .json()
-        .await?;
+fn resolve_client_secret(config: &GoogleAuthConfig) -> Option<String> {
+    config
+        .client_secret
+        .clone()
+        .or_else(|| std::env::var("GOOGLE_CLI_CLIENT_SECRET").ok())
+}
 
-    // Printed rather than logged: this is the one thing the runner must act on.
-    println!();
-    println!("  Sign in to continue:");
-    println!("    1. open {}", device.verification_url);
-    println!("    2. enter code {}", device.user_code);
-    println!("  (expires in {} minutes)", device.expires_in / 60);
-    println!();
+/// A device sign-in waiting on the person to enter the code.
+pub struct DeviceSignIn {
+    pub verification_url: String,
+    pub user_code: String,
+    pub expires_in_secs: u64,
+    device_code: String,
+    interval: Duration,
+    deadline: tokio::time::Instant,
+    config: GoogleAuthConfig,
+    client_secret: Option<String>,
+    http: reqwest::Client,
+}
 
-    let mut interval = Duration::from_secs(device.interval);
-    let deadline = tokio::time::Instant::now() + Duration::from_secs(device.expires_in);
-
-    loop {
-        tokio::time::sleep(interval).await;
-        if tokio::time::Instant::now() >= deadline {
-            anyhow::bail!("Google sign-in timed out — run again to get a fresh code");
-        }
-
-        let mut form = vec![
-            ("client_id", client_id.to_string()),
-            ("device_code", device.device_code.clone()),
-            ("grant_type", DEVICE_GRANT.to_string()),
-        ];
-        if let Some(secret) = client_secret {
-            form.push(("client_secret", secret.to_string()));
-        }
-
-        let response: TokenResponse = http
-            .post(TOKEN_URL)
-            .form(&form)
+impl DeviceSignIn {
+    pub async fn begin(config: GoogleAuthConfig) -> anyhow::Result<Self> {
+        let http = reqwest::Client::new();
+        let client_id = &config.client_id;
+        let device: DeviceCodeResponse = http
+            .post(DEVICE_CODE_URL)
+            .form(&[("client_id", client_id.as_str()), ("scope", SCOPE)])
             .send()
             .await?
+            .error_for_status()
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Google refused the device-code request ({e}). Is {client_id} an OAuth client \
+                     of type \"TV and Limited Input devices\"?"
+                )
+            })?
             .json()
             .await?;
+        Ok(Self {
+            verification_url: device.verification_url,
+            user_code: device.user_code,
+            expires_in_secs: device.expires_in,
+            device_code: device.device_code,
+            interval: Duration::from_secs(device.interval),
+            deadline: tokio::time::Instant::now() + Duration::from_secs(device.expires_in),
+            client_secret: resolve_client_secret(&config),
+            config,
+            http,
+        })
+    }
 
-        match response.error.as_deref() {
-            None => {
-                return response
-                    .refresh_token
-                    .ok_or_else(|| anyhow::anyhow!("Google sign-in returned no refresh_token"))
+    /// Poll until the person completes sign-in, then cache the credential.
+    pub async fn finish(mut self) -> anyhow::Result<GoogleAuth> {
+        let refresh_token = self.poll().await?;
+        let auth = GoogleAuth::new(self.config, refresh_token.clone());
+        write_cache(
+            &auth.cache_path,
+            &CachedToken {
+                client_id: auth.config.client_id.clone(),
+                refresh_token,
+            },
+        )
+        .await?;
+        info!(
+            "Google sign-in complete; credential cached at {:?}",
+            auth.cache_path
+        );
+        Ok(auth)
+    }
+
+    async fn poll(&mut self) -> anyhow::Result<String> {
+        loop {
+            tokio::time::sleep(self.interval).await;
+            if tokio::time::Instant::now() >= self.deadline {
+                anyhow::bail!("Google sign-in timed out — run again to get a fresh code");
             }
-            Some("authorization_pending") => continue,
-            // Google asks for backoff by bumping the interval, not by failing.
-            Some("slow_down") => interval += Duration::from_secs(5),
-            Some(error) => anyhow::bail!(
-                "Google sign-in failed: {error}{}{}",
-                describe(response.error_description),
-                secret_hint(client_secret)
-            ),
+
+            let mut form = vec![
+                ("client_id", self.config.client_id.clone()),
+                ("device_code", self.device_code.clone()),
+                ("grant_type", DEVICE_GRANT.to_string()),
+            ];
+            if let Some(secret) = &self.client_secret {
+                form.push(("client_secret", secret.clone()));
+            }
+
+            let response: TokenResponse = self
+                .http
+                .post(TOKEN_URL)
+                .form(&form)
+                .send()
+                .await?
+                .json()
+                .await?;
+
+            match response.error.as_deref() {
+                None => {
+                    return response
+                        .refresh_token
+                        .ok_or_else(|| anyhow::anyhow!("Google sign-in returned no refresh_token"))
+                }
+                Some("authorization_pending") => continue,
+                // Google asks for backoff by bumping the interval, not by failing.
+                Some("slow_down") => self.interval += Duration::from_secs(5),
+                Some(error) => anyhow::bail!(
+                    "Google sign-in failed: {error}{}{}",
+                    describe(response.error_description),
+                    secret_hint(self.client_secret.as_deref())
+                ),
+            }
         }
     }
 }
@@ -295,7 +326,7 @@ fn expand_home(path: &str) -> PathBuf {
     }
 }
 
-fn home_dir() -> Option<PathBuf> {
+pub fn home_dir() -> Option<PathBuf> {
     fn non_empty(name: &str) -> Option<std::ffi::OsString> {
         std::env::var_os(name).filter(|value| !value.is_empty())
     }

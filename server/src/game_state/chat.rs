@@ -54,7 +54,7 @@ impl OnlineCounts {
             }
             match player.client_kind {
                 ClientKind::Web => counts.web += 1,
-                ClientKind::Cli => counts.cli += 1,
+                ClientKind::Cli | ClientKind::Mcp => counts.cli += 1,
                 ClientKind::Other | ClientKind::Unknown => counts.other += 1,
             }
         }

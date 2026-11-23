@@ -1351,6 +1351,17 @@ fn docs(roles: &Roles, role_only: bool) -> Vec<&'static str> {
         .collect()
 }
 
+pub(super) fn action_docs(roles: &Roles) -> Vec<super::ActionDoc> {
+    ACTION_SPECS
+        .iter()
+        .filter(|spec| roles.teaches(spec.names[0]).unwrap_or(true))
+        .map(|spec| super::ActionDoc {
+            names: spec.names,
+            doc: spec.doc.trim_end(),
+        })
+        .collect()
+}
+
 /// Fills `{{ACTIONS}}`: every action the agent's roles allow.
 pub(super) fn action_reference(roles: &Roles) -> String {
     format!("=== ACTIONS ===\n\n{}\n", docs(roles, false).join("\n\n"))

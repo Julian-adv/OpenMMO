@@ -36,7 +36,7 @@ const MAX_PICKUP_WALK_SECS: f32 = 12.0;
 
 const MAX_POINT_WALK_SECS: f32 = 15.0;
 
-pub(super) const MAX_DOORS_PER_WALK: usize = 6;
+pub const MAX_DOORS_PER_WALK: usize = 6;
 
 const MAX_CHASE_DOORS: usize = 2;
 
@@ -54,7 +54,7 @@ const SHORTCUT_MIN_SAVING: f32 = 15.0;
 
 const MAX_SHORTCUT_DOORS: usize = 3;
 
-pub(super) enum WalkTo<'a> {
+pub enum WalkTo<'a> {
     Monster(&'a str),
     Character(&'a PlayerId),
     GroundItem(u64),
@@ -174,7 +174,7 @@ impl std::fmt::Display for WalkTo<'_> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum LostReason {
+pub enum LostReason {
     TargetGone,
 
     PlayerDied,
@@ -191,7 +191,7 @@ pub(super) enum LostReason {
 }
 
 impl LostReason {
-    pub(super) fn clause(&self) -> String {
+    pub fn clause(&self) -> String {
         match self {
             Self::TargetGone => "your target is no longer there".to_string(),
             Self::PlayerDied => "you died on the way".to_string(),
@@ -207,14 +207,14 @@ impl LostReason {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
-pub(super) enum Walked {
+pub enum Walked {
     Arrived,
 
     Lost(LostReason),
     Error,
 }
 
-pub(super) async fn walk(
+pub async fn walk(
     state: &Arc<Mutex<SharedState>>,
     to: &WalkTo<'_>,
     background: bool,

@@ -5,26 +5,24 @@
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use futures_util::StreamExt;
 use onlinerpg_shared::{
     Character, CharacterAttributes, CharacterClass, ClientMessage, Gender, ServerMessage,
 };
-use onlinerpg_terrain::height::HeightSampler;
 use serde::Deserialize;
-use tokio::sync::{mpsc, Mutex};
+use tokio::sync::Mutex;
 use tracing::{error, info, warn};
 
 use crate::claude::{self, ClaudeConfig};
 use crate::codex::{self, CodexConfig};
 use crate::driver;
-use crate::google_auth::GoogleAuth;
 use crate::llm_scheduler::{LlmPriority, LlmScheduler, TimeoutBackend};
 use crate::minimax::{self, MiniMaxConfig};
 use crate::openai::{self, OpenAiConfig};
 use crate::openrouter::{self, OpenRouterConfig};
-use crate::state::{SharedState, WorldCache};
+use crate::session::{self, enter_game, AuthSource, Session};
+use crate::state::SharedState;
 use crate::ws;
 use crate::LlmType;
 
@@ -199,10 +197,7 @@ impl NpcConfig {
 
 /// Resources shared across all NPC connections.
 pub struct SharedResources {
-    pub terrain_snapshots: Arc<crate::terrain_snapshots::TerrainSnapshots>,
-    pub height_sampler: Arc<HeightSampler>,
-    pub splat_sampler: Arc<crate::splat::SplatSampler>,
-    pub world_cache: Arc<std::sync::RwLock<WorldCache>>,
+    pub world: session::World,
     pub scheduler: LlmScheduler,
     pub codex_app_server: codex::CodexAppServer,
     /// One claim board for the process, so co-located NPCs (the two inn
@@ -217,40 +212,6 @@ pub struct SharedResources {
     /// `None` when the spectator panel is off, so nothing is recorded for it.
     pub watch: Option<Arc<crate::watch::WatchHub>>,
     pub auto_update: crate::update::AutoUpdate,
-}
-
-/// How sessions prove who they are. Operator NPCs share one secret; a
-/// user-run agent signs in as its own Google account and mints a fresh ID
-/// token per connection (they expire in an hour, sessions outlive that).
-pub enum AuthSource {
-    NpcToken(String),
-    Google(GoogleAuth),
-}
-
-impl AuthSource {
-    async fn authenticate_message(&self, account: Option<&str>) -> anyhow::Result<ClientMessage> {
-        match self {
-            AuthSource::NpcToken(token) => Ok(ClientMessage::AuthenticateNpc {
-                account_name: account
-                    .ok_or_else(|| anyhow::anyhow!("[[npcs]] account is required"))?
-                    .to_string(),
-                npc_token: token.clone(),
-            }),
-            AuthSource::Google(google) => Ok(ClientMessage::Authenticate {
-                google_id_token: google.id_token().await?,
-            }),
-        }
-    }
-
-    /// Whether the agent may delete characters that don't match its config.
-    /// Only an npc_token account exists solely for the fixture; a Google
-    /// account belongs to a person (`doc/REMOTE_AGENT_CLIENT.md`).
-    fn may_delete_mismatches(&self) -> bool {
-        match self {
-            AuthSource::NpcToken(_) => true,
-            AuthSource::Google(_) => false,
-        }
-    }
 }
 
 /// The character a `[[npcs]]` entry asks for; `None` fields are "don't care".
@@ -404,24 +365,18 @@ async fn run_npc_session(
 ) -> anyhow::Result<Duration> {
     let label = npc.label();
     let watch = watch.cloned();
-    let ws_stream = ws::connect_ws(server_url, label).await;
-    let (mut ws_tx, mut ws_rx) = ws_stream.split();
-
-    ws::send_client_info(&mut ws_tx).await?;
-
-    // --- Authentication (server auto-creates the account on first use) ---
-    let auth = shared
-        .auth
-        .authenticate_message(npc.account.as_deref())
-        .await?;
-
-    // Not fatal on its own: a refused handshake may already have closed us,
-    // and then the reason is waiting on the read side for `wait_for_auth`.
-    if let Err(e) = ws::send(&mut ws_tx, &auth).await {
-        warn!("[{label}] Auth send failed ({e}); reading the server's reason");
-    }
-
-    let characters = ws::wait_for_auth(&mut ws_rx, label).await?;
+    let session::Lobby {
+        tx: mut ws_tx,
+        rx: mut ws_rx,
+        characters,
+    } = session::login(
+        server_url,
+        label,
+        &ws::ClientIdentity::AGENT_CLIENT,
+        &shared.auth,
+        npc.account.as_deref(),
+    )
+    .await?;
 
     // --- Resolve which of the account's characters this NPC entry owns ---
     let desired = Desired {
@@ -583,18 +538,12 @@ async fn run_npc_session(
         None => Vec::new(),
     };
 
-    let entered = Instant::now();
-    let (cmd_tx, mut cmd_rx) = mpsc::channel::<ClientMessage>(32);
-    let state = Arc::new(Mutex::new(SharedState::new(
+    let lobby = session::Lobby {
+        tx: ws_tx,
+        rx: ws_rx,
         characters,
-        cmd_tx,
-        Arc::clone(&shared.height_sampler),
-        Arc::clone(&shared.splat_sampler),
-        Arc::clone(&shared.world_cache),
-        watch.clone(),
-    )));
-    {
-        let mut s = state.lock().await;
+    };
+    let mut session = Session::start(lobby, buffered, &shared.world, label, watch.clone(), |s| {
         s.always_sprint = npc.always_sprint();
         s.plays_music = npc.plays_music();
         s.keepsake_ids = npc
@@ -603,79 +552,12 @@ async fn run_npc_session(
             .and_then(crate::shop_info::npc_by_id)
             .map(|row| row.offerable_keepsake_ids().map(String::from).collect())
             .unwrap_or_default();
+    })
+    .await;
+
+    if let Some(task) = spawn_llm_task(npc, &session.state, shared, server_url, watch.clone()) {
+        session.attach(task);
     }
-    if let Some(w) = &watch {
-        w.set_state(Arc::clone(&state));
-        w.push("system", "Session connected".to_string());
-    }
-
-    let account_for_tx = label.to_string();
-    let tx_task = tokio::spawn(async move {
-        while let Some(msg) = cmd_rx.recv().await {
-            if let Err(e) = ws::send(&mut ws_tx, &msg).await {
-                error!("[{}] Failed to send command: {e}", account_for_tx);
-                break;
-            }
-        }
-    });
-
-    let state_for_rx = Arc::clone(&state);
-    let account_for_rx = label.to_string();
-    let rx_task = tokio::spawn(async move {
-        for msg in buffered {
-            handle_incoming(&state_for_rx, &account_for_rx, msg).await;
-        }
-        loop {
-            match ws::recv(&mut ws_rx).await {
-                Ok(msg) => handle_incoming(&state_for_rx, &account_for_rx, msg).await,
-                Err(e) => {
-                    error!("[{}] Connection lost: {e}", account_for_rx);
-                    break;
-                }
-            }
-        }
-    });
-
-    let terrain_state = Arc::clone(&state);
-    let terrain_source = Arc::clone(&shared.terrain_snapshots);
-    let terrain_notify = Arc::clone(&state.lock().await.terrain_notify);
-    let terrain_task = tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = terrain_notify.notified() => {},
-                _ = tokio::time::sleep(Duration::from_secs(1)) => {},
-            }
-            apply_pending_terrain(&terrain_state, &terrain_source).await;
-        }
-    });
-
-    let llm_task = spawn_llm_task(npc, &state, shared, server_url, watch.clone());
-
-    let maintenance_state = Arc::clone(&state);
-    let maintenance_task = tokio::spawn(async move {
-        let mut interval = tokio::time::interval(Duration::from_secs(1));
-        loop {
-            interval.tick().await;
-            let mut state = maintenance_state.lock().await;
-            if !state.in_game {
-                continue;
-            }
-            state.drive_player_trade().await;
-            if !state.world_view.synchronized {
-                let _ = state
-                    .send_background_command(ClientMessage::ResyncWorld)
-                    .await;
-                continue;
-            }
-            state.check_music_finished();
-            for command in state.drain_pending_commands() {
-                if let Err(error) = state.send_background_command(command).await {
-                    tracing::warn!("Pending command failed: {error}");
-                    break;
-                }
-            }
-        }
-    });
 
     if llm_enabled {
         info!("[{}] Running in LLM-driven mode", label);
@@ -683,205 +565,7 @@ async fn run_npc_session(
         info!("[{}] Running in direct mode", label);
     }
 
-    // Wait until the WebSocket reader dies (connection lost)
-    let _ = rx_task.await;
-
-    tx_task.abort();
-    maintenance_task.abort();
-    terrain_task.abort();
-    if let Some(t) = llm_task {
-        t.abort();
-    }
-    // The follow loop holds the state, so nothing else would end it.
-    state.lock().await.cancel_follow();
-    if let Some(w) = &watch {
-        w.set_disconnected();
-    }
-
-    Ok(entered.elapsed())
-}
-
-/// One server message into shared state. The entry handshake reads a few
-/// before the reader task starts, so both paths go through here.
-async fn handle_incoming(state: &Arc<Mutex<SharedState>>, label: &str, msg: ServerMessage) {
-    // Meant for whoever runs this client, so set it apart from the log lines.
-    if let ServerMessage::OperatorNotice { message } = &msg {
-        println!("\n  ==== Notice from the server operator ({label}) ====\n  {message}\n");
-    }
-    let mut s = state.lock().await;
-    if let ServerMessage::LandscapeChanged { tiles } = &msg {
-        for tile in tiles {
-            s.splat_sampler
-                .update_tile(tile.tile_x, tile.tile_z, &tile.splat)
-                .await;
-        }
-        return;
-    }
-    if let ServerMessage::LandscapeInvalidated { tiles } = &msg {
-        for &(tx, tz) in tiles {
-            s.splat_sampler.invalidate_tile(tx, tz).await;
-        }
-        return;
-    }
-    if matches!(msg, ServerMessage::GameTimeSync { .. }) {
-        let _ = s.send_background_command(ClientMessage::Heartbeat).await;
-        s.push_event(msg);
-        return;
-    }
-
-    let player_trade_event = matches!(
-        msg,
-        ServerMessage::PlayerTradeRequested { .. }
-            | ServerMessage::PlayerTradeRequestResult { .. }
-            | ServerMessage::PlayerTradeUpdate { .. }
-            | ServerMessage::PlayerTradeEnded { .. }
-            | ServerMessage::PlayerTradeError { .. }
-    );
-    s.push_event(msg);
-    if player_trade_event {
-        s.drive_player_trade().await;
-    }
-}
-
-async fn apply_pending_terrain(
-    state: &Arc<Mutex<SharedState>>,
-    source: &crate::terrain_snapshots::TerrainSnapshots,
-) {
-    let pending = state.lock().await.pending_terrain.clone();
-    for tile in pending {
-        let message = match source.load(&tile).await {
-            Ok(message) => message,
-            Err(error) => {
-                warn!(%error, x = tile.x, z = tile.z, "Terrain snapshot remains pending");
-                if error.is::<crate::terrain_snapshots::TerrainChanged>()
-                    || matches!(
-                        error
-                            .downcast_ref::<reqwest::Error>()
-                            .and_then(|error| error.status()),
-                        Some(reqwest::StatusCode::NOT_FOUND | reqwest::StatusCode::CONFLICT)
-                    )
-                {
-                    let mut s = state.lock().await;
-                    if s.pending_terrain.contains(&tile) {
-                        s.world_view.synchronized = false;
-                        let _ = s.send_background_command(ClientMessage::ResyncWorld).await;
-                    }
-                }
-                continue;
-            }
-        };
-        let mut s = state.lock().await;
-        if !s.pending_terrain.contains(&tile)
-            || s.world_view.world_epoch != tile.epoch
-            || s.world_view.generation != tile.generation
-            || s.world_view
-                .subjects
-                .get(&format!("terrain:{},{}", tile.x, tile.z))
-                != Some(&tile.revision)
-            || !s.world_cache.read().unwrap().is_current_epoch(&tile.epoch)
-        {
-            continue;
-        }
-        let mut applied = source.applied.lock().await;
-        if !s.world_cache.read().unwrap().is_current_epoch(&tile.epoch) {
-            continue;
-        }
-        if applied.epoch != tile.epoch {
-            s.height_sampler.clear().await;
-            s.splat_sampler.clear().await;
-            applied.revisions.clear();
-            applied.epoch = tile.epoch.clone();
-        }
-        if !applied
-            .revisions
-            .get(&(tile.x, tile.z))
-            .is_some_and(|revision| *revision > tile.revision)
-        {
-            let crate::terrain_snapshots::GroundTerrain { height, splat } = message;
-            if let Err(error) = s.height_sampler.update_tile(tile.x, tile.z, &height).await {
-                warn!(%error, "Could not apply terrain snapshot");
-                continue;
-            }
-            s.splat_sampler.update_tile(tile.x, tile.z, &splat).await;
-            applied.revisions.insert((tile.x, tile.z), tile.revision);
-        }
-        s.pending_terrain.retain(|pending| pending != &tile);
-    }
-}
-
-/// The name to answer a rename demand with. Deriving one from the refused name
-/// would only be a way around the ban, so the operator's configured
-/// `character_name` is the only answer — and None means there is none.
-fn rename_target<'a>(current: &str, configured: Option<&'a str>) -> Option<&'a str> {
-    configured.filter(|name| !name.eq_ignore_ascii_case(current))
-}
-
-/// Enter the game and settle what the server answers with: `JoinSuccess`, or a
-/// demand to rename a banned character first. Anything else that lands
-/// meanwhile belongs to the session, so it comes back buffered for the reader
-/// to replay in order rather than being dropped.
-async fn enter_game(
-    ws_tx: &mut ws::WsTx,
-    ws_rx: &mut ws::WsRx,
-    label: &str,
-    char_id: i64,
-    current_name: &str,
-    configured_name: Option<&str>,
-) -> anyhow::Result<Vec<ServerMessage>> {
-    let enter = ClientMessage::EnterGame {
-        character_id: char_id,
-    };
-    ws::send(ws_tx, &enter).await?;
-    info!("[{label}] Entering game with character {char_id}...");
-
-    let mut buffered = Vec::new();
-    let mut renamed = false;
-    loop {
-        let msg = ws::recv(ws_rx).await?;
-        match msg {
-            ServerMessage::JoinSuccess { .. } => {
-                // No scene to compile here, so the entry grace ends at once.
-                ws::send(ws_tx, &ClientMessage::WorldReady).await?;
-                buffered.push(msg);
-                return Ok(buffered);
-            }
-            ServerMessage::CharacterRenameRequired { character_id } => {
-                if renamed {
-                    // One rename per connection: a second demand means the new
-                    // name is refused too, and asking again would spin.
-                    return Err(ws::AuthRejected(
-                        "renamed the character, but entry was refused again".to_string(),
-                    )
-                    .into());
-                }
-                let Some(new_name) = rename_target(current_name, configured_name) else {
-                    return Err(ws::AuthRejected(format!(
-                        "'{current_name}' cannot be used on this server; set a different \
-                         character_name in config.toml and restart"
-                    ))
-                    .into());
-                };
-                warn!("[{label}] Entry refused as '{current_name}' — renaming to '{new_name}'");
-                ws::send(
-                    ws_tx,
-                    &ClientMessage::RenameCharacter {
-                        character_id,
-                        new_name: new_name.to_string(),
-                    },
-                )
-                .await?;
-                renamed = true;
-            }
-            ServerMessage::CharacterRenamed { name, .. } => {
-                info!("[{label}] Renamed to '{name}'");
-                ws::send(ws_tx, &enter).await?;
-            }
-            ServerMessage::CharacterError { message } => {
-                return Err(ws::AuthRejected(format!("entry refused: {message}")).into());
-            }
-            other => buffered.push(other),
-        }
-    }
+    Ok(session.closed().await)
 }
 
 impl NpcConfig {
@@ -1144,21 +828,6 @@ fn build_llm_backend(
     }
 }
 
-/// WS URL → REST base URL: an explicit port means game port + 1; otherwise
-/// same origin with the path dropped (the reverse proxy routes `/api/*`).
-fn api_base_url(server_url: &str) -> String {
-    let (scheme, rest) = server_url.split_once("://").unwrap_or(("ws", server_url));
-    let scheme = if scheme == "wss" { "https" } else { "http" };
-    let authority = rest.split('/').next().unwrap_or(rest);
-    match authority
-        .rsplit_once(':')
-        .and_then(|(host, port)| port.parse::<u16>().ok().map(|p| (host, p)))
-    {
-        Some((host, port)) => format!("{scheme}://{host}:{}", port + 1),
-        None => format!("{scheme}://{authority}"),
-    }
-}
-
 /// Spawn the appropriate LLM driver task based on NPC config.
 fn spawn_llm_task(
     npc: &NpcConfig,
@@ -1204,7 +873,7 @@ fn spawn_llm_task(
         .map(|f| f.spots)
         .unwrap_or_default();
 
-    let api_base_url = api_base_url(server_url);
+    let api_base_url = ws::api_base_url(server_url);
 
     let driver_config = driver::DriverConfig {
         label: label.to_string(),
@@ -1279,108 +948,6 @@ pub(crate) mod tests {
                 "{excluded}: {prompt}"
             );
         }
-    }
-
-    #[tokio::test]
-    async fn a_world_snapshot_does_not_send_a_move_that_can_cancel_a_new_pose() {
-        let (mut s, mut rx) = crate::state::tests::test_state();
-        let player = crate::state::tests::test_player(0.0, 0.0);
-        let position = player.position;
-        s.self_player_id = Some(player.id);
-        s.self_player = Some(player);
-        let state = Arc::new(Mutex::new(s));
-        handle_incoming(
-            &state,
-            "Tobin",
-            ServerMessage::WorldUpdate {
-                world_epoch: "snapshot-test".into(),
-                generation: 1,
-                sequence: 1,
-                position,
-                floor_level: 0,
-                reset: true,
-                ready: true,
-                events: vec![],
-            },
-        )
-        .await;
-        assert!(state.lock().await.world_view.synchronized);
-        assert!(rx.try_recv().is_err());
-    }
-
-    #[tokio::test]
-    async fn terrain_http_does_not_lock_state_and_old_responses_cannot_apply() {
-        use crate::terrain_snapshots::{PendingTerrain, TerrainSnapshots};
-        use onlinerpg_terrain::io::TerrainIO;
-        let dir = std::env::temp_dir().join(format!("terrain_async_{}", rand::random::<u64>()));
-        let terrain = TerrainIO::new(dir.clone());
-        let bytes = onlinerpg_terrain::defaults::default_heightmap();
-        terrain.write_heightmap(0, 0, &bytes).await.unwrap();
-        let ServerMessage::TerrainTileVersion { files, .. } =
-            terrain.tile_manifest(0, 0).await.unwrap()
-        else {
-            panic!()
-        };
-        let started = Arc::new(tokio::sync::Notify::new());
-        let release = Arc::new(tokio::sync::Notify::new());
-        let request_started = started.clone();
-        let request_release = release.clone();
-        let app = axum::Router::new().route(
-            "/api/terrain/files/{kind}/{region}/{file}",
-            axum::routing::get(move || {
-                let bytes = bytes.clone();
-                let started = request_started.clone();
-                let release = request_release.clone();
-                async move {
-                    started.notify_one();
-                    release.notified().await;
-                    bytes
-                }
-            }),
-        );
-        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let origin = format!("http://{}", listener.local_addr().unwrap());
-        let server = tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
-        let source = Arc::new(TerrainSnapshots::new(&origin, dir.to_str().unwrap()));
-        let (mut s, _rx) = crate::state::tests::test_state();
-        s.world_view.world_epoch = "world".into();
-        s.world_view.generation = 1;
-        s.world_view.subjects.insert("terrain:0,0".into(), 1);
-        s.world_cache.write().unwrap().ensure_world_epoch("world");
-        let tile = PendingTerrain {
-            epoch: "world".into(),
-            generation: 1,
-            revision: 1,
-            x: 0,
-            z: 0,
-            files,
-        };
-        s.pending_terrain.push(tile.clone());
-        let state = Arc::new(Mutex::new(s));
-        let worker_state = state.clone();
-        let worker_source = source.clone();
-        let worker =
-            tokio::spawn(async move { apply_pending_terrain(&worker_state, &worker_source).await });
-        tokio::time::timeout(Duration::from_secs(2), started.notified())
-            .await
-            .unwrap();
-        {
-            let mut s = tokio::time::timeout(Duration::from_secs(2), state.lock())
-                .await
-                .expect("HTTP must not hold shared state");
-            assert_eq!(s.pending_terrain.len(), 1);
-            s.world_view.generation = 2;
-            s.pending_terrain[0].generation = 2;
-        }
-        release.notify_one();
-        worker.await.unwrap();
-        assert!(source.applied.lock().await.revisions.is_empty());
-        assert_eq!(state.lock().await.pending_terrain.len(), 1);
-        apply_pending_terrain(&state, &source).await;
-        assert!(state.lock().await.pending_terrain.is_empty());
-        assert_eq!(source.applied.lock().await.revisions.get(&(0, 0)), Some(&1));
-        server.abort();
-        tokio::fs::remove_dir_all(dir).await.unwrap();
     }
 
     fn schedule(at: &str) -> ScheduleEntry {
@@ -1529,7 +1096,7 @@ pub(crate) mod tests {
     #[test]
     fn direct_ws_url_bumps_the_port() {
         assert_eq!(
-            api_base_url("ws://127.0.0.1:10006"),
+            ws::api_base_url("ws://127.0.0.1:10006"),
             "http://127.0.0.1:10007"
         );
     }
@@ -1537,7 +1104,7 @@ pub(crate) mod tests {
     #[test]
     fn proxied_wss_url_keeps_the_origin_and_drops_the_path() {
         assert_eq!(
-            api_base_url("wss://openmmo.example/ws"),
+            ws::api_base_url("wss://openmmo.example/ws"),
             "https://openmmo.example"
         );
     }
@@ -1545,21 +1112,8 @@ pub(crate) mod tests {
     #[test]
     fn wss_url_with_port_and_path_bumps_the_port() {
         assert_eq!(
-            api_base_url("wss://openmmo.example:10006/ws"),
+            ws::api_base_url("wss://openmmo.example:10006/ws"),
             "https://openmmo.example:10007"
         );
-    }
-
-    #[test]
-    fn a_rename_demand_is_answered_from_the_configured_name() {
-        assert_eq!(rename_target("시스템", Some("인공지능")), Some("인공지능"));
-    }
-
-    #[test]
-    fn a_config_that_cannot_answer_has_no_target() {
-        // Offering the refused name back — in any case — is refused again.
-        assert_eq!(rename_target("시스템", None), None);
-        assert_eq!(rename_target("시스템", Some("시스템")), None);
-        assert_eq!(rename_target("SYSTEM", Some("system")), None);
     }
 }

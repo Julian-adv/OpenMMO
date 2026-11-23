@@ -1,0 +1,15 @@
+[package]
+name = "openmmo-mcp"
+version = "0.1.0"
+edition = "2021"
+repository = "https://github.com/Julian-adv/OpenMMO"
+
+[dependencies]
+agent-client = { path = "../agent-client" }
+anyhow = "1.0"
+onlinerpg-shared = { path = "../shared" }
+rmcp = { version = "3.11", features = ["transport-io"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1.0", features = ["full"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }

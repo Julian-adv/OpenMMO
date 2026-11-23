@@ -70,7 +70,7 @@ pub(super) fn no_ammo_note(monster_id: &str, kind: &str) -> String {
 
 /// Execute one combat tick: check if target is alive and in range, chase or attack.
 /// Returns whether to keep targeting; false means combat ended.
-pub(super) async fn tick_combat(
+pub async fn tick_combat(
     state: &Arc<Mutex<SharedState>>,
     monster_id: &str,
     sprint: Option<bool>,

@@ -203,6 +203,8 @@ pub enum ClientKind {
     Web,
     /// agent-client.
     Cli,
+    /// openmmo-mcp.
+    Mcp,
     Other,
 }
 
@@ -213,6 +215,7 @@ impl ClientKind {
         match reported {
             "web" => ClientKind::Web,
             "cli" => ClientKind::Cli,
+            "mcp" => ClientKind::Mcp,
             _ => ClientKind::Other,
         }
     }
@@ -222,6 +225,7 @@ impl ClientKind {
             ClientKind::Unknown => "unknown",
             ClientKind::Web => "web",
             ClientKind::Cli => "cli",
+            ClientKind::Mcp => "mcp",
             ClientKind::Other => "other",
         }
     }

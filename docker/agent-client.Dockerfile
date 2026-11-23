@@ -18,10 +18,11 @@ COPY agent-client/ agent-client/
 COPY tools/cargo-build-data.rs tools/
 COPY data-src/ data-src/
 
+COPY openmmo-mcp/Cargo.toml openmmo-mcp/
 COPY server/Cargo.toml server/
 COPY tools/terrain-gen/Cargo.toml tools/terrain-gen/
 COPY docker/stub-members.sh docker/
-RUN sh docker/stub-members.sh server tools/terrain-gen
+RUN sh docker/stub-members.sh openmmo-mcp server tools/terrain-gen
 
 # The cache mounts keep dependency compiles out of the layer, so the binary
 # must be copied out within the same RUN.

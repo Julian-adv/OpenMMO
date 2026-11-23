@@ -38,7 +38,10 @@ mod walk;
 
 pub(crate) use unload_catch::BUYER as CATCH_BUYER;
 
-pub(crate) use prompt::{format_event, player_within_event_range};
+pub use combat::tick_combat;
+pub use prompt::format_event;
+pub(crate) use prompt::player_within_event_range;
+pub use walk::{walk, WalkTo, Walked};
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -57,13 +60,45 @@ use onlinerpg_shared::ClientMessage;
 pub(crate) use action::wants_reroll;
 pub(crate) use action::Roles;
 use backoff::PromptBackoff;
-use combat::{defend_self, load_attack_cooldown, tick_combat};
+use combat::{defend_self, load_attack_cooldown};
 use execute::{append_memory, handle_response};
 use movement::{
     check_schedule_transition, coverage_positions, fetch_furniture_around, keep_post_facing,
     maintain_scheduled_fishing, resolve_due_schedule,
 };
 use prompt::build_prompt;
+
+/// Run actions as a turn would, without the driver loop. Returns the monster
+/// a final attack left to fight. `may_say` vets each chat message first.
+pub async fn run_actions(
+    state: &Arc<Mutex<SharedState>>,
+    actions: &[serde_json::Value],
+    may_say: impl Fn(&str) -> bool,
+) -> Option<(String, Option<bool>)> {
+    let turn = serde_json::json!({ "actions": actions }).to_string();
+    let mut turn = action::parse_turn_tolerant(&turn).ok()?;
+    let said = turn.actions.len();
+    turn.actions
+        .retain(|a| !matches!(a, action::AgentAction::Say { message } if !may_say(message)));
+    if turn.actions.len() < said {
+        turn.errors
+            .push("action \"say\": that chat command is not available to you".into());
+    }
+    execute::run_turn(state, turn, &None, &None, false).await
+}
+
+pub struct ActionDoc {
+    pub names: &'static [&'static str],
+    pub doc: &'static str,
+}
+
+/// The actions a player's own adventurer is taught.
+pub fn adventurer_actions() -> Vec<ActionDoc> {
+    action::action_docs(&Roles {
+        adventurer: true,
+        ..Default::default()
+    })
+}
 
 /// Trait for LLM backends that can send a prompt and return a text response.
 #[async_trait]
@@ -75,7 +110,7 @@ pub trait LlmBackend: Send + Sync {
 /// the action reference rendered from the parser's own spec table
 /// (`action::ACTION_SPECS`), so the documented actions cannot drift from what
 /// the parser accepts.
-pub fn load_system_prompt(path: &str, roles: &Roles) -> anyhow::Result<String> {
+pub(crate) fn load_system_prompt(path: &str, roles: &Roles) -> anyhow::Result<String> {
     let text = std::fs::read_to_string(path)
         .map_err(|e| anyhow::anyhow!("Failed to read system prompt from {path}: {e}"))?;
     Ok(text
@@ -2439,5 +2474,24 @@ mod tests {
         // The chair cell's east flank — not the standing cell's.
         assert_eq!(entry.pos[0], -1449.5);
         assert_eq!(entry.pos[2], 4749.5);
+    }
+}
+
+#[cfg(test)]
+mod run_actions_tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn a_refused_chat_message_is_reported_and_not_sent() {
+        let (s, mut rx) = crate::state::tests::test_state();
+        let state = Arc::new(Mutex::new(s));
+        let actions = [serde_json::json!({"type": "chat", "message": "/god"})];
+        run_actions(&state, &actions, |message| !message.starts_with('/')).await;
+        assert!(rx.try_recv().is_err());
+        let events = state.lock().await.drain_agent_events();
+        assert!(
+            events.iter().any(|e| e.contains("not available")),
+            "{events:?}"
+        );
     }
 }

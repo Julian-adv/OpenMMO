@@ -283,7 +283,7 @@ fn watch_verdict(name: &str, note: &WatchNote) -> String {
     }
 }
 
-pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
+pub fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> {
     if state.dialogue_ignores_event(msg) {
         return None;
     }

@@ -19,7 +19,7 @@ use onlinerpg_shared::notice_board::NoticeBoardRef;
 
 use super::action::{
     action_to_command, asks_for_great_chest, parse_turn_tolerant, resolve_move_goal, AgentAbility,
-    AgentAction, GoalError, PickupRef, Qty,
+    AgentAction, GoalError, ParsedTurn, PickupRef, Qty,
 };
 use super::combat::{
     approach_player, chase_monster, chest_arrive_range, follow_player, no_ammo_note,
@@ -358,7 +358,16 @@ pub(super) async fn handle_response(
             return None;
         }
     };
+    run_turn(state, agent_resp, memory_file, favor_file, skip_movement).await
+}
 
+pub(super) async fn run_turn(
+    state: &Arc<Mutex<SharedState>>,
+    agent_resp: ParsedTurn,
+    memory_file: &Option<String>,
+    favor_file: &Option<String>,
+    skip_movement: bool,
+) -> Option<(String, Option<bool>)> {
     // Report any actions that failed to parse, naming the offending field, so
     // the agent fixes that action instead of thinking the whole class of action
     // is broken. The valid actions below still run.

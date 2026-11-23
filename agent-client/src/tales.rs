@@ -74,6 +74,10 @@ impl SetTales {
         self.picks.len()
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.picks.is_empty()
+    }
+
     pub fn current(&self) -> Option<&Deed> {
         self.picks.get(self.sung % self.picks.len().max(1))
     }

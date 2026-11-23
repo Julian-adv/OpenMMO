@@ -363,7 +363,7 @@ impl super::GameState {
             }
             match player.client_kind {
                 ClientKind::Web => counts.web_accounts += 1,
-                ClientKind::Cli => counts.agent_accounts += 1,
+                ClientKind::Cli | ClientKind::Mcp => counts.agent_accounts += 1,
                 ClientKind::Other | ClientKind::Unknown => counts.other_accounts += 1,
             }
         }

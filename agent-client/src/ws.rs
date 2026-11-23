@@ -57,6 +57,21 @@ pub async fn connect_ws(
     }
 }
 
+/// WS URL → REST base URL: an explicit port means game port + 1; otherwise
+/// same origin with the path dropped (the reverse proxy routes `/api/*`).
+pub fn api_base_url(server_url: &str) -> String {
+    let (scheme, rest) = server_url.split_once("://").unwrap_or(("ws", server_url));
+    let scheme = if scheme == "wss" { "https" } else { "http" };
+    let authority = rest.split('/').next().unwrap_or(rest);
+    match authority
+        .rsplit_once(':')
+        .and_then(|(host, port)| port.parse::<u16>().ok().map(|p| (host, p)))
+    {
+        Some((host, port)) => format!("{scheme}://{host}:{}", port + 1),
+        None => format!("{scheme}://{authority}"),
+    }
+}
+
 /// The server refused something only a config change can fix (token,
 /// account, character name). The session loop gives up instead of
 /// reconnecting forever.
@@ -113,16 +128,29 @@ async fn closes_as_build_refusal(rx: &mut WsRx) -> bool {
 /// Announce the protocol version and which client this is. Must be the first
 /// message on the connection; the server refuses everything else until it
 /// arrives (see `doc/REMOTE_AGENT_CLIENT.md`).
-pub async fn send_client_info(tx: &mut WsTx) -> anyhow::Result<()> {
+pub async fn send_client_info(tx: &mut WsTx, client: &ClientIdentity) -> anyhow::Result<()> {
     send(
         tx,
         &ClientMessage::ClientInfo {
             protocol_version: onlinerpg_shared::PROTOCOL_VERSION,
-            client_kind: "cli".to_string(),
-            client_version: onlinerpg_shared::stamp_layout_version(env!("CARGO_PKG_VERSION")),
+            client_kind: client.kind.as_str().to_string(),
+            client_version: onlinerpg_shared::stamp_layout_version(client.version),
         },
     )
     .await
+}
+
+/// What the handshake reports this program as.
+pub struct ClientIdentity {
+    pub kind: onlinerpg_shared::entity::ClientKind,
+    pub version: &'static str,
+}
+
+impl ClientIdentity {
+    pub const AGENT_CLIENT: Self = Self {
+        kind: onlinerpg_shared::entity::ClientKind::Cli,
+        version: env!("CARGO_PKG_VERSION"),
+    };
 }
 
 /// Wait for AuthSuccess, returning the character list.
