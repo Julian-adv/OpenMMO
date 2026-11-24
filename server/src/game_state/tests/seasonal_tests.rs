@@ -52,10 +52,10 @@ async fn a_day_inside_the_season_changes_no_region() {
 
 #[tokio::test]
 async fn the_tree_goes_up_when_the_season_opens() {
-    let (game, (rx, rz)) = setup(day(11, 30));
+    let (game, (rx, rz)) = setup(day(11, 23));
     assert!(game.fixed_placements_in(rx, rz).is_empty());
 
-    assert_eq!(game.set_seasonal_date(day(12, 1)), vec![(rx, rz)]);
+    assert_eq!(game.set_seasonal_date(day(11, 24)), vec![(rx, rz)]);
     assert_eq!(game.fixed_placements_in(rx, rz).len(), 1);
 }
 
@@ -65,10 +65,10 @@ fn period(start: MonthDay, end: MonthDay) -> SeasonSchedule {
 
 #[tokio::test]
 async fn an_operator_run_replaces_the_table_dates() {
-    let (game, (rx, rz)) = setup(day(11, 24));
+    let (game, (rx, rz)) = setup(day(11, 10));
     assert!(game.fixed_placements_in(rx, rz).is_empty());
 
-    let november = period(day(11, 20), day(11, 30));
+    let november = period(day(11, 5), day(11, 15));
     assert_eq!(
         game.apply_seasonal_schedule("winter", november),
         vec![(rx, rz)]
@@ -102,7 +102,7 @@ async fn an_event_switched_off_stays_down_in_season() {
 
 #[tokio::test]
 async fn a_set_schedule_is_stored_announced_and_kept_across_a_restart() {
-    let (game, (rx, rz)) = setup(day(11, 24));
+    let (game, (rx, rz)) = setup(day(11, 10));
     let auth = make_test_auth("seasonal_store");
     let admin = pid("admin");
     let mut broadcast_rx = game.subscribe();
@@ -123,7 +123,7 @@ async fn a_set_schedule_is_stored_announced_and_kept_across_a_restart() {
     );
     match game.seasonal_events_message(None) {
         ServerMessage::SeasonalEvents { today, events, .. } => {
-            assert_eq!(today, day(11, 24));
+            assert_eq!(today, day(11, 10));
             assert_eq!(events.len(), 1);
             assert_eq!((events[0].id.as_str(), events[0].props), ("winter", 1));
             assert_eq!(events[0].schedule, run);
@@ -132,7 +132,7 @@ async fn a_set_schedule_is_stored_announced_and_kept_across_a_restart() {
         other => panic!("{other:?}"),
     }
 
-    let (restarted, _) = setup(day(11, 24));
+    let (restarted, _) = setup(day(11, 10));
     restarted.load_seasonal_schedules(auth.seasonal_schedules().unwrap());
     assert_eq!(restarted.fixed_placements_in(rx, rz).len(), 1);
 
@@ -151,7 +151,7 @@ async fn a_set_schedule_is_stored_announced_and_kept_across_a_restart() {
 
 #[tokio::test]
 async fn a_bad_schedule_is_refused_and_changes_nothing() {
-    let (game, (rx, rz)) = setup(day(11, 24));
+    let (game, (rx, rz)) = setup(day(11, 10));
     let auth = make_test_auth("seasonal_refuse");
     let admin = pid("admin");
     let mut broadcast_rx = game.subscribe();
@@ -177,7 +177,7 @@ async fn a_bad_schedule_is_refused_and_changes_nothing() {
 
 #[tokio::test]
 async fn the_season_command_lists_sets_and_explains_itself() {
-    let (game, (rx, rz)) = setup(day(11, 24));
+    let (game, (rx, rz)) = setup(day(11, 10));
     let auth = make_test_auth("seasonal_command");
     let admin = pid("admin");
     let mut admin_rx = game.register_direct_channel(&admin).await;
@@ -198,20 +198,20 @@ async fn the_season_command_lists_sets_and_explains_itself() {
 
     assert_eq!(
         say("/season").await,
-        "Season (UTC 11-24): winter 12-01..12-30 (default), down"
+        "Season (UTC 11-10): winter 11-24..12-30 (default), down"
     );
     assert_eq!(
         say("/season winter 11-01 1/5").await,
-        "Season (UTC 11-24): winter 11-01..01-05, up"
+        "Season (UTC 11-10): winter 11-01..01-05, up"
     );
     assert_eq!(game.fixed_placements_in(rx, rz).len(), 1);
     assert_eq!(
         say("/season winter off").await,
-        "Season (UTC 11-24): winter off, down"
+        "Season (UTC 11-10): winter off, down"
     );
     assert_eq!(
         say("/season winter default").await,
-        "Season (UTC 11-24): winter 12-01..12-30 (default), down"
+        "Season (UTC 11-10): winter 11-24..12-30 (default), down"
     );
     assert!(say("/season winter 11-31 12-01").await.contains("MM-DD"));
     assert!(say("/season winter").await.starts_with("Season: /season"));
