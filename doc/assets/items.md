@@ -11,6 +11,14 @@
 - 정리(2026-10-25): 미리보기 PNG 3개·상세 검증 보고서 3개·재생성 가능한 중간 4K GLB·Blender 백업을 삭제했다. 최종 모델·아이콘, 원화·Tripo 원본·현재 Blender 파일·원본 텍스처와 간결한 검증·출처 기록은 보존했다.
 - 재현: `blender -b --python-exit-code 1 -P assets/items/rift_ring/tripo_v1/prepare.py`로 4K 원본과 임시 GLB를 생성한다. `tools/blender-scripts/export_item_asset.py`에 `--source assets/items/rift_ring/tripo_v1/rift_ring.glb --name rift_ring --size 0.15 --category accessory --icon-rotation 28 -8 -102`를 주어 바닥 모델·아이콘·Blender 작업 파일을 출력하고, `tools/optimize-modular-part.mjs`에 `--ktx2 --size=512`를 주어 원본 GLB에서 런타임 모델을 압축한다.
 
+## Blindfold — 눈가리개
+
+- 원화: `assets/items/blindfold/concept_v1`(남성)·`concept_female_v1`(여성). 우리 몸체를 민머리 파란 마네킹으로 렌더한 앞·왼쪽·뒤 그림 위에 숯색 리넨 띠를 그렸다. OpenAI Codex ImageGen(`codex exec -i`), ChatGPT Pro 20x, 2026-11-24. 프롬프트·해시는 각 폴더의 `generation.json`.
+- 3D: 사용자가 Tripo 웹에서 앞·left·뒤 세 장으로 생성(`tripo_male_v1`, `tripo_female_v1`의 `source/model.glb`).
+- `tools/fit-blindfold.py male|female`이 파란 마네킹을 잘라내고, 마네킹을 몸체에 맞춰(남 평균 9 mm, 여 3.5 mm) 띠를 Head 본 100%로 연결한다. 천에 번진 파란 텍셀은 주변 색으로 메우고 텍스처는 1024²로 줄인다.
+- 런타임: 남성 `helmet_blindfold`(`prepare-modular-character.mjs --blindfold-only`), 여성 `blindfold_helmet`(`prepare-female-knight.mjs --part blindfold_helmet`). 머리카락은 그대로 보인다.
+- 바닥 모델·아이콘: `tools/blender-scripts/build_blindfold.py`가 남성 띠로 `client/public/models/armor/blindfold.glb`(512² WebP)와 128² 아이콘을 만든다.
+
 ## Mirror Shield — 거울 방패
 
 - [concept_v1](../../assets/items/mirror_shield/concept_v1/concept.png) — 돌의 정원 메두사의 응시를 되비치는 방패. 둥근 그리스 청동 아스피스, 거울처럼 닦은 가운데와 메안더 무늬·녹청 테두리. OpenAI Codex ImageGen, ChatGPT Pro 20x, 2026-11-23(프롬프트·생성 기록은 같은 폴더).

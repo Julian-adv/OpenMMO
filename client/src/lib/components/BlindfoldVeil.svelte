@@ -14,16 +14,17 @@
 {/if}
 
 <style>
-  /* Eyes covered: only what stands within arm's reach shows. */
+  /* Eyes covered: only what stands within arm's reach shows. Under the HUD. */
   .veil {
     position: fixed;
     inset: 0;
+    z-index: 1;
     pointer-events: none;
     background: radial-gradient(
       circle at 50% 46%,
       transparent 0,
-      transparent 70px,
-      rgba(0, 0, 0, 0.97) 170px
+      transparent 50px,
+      #000 130px
     );
   }
 

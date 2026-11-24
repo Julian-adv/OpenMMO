@@ -14,7 +14,11 @@ import {
  *  polished metal reflects. */
 export const REFLECTION_LAYER = 7
 const EYE_HEIGHT = 1
-const RECAPTURE_DISTANCE = 3
+/** The reflection is taken once per place: a square this wide (m) of town,
+ *  field or dungeon floor. A soft 64 px mirror shows no finer change. */
+const PLACE_SIZE = 48
+/** Dungeon floors sit further apart than this (m). */
+const FLOOR_HEIGHT = 4
 /** Recapture when daylight drifts this far (0 night … 1 midday). */
 const DAYLIGHT_STEP = 0.05
 /** While a capture is due but no mirror is on screen, look again this often. */
@@ -52,15 +56,16 @@ function sky() {
 /**
  * Captures the surroundings into a small cube map for polished metal to
  * reflect: ground under a painted sky, or the dungeon around the player.
- * Runs only after the player moves a few metres, goes up or down, or
- * daylight changes, and only while a polished mesh is on screen; one face
- * per frame.
+ * Taken once per place (a square of ground or dungeon floor) or when
+ * daylight changes, only while the player stands still and a polished mesh
+ * is on screen; one face per frame.
  */
 export class GroundReflection {
   private readonly target = reflectionCube
-  private readonly camera = new THREE.CubeCamera(0.1, 80, this.target)
+  private readonly camera = new THREE.CubeCamera(0.1, 40, this.target)
   private nextCheck = 0
-  private readonly last = new THREE.Vector3(Infinity, 0, 0)
+  private readonly previous = new THREE.Vector3()
+  private readonly place = { x: NaN, z: NaN, y: NaN }
   private underground = false
   private tilted: boolean | undefined
   private daylight = 0
@@ -83,11 +88,19 @@ export class GroundReflection {
   ) {
     if (!hasMetalReflections()) return
     this.tilt(view, underground)
+    const moving = this.previous.distanceToSquared(position) > 1e-6
+    this.previous.copy(position)
     if (this.face < 0) {
+      const px = Math.floor(position.x / PLACE_SIZE)
+      const pz = Math.floor(position.z / PLACE_SIZE)
+      const floor = Math.round(position.y / FLOOR_HEIGHT)
+      const samePlace =
+        px === this.place.x && pz === this.place.z && floor === this.place.y
+      // Wait for the player to stop, so the capture is not taken on the run.
       if (
-        underground === this.underground &&
-        this.last.distanceToSquared(position) < RECAPTURE_DISTANCE ** 2 &&
-        Math.abs(this.currentDaylight() - this.daylight) < DAYLIGHT_STEP
+        moving ||
+        (samePlace &&
+          Math.abs(this.currentDaylight() - this.daylight) < DAYLIGHT_STEP)
       )
         return
       const now = performance.now()
@@ -96,6 +109,7 @@ export class GroundReflection {
         this.nextCheck = now + ON_SCREEN_CHECK_MS
         return
       }
+      Object.assign(this.place, { x: px, z: pz, y: floor })
       this.start(renderer, scene, position, underground)
     }
     this.drawFace(renderer, scene)
@@ -125,7 +139,6 @@ export class GroundReflection {
     underground: boolean
   ) {
     this.underground = underground
-    this.last.copy(position)
     this.face = 0
     this.shadows = []
     scene.traverse((o) => {

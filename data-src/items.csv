@@ -7,7 +7,7 @@ raven_shield,Raven Shield,A round wooden shield painted with a black raven crest
 earth_shield,Shield of the Earth,Slabs of the earth guardian bound in scorched iron. Faint orange light lingers in the cracks beneath its seal.,5,off_hand,false,armor/earth_shield.png,armor/earth_shield.glb,armor,,,stone,30000,3,,,,,,,,,,,,,,,,,,,,,shield,
 mirror_shield,Mirror Shield,A bronze shield polished until it shows a face. Held toward a gaze it throws the gaze back.,5,off_hand,false,armor/mirror_shield.png,armor/mirror_shield.glb,armor,,,metal,40000,1,,,,,,,,,,gazereflect,,,,,,,,,,,shield,
 leather_helmet,Leather Helmet,A simple leather helmet.,1,head,false,armor/leather_helmet.png,armor/leather_helmet.glb,armor,,,leather,1500,1,,,,,1,,,,,,,,,,,,,,,,,
-blindfold,Blindfold,A strip of dark cloth tied over the eyes. No gaze can meet eyes it covers but you fight half blind.,0.1,head,false,armor/leather_helmet.png,armor/leather_helmet.glb,armor,,,cloth,300,,,,,,,,,,,blindfold;hit-10,,,,,,,,,,,,
+blindfold,Blindfold,A strip of dark cloth tied over the eyes. No gaze can meet eyes it covers but you fight half blind.,0.1,head,false,armor/blindfold.png,armor/blindfold.glb,armor,,,cloth,300,,,,,,,,,,,blindfold;hit-10,,,,,,,,,,,,
 iron_helmet,Iron Helmet,A heavy iron great helm that guards the whole head.,4,head,false,armor/iron_helmet.png,armor/iron_helmet.glb,armor,,,metal,6000,2,,,,,2,0.37,,,,,,,,,,,,,,,,
 breastplate,Breastplate,A polished steel breastplate that turns aside all but the truest blows.,20,chest,false,armor/plate_armor.png,armor/plate_armor.glb,armor,,,metal,40000,7,,,,,4,,,,,,,,,,,,,,,,,
 leather_pants,Leather Pants,Durable leather leggings.,4,pants,false,armor/leather_pants.png,armor/leather_pants.glb,armor,,,leather,2500,1,,,,,1,0.3,,,,,,,,,,,,,,,,

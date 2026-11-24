@@ -498,7 +498,14 @@ describe('female modular starter outfits', () => {
         const part = parts[slot]
         const barbarianStyle =
           item.material === 'leather' || id.startsWith('worn_barbarian_')
-        const brilliance = id === 'helm_of_brilliance'
+        const itemHelmet = (
+          {
+            helm_of_brilliance: 'brilliance_helmet',
+            blindfold: 'blindfold_helmet',
+          } as Record<string, string>
+        )[id]
+        // The blindfold keeps the chosen hair, the default bob.
+        const blindfold = id === 'blindfold'
         const valkyrie = id.startsWith('worn_valkyrie_')
         const caveman = item.worldModel?.startsWith('armor/caveman_')
         const priest = item.worldModel?.startsWith('armor/priest_')
@@ -535,21 +542,21 @@ describe('female modular starter outfits', () => {
                             ? [`valkyrie_${part}`, part]
                             : rogueStyle
                               ? [`rogue_${part}`, part]
-                              : brilliance
-                                ? ['brilliance_helmet', part]
+                              : itemHelmet
+                                ? [itemHelmet, part]
                                 : barbarianStyle
                                   ? [`barbarian_${part}`, part]
                                   : [part, `barbarian_${part}`]
         await applyCharacterArmor(modelRoot, { [slot]: id } as ArmorEquipment)
         expect(count(modelRoot, shown), id).toBeGreaterThan(0)
         expect(count(modelRoot, hidden), id).toBe(0)
-        if (brilliance) expect(count(modelRoot, 'barbarian_helmet'), id).toBe(0)
+        if (itemHelmet) expect(count(modelRoot, 'barbarian_helmet'), id).toBe(0)
         if (slot === 'head') {
           expect(count(modelRoot, 'barbarian_hair') > 0, id).toBe(
             barbarianStyle && !bard
           )
           expect(count(modelRoot, 'hair') > 0, id).toBe(
-            valkyrie || priest || !!bard || !!ceremony || !!maid
+            valkyrie || priest || !!bard || !!ceremony || !!maid || blindfold
           )
         }
       }

@@ -214,9 +214,9 @@
 
 <LandscapingPanel />
 <FurnitureShopPanel />
+<BlindfoldVeil />
 
 <div class="game-hud" style:--cluster-width="{clusterWidth}px">
-  <BlindfoldVeil />
   <ServerNotice />
   <SkillFailureToast />
   <AnnouncementToasts />
