@@ -101,6 +101,15 @@ impl SharedState {
             .any(|i| i.item_def_id == item_def_id)
     }
 
+    /// Worn gear, like the Ring of Teleport Control, that lets any teleport
+    /// scroll go to a bookmark.
+    pub fn worn_teleport_control(&self) -> Option<&'static crate::item_defs::ItemDef> {
+        self.self_equipped
+            .values()
+            .filter_map(|item| crate::item_defs::get(&item.item_def_id))
+            .find(|def| def.controls_teleport())
+    }
+
     /// Unlocked plain teleport scrolls in the bag: what the blesser will take.
     pub fn plain_teleport_scrolls(&self) -> u32 {
         self.self_bag
