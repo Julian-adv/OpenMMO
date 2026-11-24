@@ -381,7 +381,9 @@ fn requires_admin(msg: &ClientMessage) -> bool {
         ClientMessage::DebugTeleport { .. }
         | ClientMessage::DebugDropItem { .. }
         | ClientMessage::DebugSetTime { .. }
-        | ClientMessage::DebugResetDungeonProps { .. } => true,
+        | ClientMessage::DebugResetDungeonProps { .. }
+        | ClientMessage::QuerySeasonalEvents
+        | ClientMessage::SetSeasonalEvent { .. } => true,
         ClientMessage::ChatMessage { message } => {
             parse_notice_command(message).is_some() || parse_admin_command(message).is_some()
         }
@@ -789,6 +791,26 @@ async fn handle_client_message(
         ClientMessage::DebugResetDungeonProps { entrance_id } => {
             if state.require_in_game("debug dungeon prop reset").is_some() {
                 game_state.debug_reset_dungeon_props(&entrance_id).await;
+            }
+        }
+
+        ClientMessage::QuerySeasonalEvents => {
+            if let Some(id) = &state.require_in_game("seasonal events") {
+                game_state
+                    .send_direct_message(id, game_state.seasonal_events_message(None))
+                    .await;
+            }
+        }
+
+        ClientMessage::SetSeasonalEvent { event, schedule } => {
+            if let Some(id) = &state.require_in_game("seasonal event schedule") {
+                let error = game_state
+                    .set_seasonal_schedule(id, &event, schedule, auth_service)
+                    .await
+                    .err();
+                game_state
+                    .send_direct_message(id, game_state.seasonal_events_message(error))
+                    .await;
             }
         }
 

@@ -259,6 +259,7 @@ pub(crate) enum AdminCommand<'a> {
     Summon(&'a str),
     Goto(&'a str),
     Weather(&'a str),
+    Season(&'a str),
     FullMoon,
     God,
     Spawnmob {
@@ -319,6 +320,9 @@ pub(crate) fn parse_admin_command(message: &str) -> Option<AdminCommand<'_>> {
     }
     if let Some(rest) = strip_command(message, "/weather") {
         return Some(AdminCommand::Weather(rest));
+    }
+    if let Some(rest) = strip_command(message, "/season") {
+        return Some(AdminCommand::Season(rest));
     }
     strip_command(message, "/goto").map(AdminCommand::Goto)
 }
@@ -1110,6 +1114,7 @@ impl super::GameState {
             AdminCommand::Summon(name) => self.summon_command(admin_id, name).await,
             AdminCommand::Goto(name) => self.goto_command(admin_id, name).await,
             AdminCommand::Weather(args) => self.weather_command(admin_id, args),
+            AdminCommand::Season(args) => self.season_command(admin_id, args, auth).await,
             AdminCommand::God => self.god_command(admin_id).await,
             AdminCommand::FullMoon => self.full_moon_command(),
             AdminCommand::Spawnmob {

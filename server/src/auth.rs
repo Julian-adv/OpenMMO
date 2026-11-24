@@ -46,6 +46,8 @@ mod family;
 mod family_metrics;
 #[path = "auth_field_raids.rs"]
 mod field_raids;
+#[path = "auth_seasonal.rs"]
+mod seasonal;
 #[path = "auth_statues.rs"]
 mod statues;
 pub(crate) use estate_storage::EstateDeposit;

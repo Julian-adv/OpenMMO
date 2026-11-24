@@ -639,6 +639,10 @@ async fn main() -> ExitCode {
         Ok(rows) => game_state.load_statues(&rows),
         Err(err) => warn!("No dungeon statues loaded: {}", err),
     }
+    match auth_service.seasonal_schedules() {
+        Ok(stored) => game_state.load_seasonal_schedules(stored),
+        Err(err) => warn!("No seasonal schedules loaded: {}", err),
+    }
     if let Err(err) = game_state.init_passability(&terrain_io).await {
         error!(
             "Failed to build passability cache; refusing to start: {}",

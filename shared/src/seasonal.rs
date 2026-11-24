@@ -1,6 +1,7 @@
-//! Seasonal props from `data-src/seasonal_props.csv`: decorations the world
-//! wears between two real-world calendar dates every year (doc/SEASONAL_PROPS.md).
-//! They are placed from this table, not from region object files.
+//! Seasonal events from `data-src/seasonal_events.csv` and the props each puts
+//! up from `data-src/seasonal_props.csv`: decorations the world wears between
+//! two real-world calendar dates every year (doc/SEASONAL_PROPS.md).
+//! Props are placed from these tables, not from region object files.
 
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
@@ -8,6 +9,7 @@ use std::sync::OnceLock;
 use crate::furniture::{FurniturePlacement, FIXED_PLACEMENT_ID_BASE};
 use crate::world::wrap_world_x;
 
+static SEASONAL_EVENTS_JSON: &str = include_str!("../../data/seasonal_events.json");
 static SEASONAL_PROPS_JSON: &str = include_str!("../../data/seasonal_props.json");
 static CATALOG_JSON: &str = include_str!("../../data/object_catalog.json");
 
@@ -17,7 +19,9 @@ const PLACEMENT_ID_BASE: u32 = FIXED_PLACEMENT_ID_BASE + 100_000_000;
 const DAYS_IN_MONTH: [u8; 12] = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
 /// A day of the real-world year, ordered through the year.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize,
+)]
 pub struct MonthDay {
     pub month: u8,
     pub day: u8,
@@ -28,21 +32,100 @@ impl MonthDay {
         let days = *DAYS_IN_MONTH.get(usize::from(month).checked_sub(1)?)?;
         (1..=days).contains(&day).then_some(Self { month, day })
     }
+
+    /// `MM-DD` or `MM/DD`.
+    pub fn parse(text: &str) -> Option<Self> {
+        let (month, day) = text.split_once(['-', '/'])?;
+        Self::new(month.parse().ok()?, day.parse().ok()?)
+    }
+}
+
+impl std::fmt::Display for MonthDay {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:02}-{:02}", self.month, self.day)
+    }
+}
+
+/// First and last day of a run, both included. It may run past new year.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct Season {
+    pub start: MonthDay,
+    pub end: MonthDay,
+}
+
+impl Season {
+    /// `None` when either end is not a calendar day, as a client may send.
+    pub fn checked(self) -> Option<Self> {
+        Some(Self {
+            start: MonthDay::new(self.start.month, self.start.day)?,
+            end: MonthDay::new(self.end.month, self.end.day)?,
+        })
+    }
+
+    pub fn contains(&self, date: MonthDay) -> bool {
+        if self.start <= self.end {
+            self.start <= date && date <= self.end
+        } else {
+            date >= self.start || date <= self.end
+        }
+    }
+}
+
+impl std::fmt::Display for Season {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}..{}", self.start, self.end)
+    }
+}
+
+/// When an event runs: on its table dates, on an operator's dates, or never.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, serde::Serialize, serde::Deserialize)]
+pub enum SeasonSchedule {
+    #[default]
+    Default,
+    Period(Season),
+    Off,
+}
+
+impl SeasonSchedule {
+    pub fn season(self, default: Season) -> Option<Season> {
+        match self {
+            Self::Default => Some(default),
+            Self::Period(season) => Some(season),
+            Self::Off => None,
+        }
+    }
+}
+
+/// An event as the operator panel lists it.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct SeasonalEventState {
+    pub id: String,
+    pub default_season: Season,
+    pub schedule: SeasonSchedule,
+    pub props: u32,
+    /// Whether its props stand today.
+    pub active: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct EventRow {
+    id: String,
+    start_month: u8,
+    start_day: u8,
+    end_month: u8,
+    end_day: u8,
+}
+
+#[derive(Debug, serde::Deserialize)]
 struct Row {
     id: String,
+    event: String,
     object: String,
     x: f32,
     z: f32,
     #[serde(default)]
     rotation: f32,
-    start_month: u8,
-    start_day: u8,
-    end_month: u8,
-    end_day: u8,
 }
 
 #[derive(serde::Deserialize)]
@@ -51,29 +134,26 @@ struct CatalogEntry {
 }
 
 #[derive(Debug)]
+pub struct SeasonalEventDef {
+    pub id: String,
+    /// The run from the table, used until an operator sets another.
+    pub season: Season,
+}
+
+#[derive(Debug)]
 pub struct SeasonalPropDef {
     pub id: String,
+    /// The event whose run puts this prop up.
+    pub event: String,
     pub object: String,
     pub x: f32,
     pub z: f32,
     /// Degrees, the placement yaw convention.
     pub rotation: f32,
-    /// First and last day standing, both included.
-    pub start: MonthDay,
-    pub end: MonthDay,
     index: u32,
 }
 
 impl SeasonalPropDef {
-    /// Whether the prop stands on `date`. A season may run past new year.
-    pub fn in_season(&self, date: MonthDay) -> bool {
-        if self.start <= self.end {
-            self.start <= date && date <= self.end
-        } else {
-            date >= self.start || date <= self.end
-        }
-    }
-
     pub fn placement(&self, ground: f32) -> FurniturePlacement {
         FurniturePlacement {
             id: PLACEMENT_ID_BASE + self.index,
@@ -88,6 +168,40 @@ impl SeasonalPropDef {
     }
 }
 
+fn parse_event(row: EventRow) -> SeasonalEventDef {
+    let id = row.id;
+    let date = |month, day, which| {
+        MonthDay::new(month, day)
+            .unwrap_or_else(|| panic!("{id}: {which} {month}/{day} is not a calendar day"))
+    };
+    SeasonalEventDef {
+        season: Season {
+            start: date(row.start_month, row.start_day, "start"),
+            end: date(row.end_month, row.end_day, "end"),
+        },
+        id,
+    }
+}
+
+/// Every seasonal event, ordered by id.
+pub fn seasonal_event_defs() -> &'static [SeasonalEventDef] {
+    static DEFS: OnceLock<Vec<SeasonalEventDef>> = OnceLock::new();
+    DEFS.get_or_init(|| {
+        let mut events: Vec<SeasonalEventDef> =
+            serde_json::from_str::<HashMap<String, EventRow>>(SEASONAL_EVENTS_JSON)
+                .expect("seasonal_events.json is malformed")
+                .into_values()
+                .map(parse_event)
+                .collect();
+        events.sort_by(|a, b| a.id.cmp(&b.id));
+        events
+    })
+}
+
+pub fn seasonal_event_def(id: &str) -> Option<&'static SeasonalEventDef> {
+    seasonal_event_defs().iter().find(|event| event.id == id)
+}
+
 fn parse(row: Row, index: u32, catalog: &HashSet<String>) -> SeasonalPropDef {
     let id = row.id;
     assert!(
@@ -95,13 +209,13 @@ fn parse(row: Row, index: u32, catalog: &HashSet<String>) -> SeasonalPropDef {
         "{id}: {} is not a catalog object",
         row.object
     );
-    let date = |month, day, which| {
-        MonthDay::new(month, day)
-            .unwrap_or_else(|| panic!("{id}: {which} {month}/{day} is not a calendar day"))
-    };
+    assert!(
+        seasonal_event_def(&row.event).is_some(),
+        "{id}: {} is not a seasonal event",
+        row.event
+    );
     SeasonalPropDef {
-        start: date(row.start_month, row.start_day, "start"),
-        end: date(row.end_month, row.end_day, "end"),
+        event: row.event,
         object: row.object,
         x: wrap_world_x(row.x),
         z: row.z,
@@ -141,35 +255,35 @@ mod tests {
         MonthDay::new(month, day).unwrap()
     }
 
-    fn prop(start: MonthDay, end: MonthDay) -> SeasonalPropDef {
-        SeasonalPropDef {
-            id: "test".into(),
-            object: "winter_tree".into(),
-            x: 0.0,
-            z: 0.0,
-            rotation: 0.0,
-            start,
-            end,
-            index: 0,
-        }
+    fn season(start: MonthDay, end: MonthDay) -> Season {
+        Season { start, end }
     }
 
     #[test]
     fn a_season_across_new_year_covers_both_ends() {
-        let winter = prop(day(12, 10), day(1, 5));
+        let winter = season(day(12, 10), day(1, 5));
         for date in [day(12, 10), day(12, 31), day(1, 1), day(1, 5)] {
-            assert!(winter.in_season(date), "{date:?}");
+            assert!(winter.contains(date), "{date:?}");
         }
         for date in [day(12, 9), day(1, 6), day(7, 1)] {
-            assert!(!winter.in_season(date), "{date:?}");
+            assert!(!winter.contains(date), "{date:?}");
         }
     }
 
     #[test]
     fn a_season_inside_one_year_stops_at_its_last_day() {
-        let summer = prop(day(6, 1), day(8, 31));
-        assert!(summer.in_season(day(6, 1)) && summer.in_season(day(8, 31)));
-        assert!(!summer.in_season(day(5, 31)) && !summer.in_season(day(9, 1)));
+        let summer = season(day(6, 1), day(8, 31));
+        assert!(summer.contains(day(6, 1)) && summer.contains(day(8, 31)));
+        assert!(!summer.contains(day(5, 31)) && !summer.contains(day(9, 1)));
+    }
+
+    #[test]
+    fn a_schedule_picks_the_table_run_an_operator_run_or_none() {
+        let table = season(day(12, 10), day(1, 5));
+        let early = season(day(11, 20), day(12, 26));
+        assert_eq!(SeasonSchedule::Default.season(table), Some(table));
+        assert_eq!(SeasonSchedule::Period(early).season(table), Some(early));
+        assert_eq!(SeasonSchedule::Off.season(table), None);
     }
 
     #[test]
@@ -178,6 +292,17 @@ mod tests {
         for (month, day) in [(0, 1), (13, 1), (2, 30), (4, 31), (1, 0)] {
             assert!(MonthDay::new(month, day).is_none(), "{month}/{day}");
         }
+        assert_eq!(MonthDay::parse("12-10"), Some(day(12, 10)));
+        assert_eq!(MonthDay::parse("1/5"), Some(day(1, 5)));
+        assert_eq!(day(1, 5).to_string(), "01-05");
+        for text in ["", "12", "13-01", "02-30", "a-b", "12-10-1"] {
+            assert_eq!(MonthDay::parse(text), None, "{text}");
+        }
+        let sent = Season {
+            start: MonthDay { month: 2, day: 30 },
+            end: day(3, 1),
+        };
+        assert_eq!(sent.checked(), None);
     }
 
     #[test]
@@ -186,6 +311,7 @@ mod tests {
         assert!(!defs.is_empty());
         let mut ids = HashSet::new();
         for def in defs {
+            assert!(seasonal_event_def(&def.event).is_some(), "{}", def.id);
             let placement = def.placement(3.5);
             assert!(is_fixed_placement(placement.id));
             assert!(ids.insert(placement.id), "{} shares a placement id", def.id);

@@ -723,6 +723,13 @@ async fn handle_incoming(state: &Arc<Mutex<SharedState>>, label: &str, msg: Serv
         }
         return;
     }
+    if let ServerMessage::ObjectRegionsChanged { regions } = &msg {
+        s.world_cache
+            .write()
+            .unwrap()
+            .forget_furniture_regions(regions);
+        return;
+    }
     if matches!(msg, ServerMessage::GameTimeSync { .. }) {
         let _ = s.send_background_command(ClientMessage::Heartbeat).await;
         s.push_event(msg);

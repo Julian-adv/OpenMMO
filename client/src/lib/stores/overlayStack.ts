@@ -17,6 +17,7 @@ export type OverlayId =
   | 'friends'
   | 'family'
   | 'familyLog'
+  | 'seasonalEvents'
   | 'emotes'
   | 'instrument'
   | 'inventory'
@@ -64,6 +65,7 @@ const OVERLAYS: Record<OverlayId, { layer: number; close?: () => void }> = {
   family: { layer: 0, close: () => familyPanelVisible.set(false) },
   familyLog: { layer: 0, close: () => familyStorageLogVisible.set(false) },
   emotes: { layer: 0, close: () => emotePanelVisible.set(false) },
+  seasonalEvents: { layer: 0 },
   instrument: { layer: 1 },
   trade: { layer: 1, close: () => shopSession.set(null) },
   // Closer registered by the window: once a side is locked Escape

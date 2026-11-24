@@ -753,6 +753,12 @@ pub enum ClientMessage {
     DebugResetDungeonProps {
         entrance_id: String,
     },
+    /// Operator only, like the Debug* messages.
+    QuerySeasonalEvents,
+    SetSeasonalEvent {
+        event: String,
+        schedule: crate::seasonal::SeasonSchedule,
+    },
     InteractObject {
         object_type: String,
         object_id: u32,
@@ -2110,6 +2116,18 @@ pub enum ServerMessage {
     ServerAnnouncement {
         message: String,
     },
+    /// Answers `QuerySeasonalEvents` and `SetSeasonalEvent`. `today` is the
+    /// UTC date the schedules are read against.
+    SeasonalEvents {
+        today: crate::seasonal::MonthDay,
+        events: Vec<crate::seasonal::SeasonalEventState>,
+        error: Option<String>,
+    },
+    /// Fixed placements went up or came down in these object regions;
+    /// clients holding one re-read it.
+    ObjectRegionsChanged {
+        regions: Vec<(i32, i32)>,
+    },
     /// Direct operator notice (see doc/IP_NOTICES.md); clients keep it on
     /// screen until the player confirms it.
     OperatorNotice {
@@ -3126,6 +3144,7 @@ impl ServerMessage {
             | Self::ShoutMessage { .. }
             | Self::SystemMessage { .. }
             | Self::OperatorNotice { .. }
+            | Self::SeasonalEvents { .. }
             | Self::SongRequested { .. }
             | Self::PartyChatMessage { .. }
             | Self::FamilyChatMessage { .. }
@@ -3247,6 +3266,7 @@ impl ServerMessage {
             | Self::WeatherSync { .. }
             | Self::RoadSnowCleared { .. }
             | Self::ServerNotice { .. }
+            | Self::ObjectRegionsChanged { .. }
             | Self::ServerAnnouncement { .. } => DeliveryClass::Global,
             Self::WorldUpdate { .. } => DeliveryClass::Control,
         }

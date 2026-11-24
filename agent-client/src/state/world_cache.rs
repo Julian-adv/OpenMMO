@@ -33,6 +33,8 @@ pub struct WorldCache {
     dungeon_revisions: HashMap<String, u64>,
     dungeon_cached: HashSet<String>,
     fetched_furniture_regions: HashSet<(i32, i32)>,
+    /// Bumped when the server says a fetched region changed.
+    furniture_generation: u64,
     /// Static placements used to resolve furniture interactions.
     furniture_placements: HashMap<(i32, i32), Vec<FurniturePlacement>>,
     /// Open `swingDoor` objects by (region x, region z, placement id).
@@ -257,6 +259,7 @@ impl WorldCache {
             dungeon_revisions: HashMap::new(),
             dungeon_cached: HashSet::new(),
             fetched_furniture_regions: HashSet::new(),
+            furniture_generation: 0,
             furniture_placements: HashMap::new(),
             object_doors: HashSet::new(),
             fence_views: HashMap::new(),
@@ -670,6 +673,18 @@ impl WorldCache {
 
     pub fn mark_furniture_fetched(&mut self, region: (i32, i32)) {
         self.fetched_furniture_regions.insert(region);
+    }
+
+    /// `ObjectRegionsChanged`: these regions are fetched again.
+    pub fn forget_furniture_regions(&mut self, regions: &[(i32, i32)]) {
+        for region in regions {
+            self.fetched_furniture_regions.remove(region);
+        }
+        self.furniture_generation += 1;
+    }
+
+    pub fn furniture_generation(&self) -> u64 {
+        self.furniture_generation
     }
 
     /// Register (or replace) a region's solid furniture in the passability cache

@@ -9,6 +9,7 @@ export const PANEL_IDS = [
   'friends',
   'family',
   'familyLog',
+  'seasonalEvents',
   'party',
   'emotes',
   'trade',
