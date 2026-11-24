@@ -1,29 +1,29 @@
 import * as THREE from 'three'
-import { CubeRenderTarget, type WebGPURenderer } from 'three/webgpu'
+import type { WebGPURenderer } from 'three/webgpu'
 import { renderKeepingLights } from '../utils/deferredShaderBuild'
 import { AMBIENT_DAY_INTENSITY } from '../components/game-scene/scene-lighting'
 import {
   hasMetalReflections,
   panorama,
-  releaseReflectionSource,
-  setReflectionRotation,
-  setReflectionSource,
+  reflectionCube,
+  reflectionRotation,
+  reflectiveOnScreen,
 } from './metal-reflection'
 
 /** Objects on this layer (terrain, dungeon floors and walls, lights) are what
  *  polished metal reflects. */
 export const REFLECTION_LAYER = 7
-const SIZE = 64
 const EYE_HEIGHT = 1
 const RECAPTURE_DISTANCE = 3
 /** Recapture when daylight drifts this far (0 night … 1 midday). */
 const DAYLIGHT_STEP = 0.05
+/** While a capture is due but no mirror is on screen, look again this often. */
+const ON_SCREEN_CHECK_MS = 500
 /** The camera looks down at about 35°, so a mirror facing it would show only
  *  sky. Tip the reflection this far so it shows the horizon instead. */
 const TILT = THREE.MathUtils.degToRad(40)
 const right = new THREE.Vector3()
 const tilt = new THREE.Quaternion()
-const tiltEuler = new THREE.Euler()
 const lastRight = new THREE.Vector3()
 const ambientHsl = { h: 0, s: 0, l: 0 }
 
@@ -52,13 +52,14 @@ function sky() {
 /**
  * Captures the surroundings into a small cube map for polished metal to
  * reflect: ground under a painted sky, or the dungeon around the player.
- * Runs only while some reflective material is loaded, and only after the
- * player moves a few metres, goes up or down, or daylight changes; one face
+ * Runs only after the player moves a few metres, goes up or down, or
+ * daylight changes, and only while a polished mesh is on screen; one face
  * per frame.
  */
 export class GroundReflection {
-  private readonly target = new CubeRenderTarget(SIZE)
+  private readonly target = reflectionCube
   private readonly camera = new THREE.CubeCamera(0.1, 80, this.target)
+  private nextCheck = 0
   private readonly last = new THREE.Vector3(Infinity, 0, 0)
   private underground = false
   private tilted: boolean | undefined
@@ -89,6 +90,12 @@ export class GroundReflection {
         Math.abs(this.currentDaylight() - this.daylight) < DAYLIGHT_STEP
       )
         return
+      const now = performance.now()
+      if (now < this.nextCheck) return
+      if (!reflectiveOnScreen(scene, view)) {
+        this.nextCheck = now + ON_SCREEN_CHECK_MS
+        return
+      }
       this.start(renderer, scene, position, underground)
     }
     this.drawFace(renderer, scene)
@@ -100,7 +107,7 @@ export class GroundReflection {
     this.tilted = underground
     lastRight.copy(right)
     tilt.setFromAxisAngle(right, underground ? 0 : TILT)
-    setReflectionRotation(tiltEuler.setFromQuaternion(tilt))
+    reflectionRotation.setFromQuaternion(tilt)
   }
 
   /** 0 at night, about 1 at midday, from the ambient light. */
@@ -169,11 +176,5 @@ export class GroundReflection {
     if (++this.face < 6) return
     this.face = -1
     texture.needsPMREMUpdate = true
-    setReflectionSource(texture)
-  }
-
-  dispose() {
-    releaseReflectionSource(this.target.texture)
-    this.target.dispose()
   }
 }

@@ -1,4 +1,5 @@
 import * as THREE from 'three'
+import { CubeRenderTarget, type WebGPURenderer } from 'three/webgpu'
 
 /** An equirect panorama: a vertical gradient (`stops`, top to bottom) with
  *  soft glows `[x, y, radius, alpha = 1, squash = 1]` on a 256×128 canvas. */
@@ -29,26 +30,7 @@ export function panorama(
   return texture
 }
 
-let fallback: THREE.Texture | undefined
 let stage: THREE.Texture | undefined
-
-/** Bright and warm all round, for scenes that capture nothing. */
-function reflectedWorld() {
-  return (fallback ??= panorama(
-    [
-      [0, '#fffaf0'],
-      [0.5, '#e9dcc2'],
-      [1, '#b59a72'],
-    ],
-    [
-      [60, 30, 26, 0.9],
-      [190, 22, 18, 0.9],
-      [120, 92, 30, 0.9],
-      [230, 84, 20, 0.9],
-    ],
-    '255,255,255'
-  ))
-}
 
 /** The character select stage: dark blue backdrop and floor under a few
  *  overhead spotlights. */
@@ -73,11 +55,19 @@ export function stageReflection() {
   ))
 }
 
-const reflective = new Set<THREE.MeshStandardMaterial>()
-let source: THREE.Texture | null = null
+/** The one cube map every polished material reflects; scenes draw into it. */
+export const reflectionCube = new CubeRenderTarget(64)
+/** Shared by every reflective material, so one write turns them all. */
+export const reflectionRotation = new THREE.Euler()
+let any = false
+const frustum = new THREE.Frustum()
+const frustumMatrix = new THREE.Matrix4()
+const stack: THREE.Object3D[] = []
+const fillCamera = new THREE.CubeCamera(1, 10, reflectionCube)
+const fillScene = new THREE.Scene()
 
 /** Give materials that ask for it in their glTF extras (`envReflect`, the
- *  reflection strength) something to reflect. */
+ *  reflection strength) the shared reflection. */
 export function applyMetalReflections(root: THREE.Object3D) {
   root.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return
@@ -89,35 +79,46 @@ export function applyMetalReflections(root: THREE.Object3D) {
         !(material instanceof THREE.MeshStandardMaterial)
       )
         continue
-      material.envMap = source ?? reflectedWorld()
+      material.envMap = reflectionCube.texture
       material.envMapIntensity = strength
+      material.envMapRotation = reflectionRotation
       material.needsUpdate = true
-      reflective.add(material)
+      // userData survives clones, unlike a set of meshes.
+      o.userData.reflective = true
+      any = true
     }
   })
 }
 
 export function hasMetalReflections() {
-  return reflective.size > 0
+  return any
 }
 
-/** Reflect `texture` (the captured surroundings), or the stock panorama. */
-export function setReflectionSource(texture: THREE.Texture | null) {
-  if (source === texture) return
-  source = texture
-  for (const material of reflective) {
-    material.envMap = texture ?? reflectedWorld()
-    material.needsUpdate = true
+export function reflectiveOnScreen(
+  scene: THREE.Object3D,
+  camera: THREE.Camera
+) {
+  frustumMatrix.multiplyMatrices(
+    camera.projectionMatrix,
+    camera.matrixWorldInverse
+  )
+  frustum.setFromProjectionMatrix(frustumMatrix)
+  stack.length = 0
+  stack.push(scene)
+  while (stack.length) {
+    const o = stack.pop()!
+    if (!o.visible) continue
+    if (o.userData.reflective && frustum.intersectsObject(o)) return true
+    for (const child of o.children) stack.push(child)
   }
+  return false
 }
 
-/** Drop `texture` as the reflection source if it still is one. */
-export function releaseReflectionSource(texture: THREE.Texture) {
-  if (source === texture) setReflectionSource(null)
-}
-
-/** Turn what every reflective material sees, e.g. to tip the horizon
- *  toward a camera looking down. */
-export function setReflectionRotation(rotation: THREE.Euler) {
-  for (const material of reflective) material.envMapRotation.copy(rotation)
+/** Show a still panorama, e.g. a stage that has nothing to capture. */
+export function fillReflection(
+  renderer: WebGPURenderer,
+  texture: THREE.Texture
+) {
+  fillScene.background = texture
+  fillCamera.update(renderer as unknown as THREE.WebGLRenderer, fillScene)
 }

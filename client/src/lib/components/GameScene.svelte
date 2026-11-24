@@ -1371,7 +1371,6 @@
       asyncPipelines?.dispose()
       scene.environment?.dispose()
       scene.environment = null
-      groundReflection.dispose()
       unsubscribeViewportSize()
       unsubscribeCameraReset()
       unsubscribeServerGameTime()
