@@ -13,6 +13,19 @@ missing; edit it between a --plan-only run and the real one.
 import argparse, json, os, pathlib, sys, time, urllib.error, urllib.request
 
 PROMPTS = {
+    "statue_shatter": (
+        "A life-size stone statue smashed by one heavy blow: an immediate sharp "
+        "crack of solid rock splitting, then chunks of stone and gravel tumbling "
+        "onto a stone floor and settling. Close, dry, gritty foley, about one "
+        "second. No voice, no scream, no metal clang, no glass, no wood, no "
+        "magic, no music, no long reverb."
+    ),
+    "amphora_shatter": (
+        "A large fired clay amphora smashed by a blow: one bright hollow "
+        "ceramic crack, then terracotta shards clattering and skittering across "
+        "a stone floor. Close dry pottery foley, under one second. No glass, no "
+        "wood, no metal, no liquid splash, no voice, no music, no reverb."
+    ),
     "petrify": (
         "A living body turning to solid stone in one second: a fast dry crackling "
         "creep of rock crusting over cloth and skin, rising quickly, ending in one "

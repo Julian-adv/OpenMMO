@@ -30,7 +30,6 @@ import {
 import { buildInteriorDoor, type InteriorDoor } from './dungeon-geo-doors'
 import {
   DUNGEON_FLOOR_TEXTURE_IDX,
-  DUNGEON_WALL_TEXTURE_IDX,
   DUNGEON_MASONRY_BACK_TEXTURE_IDX,
   DUNGEON_WALL_WEATHERING_TEXTURE_IDX,
   DUNGEON_WALL_DETAILS_TEXTURE_IDX,
@@ -339,7 +338,7 @@ export function buildDungeonFloorGroup(
 
   // Carved cells outside rooms use the corridor texture; shafts emit no walls.
   const wallTexAt = (x: number, z: number) =>
-    roomAt(x, z) && !temple ? DUNGEON_WALL_TEXTURE_IDX : cave.wallTexture
+    roomAt(x, z) ? cave.roomWallTexture : cave.wallTexture
   // Trim corridor ends where perpendicular room walls cross.
   const trimCorridorRun = (
     tex: number,
@@ -563,7 +562,14 @@ export function buildDungeonFloorGroup(
   // Door arches are static; the layer animates the leaves.
   const archEntries: GeoEntry[] = []
   const doors: InteriorDoor[] = doorSpecs.map((spec) =>
-    buildInteriorDoor(layout.depth, spec, ctx.wallHeight, archEntries)
+    buildInteriorDoor(
+      layout.depth,
+      spec,
+      ctx.wallHeight,
+      archEntries,
+      cave.roomDoorTexture,
+      cave.roomWallTexture
+    )
   )
   // Ground clicks pass through arches; door leaves have their own pickable group.
   if (archEntries.length > 0) {

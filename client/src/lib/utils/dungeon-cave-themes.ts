@@ -1,5 +1,10 @@
 import { DUNGEON_ENTRANCES } from '../data/dungeonDefs'
 import { HOUSING_TEXTURES } from './housing-textures'
+import type { PropSound } from '../managers/sfxManager'
+import {
+  DUNGEON_DOOR_TEXTURE_IDX,
+  DUNGEON_WALL_TEXTURE_IDX,
+} from './dungeon-geo-constants'
 
 function theme(
   id: string,
@@ -9,18 +14,24 @@ function theme(
     treasureChest,
     hallColumn,
     entrance,
+    roomDoor,
+    breakSounds = {},
   }: {
     masonry?: boolean
     propModels?: Record<string, string>
     treasureChest?: string
     hallColumn?: string
     entrance?: { door: string; column: string }
+    /** Rooms walled in this theme's stone, with doors of this texture. */
+    roomDoor?: string
+    breakSounds?: Record<string, PropSound>
   } = {}
 ) {
-  const texture = (surface: string) =>
+  const dungeonTexture = (name: string) =>
     HOUSING_TEXTURES.findIndex(
-      (entry) => entry.mapUrl === `/textures/dungeon/cave-${id}-${surface}.webp`
+      (entry) => entry.mapUrl === `/textures/dungeon/${name}.webp`
     )
+  const texture = (surface: string) => dungeonTexture(`cave-${id}-${surface}`)
   return {
     id,
     /** Laid blocks and tiles rather than bare rock. */
@@ -33,13 +44,17 @@ function theme(
     treasureChest,
     /** Drawn over a hall's rock pillars, which still block as rock. */
     hallColumn,
+    roomWallTexture: roomDoor ? texture('wall') : DUNGEON_WALL_TEXTURE_IDX,
+    roomDoorTexture: roomDoor
+      ? dungeonTexture(roomDoor)
+      : DUNGEON_DOOR_TEXTURE_IDX,
+    /** Heard when a breakable prop of a kind shatters, if not wood. */
+    breakSounds,
     /** A temple-style surface entrance in this theme's stone. */
     entrance: entrance && {
       wallTexture: texture('wall'),
       roofTexture: texture('floor'),
-      doorTexture: HOUSING_TEXTURES.findIndex(
-        (entry) => entry.mapUrl === `/textures/dungeon/${entrance.door}.webp`
-      ),
+      doorTexture: dungeonTexture(entrance.door),
       column: entrance.column,
     },
   }
@@ -57,10 +72,15 @@ export const DUNGEON_TEMPLE_THEME = theme('temple', {
   propModels: {
     barrel: 'temple_amphora',
     barrel_broken: 'temple_amphora_broken',
+    crate: 'garden_petrified_adventurer',
+    crate_pieces: 'garden_petrified_adventurer_rubble',
+    chest_animated: 'garden_stone_chest',
   },
   treasureChest: 'garden_relic_chest',
   hallColumn: 'temple_column',
   entrance: { door: 'temple-door', column: 'temple_column' },
+  roomDoor: 'temple-door',
+  breakSounds: { crate: 'breakStatue', barrel: 'breakPottery' },
 })
 
 const TEMPLES = new Set(

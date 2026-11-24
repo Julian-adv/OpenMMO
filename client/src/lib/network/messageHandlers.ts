@@ -2536,7 +2536,8 @@ export function handleServerMessage(
       )
       // Mined ore is heard through the pickaxe swings, not a crate shattering.
       const mined = dungeonManager.isMinableProp(data.depth, data.prop_id)
-      if (isNew && !selfBreak && !mined) playPropSound('break')
+      if (isNew && !selfBreak && !mined)
+        playPropSound(dungeonManager.breakSound(data.depth, data.prop_id))
       break
     }
 

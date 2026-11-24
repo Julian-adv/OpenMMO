@@ -402,6 +402,23 @@
     "solid": true
   },
   {
+    "id": "garden_stone_chest",
+    "name": "Marble Chest",
+    "model": "objects/garden_stone_chest.glb",
+    "solid": true
+  },
+  {
+    "id": "garden_petrified_adventurer",
+    "name": "Petrified Adventurer",
+    "model": "objects/garden_petrified_adventurer.glb",
+    "solid": true
+  },
+  {
+    "id": "garden_petrified_adventurer_rubble",
+    "name": "Shattered Statue",
+    "model": "objects/garden_petrified_adventurer_rubble.glb"
+  },
+  {
     "id": "health_potion",
     "name": "Greater Healing Potion",
     "model": "objects/greater_healing_potion.glb"

@@ -19,9 +19,7 @@ import {
 import {
   WALL_THICKNESS,
   WALL_HALF_THICKNESS,
-  DUNGEON_DOOR_TEXTURE_IDX,
   DUNGEON_LOCKED_DOOR_TEXTURE_IDX,
-  DUNGEON_WALL_TEXTURE_IDX,
   WALL_N,
   WALL_E,
   WALL_S,
@@ -366,7 +364,8 @@ function addInteriorDoorArch(
   lat0: number,
   W: number,
   wallLine: number,
-  wallTop: number
+  wallTop: number,
+  textureIndex: number
 ) {
   // Flat top + sides, then the shared dome underside.
   const shape = new THREE.Shape()
@@ -383,7 +382,7 @@ function addInteriorDoorArch(
     lat0,
     wallLine,
     WALL_THICKNESS,
-    DUNGEON_WALL_TEXTURE_IDX
+    textureIndex
   )
 }
 
@@ -417,11 +416,11 @@ export function buildInteriorDoor(
   depth: number,
   spec: InteriorDoorSpec,
   wallTop: number,
-  archEntries: GeoEntry[]
+  archEntries: GeoEntry[],
+  door: number,
+  arch: number
 ): InteriorDoor {
-  const textureIndex = spec.locked
-    ? DUNGEON_LOCKED_DOOR_TEXTURE_IDX
-    : DUNGEON_DOOR_TEXTURE_IDX
+  const textureIndex = spec.locked ? DUNGEON_LOCKED_DOOR_TEXTURE_IDX : door
   const mat = getHousingMaterial(textureIndex)
   const { lat0, len, wallLine, doorId } = spec
   const halfW = len / 2
@@ -436,7 +435,7 @@ export function buildInteriorDoor(
   const leafSpecs = doorLeafSpecs(spansX, lat0, lat0 + len, wallPlane)
   const leaves = leafSpecs.map((s) => makeDoorLeaf(s, halfW, outX, outZ, mat))
   tagDoorLeaves(leaves, depth, doorId)
-  addInteriorDoorArch(archEntries, spansX, lat0, len, wallPlane, wallTop)
+  addInteriorDoorArch(archEntries, spansX, lat0, len, wallPlane, wallTop, arch)
   return {
     depth,
     doorId,

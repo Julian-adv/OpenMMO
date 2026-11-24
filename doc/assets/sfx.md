@@ -373,6 +373,13 @@ Both were generated and processed exactly like the monster cries above.
   스윙 시작 600 ms 뒤(`player_anim_timing.csv`의 `mining_swing_impact`, 빌린 `great_sword_slash`의 내려찍는 순간)에 재생.
   원본과 처리 기록은 `assets/sfx/pickaxe-ore-2026-11-05/`의 `pickaxe-ore_chunk-take2_2026-11-05.mp3` 및 같은 이름의 `.json`에 보관.
 
+- statue-shatter.ogg, amphora-shatter.ogg — 돌의 정원에서 석화된 모험가 석상(상자 자리)과 항아리(통 자리)가 부서지는 소리. 다른 던전은 `crate-break.ogg` 그대로다(`DUNGEON_TEMPLE_THEME.breakSounds`).
+  [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-24 직접 생성. Starter 유료 플랜,
+  [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.
+  프롬프트 `statue_shatter`·`amphora_shatter`(1.2초, `prompt_influence=0.4`) 각 3개 중 사용자가 둘 다 take 1을 골랐다.
+  앞 무음 −40 dB 제거 후 석상은 0.55초에서 자르고 120 ms 페이드(자동 컷은 굴러떨어지는 소리를 잘랐다), 항아리는 −38 dB 자동 컷 0.7초에 60 ms 페이드. 모노, 피크 −3 dB, 44.1 kHz OGG Vorbis.
+  원본과 처리 기록은 `assets/sfx/garden-shatter-2026-11-24/`.
+
 - petrify.ogg — 플레이어가 돌로 굳는 순간의 소리(떠도는 눈, 뱀 시녀, 광산 십장의 석화와 응시로 죽어 석상이 될 때).
   [ElevenLabs Sound Effects](https://elevenlabs.io/sound-effects) API로 2026-11-22 직접 생성. Starter 유료 플랜,
   [유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform) 적용.

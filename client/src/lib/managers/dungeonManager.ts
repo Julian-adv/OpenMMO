@@ -11,7 +11,8 @@
  * player-physics can consult it without prop drilling.
  */
 import { get } from 'svelte/store'
-import { preloadDungeonSounds } from './sfxManager'
+import { preloadDungeonSounds, type PropSound } from './sfxManager'
+import { dungeonCaveTheme } from '../utils/dungeon-cave-themes'
 import {
   dungeon_layout,
   dungeon_set_layout_variants,
@@ -732,9 +733,20 @@ class DungeonManager {
     return this.openedProps.get(depth) ?? EMPTY_BROKEN
   }
 
+  private propKind(depth: number, propId: number): string | undefined {
+    return this.layouts[depth - 1]?.props[propId]?.kind
+  }
+
   isMinableProp(depth: number, propId: number): boolean {
-    const kind = this.layouts[depth - 1]?.props[propId]?.kind
+    const kind = this.propKind(depth, propId)
     return kind !== undefined && MINABLE_PROP_KINDS.has(kind)
+  }
+
+  /** The sound of prop `propId` shattering, in this floor's theme. */
+  breakSound(depth: number, propId: number): PropSound {
+    const kind = this.propKind(depth, propId)
+    const sounds = dungeonCaveTheme(this.dungeonId ?? '', depth).breakSounds
+    return (kind && sounds[kind]) || 'break'
   }
 
   /** Cells rail cart `propId` stands pushed along its rail. */
