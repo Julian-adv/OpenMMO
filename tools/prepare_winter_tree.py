@@ -21,8 +21,10 @@ import bmesh
 import bpy
 from mathutils import Matrix, Vector
 
-# Height before the star is enlarged.
+# Height the tree is dressed at, before the star is enlarged. Every size below is for this tree.
 HEIGHT_M = 5.0
+# The dressed tree, 5.1 m with its star, is scaled by this to stand 6.2 m.
+SIZE = 6.2 / 5.1
 KEEP = ("Tree_lod1", "garland_lod1", "lights_lod1", "ornaments_lod1")
 # The source's pot marks where the trunk stands.
 POT = "base_lod1"
@@ -414,6 +416,12 @@ for image in bpy.data.images:
     if image.size[0] > SMALL_TEXTURE and image.name != "Image_0":
         image.scale(SMALL_TEXTURE, SMALL_TEXTURE)
 
+for obj in (tree, *painted):
+    obj.scale = (SIZE, SIZE, SIZE)
+bpy.context.view_layer.update()
+lights = [[round(c * SIZE, 3) for c in p] for p in lights]
+star = [round(c * SIZE, 3) for c in star]
+
 bpy.ops.export_scene.gltf(
     filepath=out,
     export_format="GLB",
@@ -461,4 +469,4 @@ print("RESULT painted", [
     for m in document["meshes"] for p in m["primitives"] if "COLOR_0" in p["attributes"]])
 if lights_out:
     with open(lights_out, "w") as handle:
-        json.dump({"bulbs": lights, "star": star}, handle)
+        json.dump({"bulbs": lights, "star": star, "scale": round(SIZE, 4)}, handle)

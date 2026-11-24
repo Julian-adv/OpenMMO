@@ -37,26 +37,28 @@ type N = any
  *  tools/prepare_winter_tree.py. */
 export const WINTER_TREE_LIGHTS = spots.bulbs as Point[]
 export const WINTER_TREE_STAR = spots.star as Point
+/** The model against the 5 m tree the sizes below were tuned on. */
+const SIZE = spots.scale
 /** Height above the tree's base of the warm light it throws at night. */
-export const WINTER_TREE_LIGHT_HEIGHT = 2.4
+export const WINTER_TREE_LIGHT_HEIGHT = 2.4 * SIZE
 
 const BULB_COLORS = ['#ffc46b', '#ff5d4a', '#ffc46b', '#58d37a', '#5aa2ff']
-const BULB_RADIUS = 0.13
+const BULB_RADIUS = 0.13 * SIZE
 const BULB_BRIGHTNESS = 1.3
 const STAR_COLOR = '#ffd27a'
-const STAR_HALO_RADIUS = 0.42
-const STAR_FLARE_SIZE = 1.15
+const STAR_HALO_RADIUS = 0.42 * SIZE
+const STAR_FLARE_SIZE = 1.15 * SIZE
 const GLINT_COUNT = 18
-const GLINT_SIZE = 0.42
+const GLINT_SIZE = 0.42 * SIZE
 const MOTE_COUNT = 28
 const MOTE_COLOR = '#ffd9a0'
 const DAY_GLOW = 0.15
 /** Below this are the skirt and the presents, which stay unlit. */
-const DECOR_FLOOR = 0.75
+const DECOR_FLOOR = 0.75 * SIZE
 const GOLDEN_ANGLE = 2.399963229728653
 const TAU = Math.PI * 2
 
-const crownTop = WINTER_TREE_STAR[1] - 0.3
+const crownTop = WINTER_TREE_STAR[1] - 0.3 * SIZE
 
 let glow: ReturnType<typeof createGlow> | null = null
 
@@ -120,7 +122,7 @@ function buildBulbs() {
     geometry,
     'aBand',
     1,
-    WINTER_TREE_LIGHTS.map(([x, y, z]) => y * 1.4 + Math.atan2(z, x))
+    WINTER_TREE_LIGHTS.map(([x, y, z]) => (y / SIZE) * 1.4 + Math.atan2(z, x))
   )
   instanced(
     geometry,
@@ -171,7 +173,7 @@ function buildStar() {
 
   const material = additive(new SpriteNodeMaterial())
   material.color.set(STAR_COLOR)
-  material.positionNode = towardCamera(vec3(0), 0.4)
+  material.positionNode = towardCamera(vec3(0), 0.4 * SIZE)
   material.rotationNode = sin(time.mul(0.27)).mul(0.4)
   material.opacityNode = glintShape(900)
     .mul(sin(time.mul(1.7)).mul(0.1).add(0.45))
@@ -217,7 +219,7 @@ function buildGlints() {
     turn
       .fromArray(WINTER_TREE_LIGHTS[i * stride])
       .applyAxisAngle(THREE.Object3D.DEFAULT_UP, 0.4)
-    spots.push(turn.x, turn.y + 0.15, turn.z)
+    spots.push(turn.x, turn.y + 0.15 * SIZE, turn.z)
     beat.push(0.6 + ((i * 5) % 9) * 0.1, (i * 1.7) % TAU)
   }
   instanced(field.geometry, 'aSpot', 3, spots)
@@ -225,7 +227,7 @@ function buildGlints() {
 
   const pace = attribute('aBeat', 'vec2')
   const flash = max(sin(time.mul(pace.x).add(pace.y)), 0).pow(24)
-  material.positionNode = towardCamera(attribute('aSpot', 'vec3'), 0.12)
+  material.positionNode = towardCamera(attribute('aSpot', 'vec3'), 0.12 * SIZE)
   material.scaleNode = flash.mul(0.5).add(0.5).mul(GLINT_SIZE)
   material.rotationNode = pace.y
   material.opacityNode = glintShape(1400)
@@ -243,7 +245,7 @@ function buildMotes() {
   for (let i = 0; i < MOTE_COUNT; i++)
     orbit.push(
       i * GOLDEN_ANGLE,
-      0.7 + ((i * 0.618034) % 1) * 1.3,
+      (0.7 + ((i * 0.618034) % 1) * 1.3) * SIZE,
       0.035 + ((i * 3) % 7) * 0.006,
       (i * 0.381966) % 1
     )
@@ -252,16 +254,18 @@ function buildMotes() {
   const seed = attribute('aOrbit', 'vec4')
   const fall = fract(time.mul(seed.z).add(seed.w))
   const angle = seed.x.add(time.mul(0.12))
-  const radius = seed.y.add(sin(time.mul(0.6).add(seed.w.mul(TAU))).mul(0.12))
+  const radius = seed.y.add(
+    sin(time.mul(0.6).add(seed.w.mul(TAU))).mul(0.12 * SIZE)
+  )
   material.positionNode = vec3(
     cos(angle).mul(radius),
     fall
       .oneMinus()
-      .mul(crownTop + 0.4)
-      .add(0.3),
+      .mul(crownTop + 0.4 * SIZE)
+      .add(0.3 * SIZE),
     sin(angle).mul(radius)
   )
-  material.scaleNode = seed.w.mul(0.05).add(0.08)
+  material.scaleNode = seed.w.mul(0.05).add(0.08).mul(SIZE)
   material.opacityNode = exp(length(uv().sub(0.5)).pow(2).mul(-22))
     .mul(sin(fall.mul(Math.PI)))
     .mul(sin(time.mul(2.3).add(seed.x)).mul(0.3).add(0.7))
@@ -280,8 +284,8 @@ export function buildWinterTreeGlow(): THREE.Group {
 /** Lets the star and the ornaments keep their colour in the dark. */
 function lightDecorations(model: THREE.Object3D) {
   const height = positionLocal.y
-  const star = smoothstep(crownTop - 0.15, crownTop + 0.1, height)
-  const shine = smoothstep(DECOR_FLOOR, DECOR_FLOOR + 0.3, height)
+  const star = smoothstep(crownTop - 0.15 * SIZE, crownTop + 0.1 * SIZE, height)
+  const shine = smoothstep(DECOR_FLOOR, DECOR_FLOOR + 0.3 * SIZE, height)
     .mul(star.mul(0.35).add(0.3))
     .mul(nightGlow())
   model.traverse((o) => {

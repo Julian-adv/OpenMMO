@@ -7,16 +7,16 @@ import {
 } from './winter-tree'
 
 describe('winter tree glow', () => {
-  it('keeps every bulb on the boughs of the 5 m tree, under the star', () => {
+  it('keeps every bulb on the boughs of the 6.2 m tree, under the star', () => {
     expect(WINTER_TREE_LIGHTS.length).toBeGreaterThan(40)
     const [starX, starY, starZ] = WINTER_TREE_STAR
     expect(Math.hypot(starX, starZ)).toBeLessThan(0.2)
-    expect(starY).toBeGreaterThan(4.5)
-    expect(starY).toBeLessThan(5)
+    expect(starY).toBeGreaterThan(5.4)
+    expect(starY).toBeLessThan(6.2)
     for (const [x, y, z] of WINTER_TREE_LIGHTS) {
       expect(y).toBeGreaterThan(0.6)
       expect(y).toBeLessThan(starY)
-      expect(Math.hypot(x, z)).toBeLessThan(1.6)
+      expect(Math.hypot(x, z)).toBeLessThan(1.9)
     }
   })
 

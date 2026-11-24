@@ -58,7 +58,7 @@
 
 ## 겨울 나무 (`winter_tree`)
 
-- 모델은 `client/public/models/objects/winter_tree.glb`. 높이 5.1m, 가지가 땅까지 내려오는 전나무에 금빛 장식 줄·구슬·별이 달리고
+- 모델은 `client/public/models/objects/winter_tree.glb`. 높이 6.2m, 가지가 땅까지 내려오는 전나무에 금빛 장식 줄·구슬·별이 달리고
   밑에는 붉은 치마 천 위로 선물 상자가 쌓였다.
   출처와 가공은 [props.md](assets/props.md)에 있다 (David Montaña, CC BY 4.0).
 - 카탈로그의 `glow: "winterTree"`가 나무를 꾸민다 (`client/src/lib/utils/winter-tree.ts`).
@@ -69,7 +69,7 @@
   - 밤에는 나무가 주변 바닥과 캐릭터에 따뜻한 빛을 던진다. 지상에서 쉬는 수정 빛 풀의 조명을 빌려 써서
     장면의 조명 수는 늘지 않는다 (`GameScenePlayersLayer.svelte`의 `TREE_GLOW`). 횃불 효과를 끈 그래픽 설정에서는 꺼진다.
   - 모두 셰이더 시간으로 움직여서 프레임마다 도는 스크립트가 없다. 드로콜은 5회 늘고, 밤에 진하고 낮에 옅다.
-- 선물 더미를 덮는 2.8m 사각형이 통행을 막는다. 치마 천 가장자리는 밟고 지나간다.
+- 선물 더미를 덮는 3.4m 사각형이 통행을 막는다. 치마 천 가장자리는 밟고 지나간다.
 
 ## 장식 추가
 
