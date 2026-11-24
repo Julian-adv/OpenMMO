@@ -11,6 +11,12 @@
 - 정리(2026-10-25): 미리보기 PNG 3개·상세 검증 보고서 3개·재생성 가능한 중간 4K GLB·Blender 백업을 삭제했다. 최종 모델·아이콘, 원화·Tripo 원본·현재 Blender 파일·원본 텍스처와 간결한 검증·출처 기록은 보존했다.
 - 재현: `blender -b --python-exit-code 1 -P assets/items/rift_ring/tripo_v1/prepare.py`로 4K 원본과 임시 GLB를 생성한다. `tools/blender-scripts/export_item_asset.py`에 `--source assets/items/rift_ring/tripo_v1/rift_ring.glb --name rift_ring --size 0.15 --category accessory --icon-rotation 28 -8 -102`를 주어 바닥 모델·아이콘·Blender 작업 파일을 출력하고, `tools/optimize-modular-part.mjs`에 `--ktx2 --size=512`를 주어 원본 GLB에서 런타임 모델을 압축한다.
 
+## Ring of Teleport Control — 순간이동 제어 반지
+
+- 원화: [concept_v1](../../assets/items/ring_of_teleport_control/concept_v1/concept.png). 돌이 된 발굴단원이 끼고 있던 반지. 낡은 은 고리, 네 발로 물린 월장석 속 옅은 보라 소용돌이, 한 바퀴 돌아 제자리로 오는 길 무늬. OpenAI Codex ImageGen, ChatGPT Pro 20x, 2026-11-24(프롬프트·생성 기록은 같은 폴더).
+- 3D: 사용자가 Tripo 웹에서 원화 한 장으로 생성(`tripo_v1/source/model.glb`), 3,068삼각형.
+- 균열의 반지와 같은 절차: `tripo_v1/prepare.py`(고리 면을 바닥으로 눕히고 긴 변 0.15m, 바닥 중심 원점) → `export_item_asset.py --size 0.15 --category accessory --icon-rotation -50 0 160 --exposure -0.6`(아이콘은 월장석이 보이게) → `optimize-modular-part.mjs --ktx2 --size=512`로 런타임 모델 `client/public/models/accessory/ring_of_teleport_control.glb`(848,748바이트).
+
 ## Blindfold — 눈가리개
 
 - 원화: `assets/items/blindfold/concept_v1`(남성)·`concept_female_v1`(여성). 우리 몸체를 민머리 파란 마네킹으로 렌더한 앞·왼쪽·뒤 그림 위에 숯색 리넨 띠를 그렸다. OpenAI Codex ImageGen(`codex exec -i`), ChatGPT Pro 20x, 2026-11-24. 프롬프트·해시는 각 폴더의 `generation.json`.
