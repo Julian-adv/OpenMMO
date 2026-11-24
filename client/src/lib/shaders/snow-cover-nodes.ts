@@ -197,7 +197,7 @@ export function applySnowCover(
   return mask
 }
 
-const OBJECT_SNOW = vec3(0.86, 0.88, 0.92)
+export const OBJECT_SNOW = vec3(0.86, 0.88, 0.92)
 
 /** copy() skips the node slots a plain material lacks, so recopying after the
  *  source changes keeps the snow. It also skips alphaTest, a Material setter. */

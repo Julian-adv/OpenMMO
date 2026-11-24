@@ -16,6 +16,7 @@ import {
   mix,
   modelWorldMatrixInverse,
   normalView,
+  normalWorld,
   positionLocal,
   sin,
   smoothstep,
@@ -29,6 +30,7 @@ import {
 } from 'three/tsl'
 import spots from '../data/winterTreeLights.json'
 import { serverGameTime } from '../stores/timeStore'
+import { OBJECT_SNOW, perlin, snowCover } from '../shaders/snow-cover-nodes'
 
 type Point = [number, number, number]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -60,6 +62,8 @@ const DAY_GLOW = 0.15
 const DAY_FOLIAGE_TINT = [0.5, 0.72, 1.25]
 const DAY_FOLIAGE_CUTOFF = 0.2
 const DAY_CORE_SHADE = 0.5
+/** Share of the lying snow the boughs hold. */
+const BOUGH_SNOW = 0.55
 /** The solid cone inside the boughs in `winter_tree.glb`. */
 const CORE = 'winter_tree_core'
 /** Below this are the skirt and the presents, which stay unlit. */
@@ -292,8 +296,9 @@ export function buildWinterTreeGlow(): THREE.Group {
   return group
 }
 
-/** The boughs as built at night, deeper and fuller by day. */
-function dayFoliage(src: THREE.MeshStandardMaterial) {
+/** The boughs as built at night, deeper and fuller by day, dusted with
+ *  whatever snow lies around. */
+function boughMaterial(src: THREE.MeshStandardMaterial) {
   const material = new MeshStandardNodeMaterial({
     name: src.name,
     normalMap: src.normalMap,
@@ -306,13 +311,27 @@ function dayFoliage(src: THREE.MeshStandardMaterial) {
   const day = night().oneMinus()
   const leaf = texture(src.map!)
   const tint = mix(vec3(1), vec3(...DAY_FOLIAGE_TINT), day)
-  material.colorNode = vec4(leaf.rgb.mul(tint), leaf.a)
+  // Even over the tree: the ground's snow patches are metres wide and would
+  // whiten one side of it.
+  const grain = perlin(
+    positionLocal.xz.add(positionLocal.y.mul(0.6)),
+    2.2,
+    0.37,
+    11.3
+  )
+  const snow = snowCover
+    .mul(smoothstep(0.25, 0.7, normalWorld.y))
+    .mul(smoothstep(0.3, 0.6, grain).mul(0.65).add(0.35))
+    .mul(BOUGH_SNOW)
+    .clamp()
+  material.colorNode = vec4(mix(leaf.rgb.mul(tint), OBJECT_SNOW, snow), leaf.a)
+  material.roughnessNode = mix(float(src.roughness), float(0.85), snow)
   material.alphaTestNode = mix(src.alphaTest, DAY_FOLIAGE_CUTOFF, day)
   return material
 }
 
 /** The dark core behind the boughs, sunk further into shadow by day. */
-function dayCore(src: THREE.MeshStandardMaterial) {
+function coreMaterial(src: THREE.MeshStandardMaterial) {
   const material = new MeshStandardNodeMaterial({
     name: src.name,
     roughness: src.roughness,
@@ -336,11 +355,11 @@ function lightDecorations(model: THREE.Object3D) {
     const src = o.material as THREE.MeshStandardMaterial
     // The cut-outs are the boughs and the sprigs wound round them.
     if (src.alphaTest > 0 && src.map) {
-      o.material = dayFoliage(src)
+      o.material = boughMaterial(src)
       return
     }
     if (src.name === CORE) {
-      o.material = dayCore(src)
+      o.material = coreMaterial(src)
       return
     }
     // Textured ornaments and the painted baubles.
