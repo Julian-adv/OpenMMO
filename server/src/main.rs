@@ -1069,6 +1069,7 @@ async fn main() -> ExitCode {
                 metrics::record_hourly_metrics(&metrics_game, Arc::clone(&metrics_auth)),
             )
             .await;
+            guard_tick("seasonal props", metrics_game.refresh_seasonal_props()).await;
             let remaining = metrics::SAMPLE_INTERVAL_SECONDS
                 - auth::unix_now().rem_euclid(metrics::SAMPLE_INTERVAL_SECONDS);
             tokio::select! {

@@ -463,6 +463,19 @@
     }
   },
   {
+    "id": "winter_tree",
+    "name": "Winter Tree",
+    "model": "objects/winter_tree.glb",
+    "glow": "winterTree",
+    "solid": true,
+    "footprint": {
+      "minX": -1.4,
+      "maxX": 1.4,
+      "minZ": -1.4,
+      "maxZ": 1.4
+    }
+  },
+  {
     "id": "mannequin",
     "name": "Mannequin",
     "procedural": "mannequin",

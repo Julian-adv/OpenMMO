@@ -253,6 +253,7 @@ impl super::GameState {
             self.passability_add_house(house).await;
         }
         self.load_field_boss_sites().await;
+        self.load_seasonal_props().await;
         let regions = self.load_region_furniture(terrain_io).await?;
         let mut dungeons = 0usize;
         for def in self.dungeon_defs.all() {
@@ -279,8 +280,8 @@ impl super::GameState {
     async fn load_region_furniture(&self, terrain_io: &TerrainIO) -> std::io::Result<usize> {
         let mut count = 0;
         let mut regions = terrain_io.list_object_regions().await?;
-        // Field-boss sites need no region file of their own.
-        for region in self.field_boss_regions() {
+        // Fixed placements need no region file of their own.
+        for region in self.fixed_regions() {
             if !regions.contains(&region) {
                 regions.push(region);
             }
@@ -433,8 +434,8 @@ impl super::GameState {
         rz: i32,
         file_placements: &[FurniturePlacement],
     ) -> bool {
-        // The region file plus this region's field-boss sites, which no file holds.
-        let sites = self.field_boss_placements_in(rx, rz);
+        // The region file plus this region's fixed placements, which no file holds.
+        let sites = self.fixed_placements_in(rx, rz);
         let placements: Cow<[FurniturePlacement]> = if sites.is_empty() {
             Cow::Borrowed(file_placements)
         } else {

@@ -11,7 +11,7 @@ use sha2::Digest;
 use std::sync::Arc;
 use tracing::{error, warn};
 
-use onlinerpg_shared::field_boss::is_field_boss_placement;
+use onlinerpg_shared::furniture::is_fixed_placement;
 use onlinerpg_terrain::coords;
 
 use super::io::TerrainIO;
@@ -583,9 +583,9 @@ async fn get_object(
         error!("Failed to read object ({}, {}): {}", rx, rz, e);
         StatusCode::INTERNAL_SERVER_ERROR
     })?;
-    let sites = state.game_state.field_boss_placements_in(rx, rz);
+    let sites = state.game_state.fixed_placements_in(rx, rz);
     if !sites.is_empty() {
-        // `fixed`: placed from data-src/field_bosses.csv; the editor leaves them.
+        // `fixed`: placed from a data-src table; the editor leaves them.
         let placements = data
             .as_object_mut()
             .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?
@@ -612,7 +612,7 @@ async fn put_object(
         list.retain(|p| {
             !p.get("id")
                 .and_then(|id| u32::try_from(id.as_u64()?).ok())
-                .is_some_and(is_field_boss_placement)
+                .is_some_and(is_fixed_placement)
         });
     }
     let placements = GameState::parse_region_furniture(&body).map_err(|e| {

@@ -43,6 +43,7 @@ pub mod pricing;
 pub mod reach;
 pub mod salon;
 pub mod schedule;
+pub mod seasonal;
 pub mod shelter;
 pub mod skills;
 pub mod stall;

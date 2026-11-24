@@ -1,0 +1,315 @@
+import * as THREE from 'three'
+import {
+  MeshBasicNodeMaterial,
+  MeshStandardNodeMaterial,
+  SpriteNodeMaterial,
+} from 'three/webgpu'
+import {
+  attribute,
+  cameraPosition,
+  cos,
+  exp,
+  float,
+  fract,
+  length,
+  max,
+  modelWorldMatrixInverse,
+  normalView,
+  positionLocal,
+  sin,
+  smoothstep,
+  texture,
+  time,
+  uniform,
+  uv,
+  vertexColor,
+  vec3,
+  vec4,
+} from 'three/tsl'
+import spots from '../data/winterTreeLights.json'
+import { serverGameTime } from '../stores/timeStore'
+
+type Point = [number, number, number]
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type N = any
+
+/** Bulb centres and the star of `winter_tree.glb`, model-local, from
+ *  tools/prepare_winter_tree.py. */
+export const WINTER_TREE_LIGHTS = spots.bulbs as Point[]
+export const WINTER_TREE_STAR = spots.star as Point
+/** Height above the tree's base of the warm light it throws at night. */
+export const WINTER_TREE_LIGHT_HEIGHT = 2.4
+
+const BULB_COLORS = ['#ffc46b', '#ff5d4a', '#ffc46b', '#58d37a', '#5aa2ff']
+const BULB_RADIUS = 0.13
+const BULB_BRIGHTNESS = 1.3
+const STAR_COLOR = '#ffd27a'
+const STAR_HALO_RADIUS = 0.42
+const STAR_FLARE_SIZE = 1.15
+const GLINT_COUNT = 18
+const GLINT_SIZE = 0.42
+const MOTE_COUNT = 28
+const MOTE_COLOR = '#ffd9a0'
+const DAY_GLOW = 0.15
+/** Below this are the skirt and the presents, which stay unlit. */
+const DECOR_FLOOR = 0.75
+const GOLDEN_ANGLE = 2.399963229728653
+const TAU = Math.PI * 2
+
+const crownTop = WINTER_TREE_STAR[1] - 0.3
+
+let glow: ReturnType<typeof createGlow> | null = null
+
+function createGlow() {
+  const strength = uniform(DAY_GLOW)
+  serverGameTime.subscribe((now) => {
+    strength.value = now?.isNight ? 1 : DAY_GLOW
+  })
+  return strength
+}
+
+/** 1 at night and faint by day, shared by every tree. */
+const nightGlow = () => (glow ??= createGlow())
+
+function additive<T extends THREE.Material>(material: T): T {
+  material.transparent = true
+  material.depthWrite = false
+  material.blending = THREE.AdditiveBlending
+  material.toneMapped = false
+  return material
+}
+
+/** A glow that is brightest where its sphere faces the camera, gone at the rim. */
+function haloMaterial(strength: N, falloff: number) {
+  const material = additive(new MeshBasicNodeMaterial())
+  material.opacityNode = normalView.z.abs().pow(falloff).mul(strength)
+  return material
+}
+
+/** `point` moved `distance` towards the camera, clear of the mesh it sits on. */
+function towardCamera(point: N, distance: number) {
+  const eye = modelWorldMatrixInverse.mul(vec4(cameraPosition, 1)).xyz
+  return point.add(eye.sub(point).normalize().mul(distance))
+}
+
+/** A soft core crossed by two thin rays, over a sprite quad. */
+function glintShape(sharpness: number) {
+  const d = uv().sub(0.5)
+  const reach = length(d).mul(2).oneMinus().clamp().pow(2)
+  const rays = float(1).div(d.x.abs().mul(d.y.abs()).mul(sharpness).add(1))
+  return reach.mul(rays).add(exp(length(d).pow(2).mul(-70)))
+}
+
+function instanced(
+  geometry: THREE.BufferGeometry,
+  name: string,
+  size: number,
+  data: number[]
+) {
+  geometry.setAttribute(
+    name,
+    new THREE.InstancedBufferAttribute(new Float32Array(data), size)
+  )
+}
+
+/** Bulb halos: a band of light climbs the tree in a spiral over a faint flicker. */
+function buildBulbs() {
+  const count = WINTER_TREE_LIGHTS.length
+  const geometry = new THREE.SphereGeometry(BULB_RADIUS, 8, 5)
+  instanced(
+    geometry,
+    'aBand',
+    1,
+    WINTER_TREE_LIGHTS.map(([x, y, z]) => y * 1.4 + Math.atan2(z, x))
+  )
+  instanced(
+    geometry,
+    'aPhase',
+    1,
+    WINTER_TREE_LIGHTS.map((_, i) => (i * GOLDEN_ANGLE) % TAU)
+  )
+  const band = sin(time.mul(0.9).sub(attribute('aBand', 'float')))
+    .mul(0.5)
+    .add(0.5)
+  const flicker = sin(time.mul(3.1).add(attribute('aPhase', 'float')))
+    .mul(0.5)
+    .add(0.5)
+  const strength = band.pow(2).mul(0.6).add(flicker.mul(0.12)).add(0.28)
+
+  const bulbs = new THREE.InstancedMesh(
+    geometry,
+    haloMaterial(strength.mul(nightGlow()), 4),
+    count
+  )
+  bulbs.name = 'winter-tree-bulbs'
+  const matrix = new THREE.Matrix4()
+  const tint = new THREE.Color()
+  WINTER_TREE_LIGHTS.forEach(([x, y, z], i) => {
+    bulbs.setMatrixAt(i, matrix.makeTranslation(x, y, z))
+    bulbs.setColorAt(
+      i,
+      tint
+        .set(BULB_COLORS[i % BULB_COLORS.length])
+        .multiplyScalar(BULB_BRIGHTNESS)
+    )
+  })
+  return bulbs
+}
+
+/** The star's breathing halo and its slowly rocking flare. */
+function buildStar() {
+  const star = new THREE.Group()
+  star.name = 'winter-tree-star'
+  star.position.fromArray(WINTER_TREE_STAR)
+  const breath = sin(time.mul(1.1)).mul(0.12).add(0.88)
+
+  const halo = new THREE.Mesh(
+    new THREE.SphereGeometry(STAR_HALO_RADIUS, 16, 10),
+    haloMaterial(breath.mul(0.35).mul(nightGlow()), 5)
+  )
+  ;(halo.material as MeshBasicNodeMaterial).color.set(STAR_COLOR)
+
+  const material = additive(new SpriteNodeMaterial())
+  material.color.set(STAR_COLOR)
+  material.positionNode = towardCamera(vec3(0), 0.4)
+  material.rotationNode = sin(time.mul(0.27)).mul(0.4)
+  material.opacityNode = glintShape(900)
+    .mul(sin(time.mul(1.7)).mul(0.1).add(0.45))
+    .mul(nightGlow())
+  const flare = new THREE.Mesh(
+    new THREE.PlaneGeometry(STAR_FLARE_SIZE, STAR_FLARE_SIZE),
+    material
+  )
+  star.add(halo, flare)
+  return star
+}
+
+/** A sprite per instance; `aSpot`-style attributes place them in the shader, so
+ *  the bounds are those of the whole tree. */
+function spriteField(
+  count: number,
+  material: SpriteNodeMaterial,
+  name: string
+) {
+  const field = new THREE.InstancedMesh(
+    new THREE.PlaneGeometry(1, 1),
+    material,
+    count
+  )
+  field.name = name
+  field.boundingSphere = new THREE.Sphere(
+    new THREE.Vector3(0, crownTop / 2, 0),
+    crownTop
+  )
+  return field
+}
+
+/** Brief four-point sparkles on the boughs, each a little off a bulb. */
+function buildGlints() {
+  const material = additive(new SpriteNodeMaterial())
+  material.color.set('#fff4d6')
+  const field = spriteField(GLINT_COUNT, material, 'winter-tree-glints')
+  const spots: number[] = []
+  const beat: number[] = []
+  const stride = Math.floor(WINTER_TREE_LIGHTS.length / GLINT_COUNT)
+  const turn = new THREE.Vector3()
+  for (let i = 0; i < GLINT_COUNT; i++) {
+    turn
+      .fromArray(WINTER_TREE_LIGHTS[i * stride])
+      .applyAxisAngle(THREE.Object3D.DEFAULT_UP, 0.4)
+    spots.push(turn.x, turn.y + 0.15, turn.z)
+    beat.push(0.6 + ((i * 5) % 9) * 0.1, (i * 1.7) % TAU)
+  }
+  instanced(field.geometry, 'aSpot', 3, spots)
+  instanced(field.geometry, 'aBeat', 2, beat)
+
+  const pace = attribute('aBeat', 'vec2')
+  const flash = max(sin(time.mul(pace.x).add(pace.y)), 0).pow(24)
+  material.positionNode = towardCamera(attribute('aSpot', 'vec3'), 0.12)
+  material.scaleNode = flash.mul(0.5).add(0.5).mul(GLINT_SIZE)
+  material.rotationNode = pace.y
+  material.opacityNode = glintShape(1400)
+    .mul(flash)
+    .mul(nightGlow().mul(0.5).add(0.5))
+  return field
+}
+
+/** Gold dust sinking slowly around the tree. */
+function buildMotes() {
+  const material = additive(new SpriteNodeMaterial())
+  material.color.set(MOTE_COLOR)
+  const field = spriteField(MOTE_COUNT, material, 'winter-tree-motes')
+  const orbit: number[] = []
+  for (let i = 0; i < MOTE_COUNT; i++)
+    orbit.push(
+      i * GOLDEN_ANGLE,
+      0.7 + ((i * 0.618034) % 1) * 1.3,
+      0.035 + ((i * 3) % 7) * 0.006,
+      (i * 0.381966) % 1
+    )
+  instanced(field.geometry, 'aOrbit', 4, orbit)
+
+  const seed = attribute('aOrbit', 'vec4')
+  const fall = fract(time.mul(seed.z).add(seed.w))
+  const angle = seed.x.add(time.mul(0.12))
+  const radius = seed.y.add(sin(time.mul(0.6).add(seed.w.mul(TAU))).mul(0.12))
+  material.positionNode = vec3(
+    cos(angle).mul(radius),
+    fall
+      .oneMinus()
+      .mul(crownTop + 0.4)
+      .add(0.3),
+    sin(angle).mul(radius)
+  )
+  material.scaleNode = seed.w.mul(0.05).add(0.08)
+  material.opacityNode = exp(length(uv().sub(0.5)).pow(2).mul(-22))
+    .mul(sin(fall.mul(Math.PI)))
+    .mul(sin(time.mul(2.3).add(seed.x)).mul(0.3).add(0.7))
+    .mul(nightGlow())
+  return field
+}
+
+/** Everything that glows over the winter tree model. */
+export function buildWinterTreeGlow(): THREE.Group {
+  const group = new THREE.Group()
+  group.name = 'winter-tree-glow'
+  group.add(buildBulbs(), buildStar(), buildGlints(), buildMotes())
+  return group
+}
+
+/** Lets the star and the ornaments keep their colour in the dark. */
+function lightDecorations(model: THREE.Object3D) {
+  const height = positionLocal.y
+  const star = smoothstep(crownTop - 0.15, crownTop + 0.1, height)
+  const shine = smoothstep(DECOR_FLOOR, DECOR_FLOOR + 0.3, height)
+    .mul(star.mul(0.35).add(0.3))
+    .mul(nightGlow())
+  model.traverse((o) => {
+    if (!(o instanceof THREE.Mesh)) return
+    const src = o.material as THREE.MeshStandardMaterial
+    // Textured ornaments and the painted baubles; not cut-out boughs.
+    if (src.alphaTest > 0 || !(src.map || src.vertexColors)) return
+    o.geometry.computeBoundingBox()
+    if (o.geometry.boundingBox!.max.y < DECOR_FLOOR) return
+    const material = new MeshStandardNodeMaterial({
+      name: src.name,
+      map: src.map,
+      normalMap: src.normalMap,
+      roughnessMap: src.roughnessMap,
+      metalnessMap: src.metalnessMap,
+      roughness: src.roughness,
+      metalness: src.metalness,
+      side: src.side,
+      vertexColors: src.vertexColors,
+    })
+    const tint = src.map ? texture(src.map).rgb : vertexColor().rgb
+    material.emissiveNode = tint.mul(shine)
+    o.material = material
+  })
+}
+
+/** Dresses a freshly loaded winter tree model: lit decorations and its glow. */
+export function decorateWinterTree(model: THREE.Object3D) {
+  lightDecorations(model)
+  model.add(buildWinterTreeGlow())
+}

@@ -263,6 +263,7 @@ mod road_patrol;
 pub(crate) use player::restored_floor_level;
 mod salary;
 mod salon;
+mod seasonal;
 mod skills;
 mod teleport_departure;
 mod teleport_scroll;
@@ -511,6 +512,7 @@ pub struct GameState {
     /// The one altar-summoned raid allowed at a time; lost on restart.
     field_raid: Arc<tokio::sync::Mutex<Option<field_raid::FieldRaid>>>,
     field_boss_sites: Arc<std::sync::RwLock<Vec<field_raid::FieldBossSite>>>,
+    seasonal_props: Arc<std::sync::RwLock<seasonal::SeasonalProps>>,
     /// The stand-in placement whose boss is up; not solid meanwhile.
     woken_stand_in: Arc<std::sync::RwLock<Option<u32>>>,
     bed_rest_started: Arc<RwLock<HashMap<PlayerId, tokio::time::Instant>>>,
@@ -885,6 +887,7 @@ impl GameState {
             notice_papers: Arc::default(),
             field_raid: Arc::new(tokio::sync::Mutex::new(None)),
             field_boss_sites: Arc::new(std::sync::RwLock::new(Vec::new())),
+            seasonal_props: Arc::default(),
             woken_stand_in: Arc::new(std::sync::RwLock::new(None)),
             bed_rest_started: Arc::new(RwLock::new(HashMap::new())),
             dining: Arc::new(std::sync::RwLock::new(HashMap::new())),
