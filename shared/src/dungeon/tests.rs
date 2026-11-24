@@ -1758,11 +1758,13 @@ fn variants_redraw_the_floors_behind_the_same_entrance() {
     );
 }
 
+const GARDEN_FLOORS: u8 = 30;
+
 fn temple(seed: u64) -> Vec<FloorLayout> {
     super::gen::generate_dungeon_with(
         seed,
         seed,
-        Some(25),
+        Some(GARDEN_FLOORS),
         "medusa",
         None,
         "garden",
@@ -1829,8 +1831,8 @@ fn temple_floors_are_suites_of_chambers_joined_by_doorways() {
 fn the_hall_stands_twelve_pillars_around_the_boss_over_many_seeds() {
     for seed in 0..300u64 {
         let floors = temple(seed);
-        assert_eq!(floors.len(), 25, "seed {seed}");
-        let last = &floors[24];
+        assert_eq!(floors.len(), GARDEN_FLOORS as usize, "seed {seed}");
+        let last = floors.last().unwrap();
         let hall = last.rooms.last().unwrap();
         let size = super::gen::HALL_SIZE;
         assert_eq!((hall.w, hall.d), (size, size), "seed {seed}");
@@ -1875,7 +1877,7 @@ fn every_garden_floor_has_room_for_its_statues() {
         let floors = super::gen::generate_dungeon_with(
             seed,
             seed,
-            Some(25),
+            Some(GARDEN_FLOORS),
             "medusa",
             None,
             "garden",
@@ -1883,7 +1885,11 @@ fn every_garden_floor_has_room_for_its_statues() {
         );
         for layout in &floors {
             let cells = statue_cells(layout);
-            let want = if layout.depth == 25 { 12 } else { 4 };
+            let want = if usize::from(layout.depth) == floors.len() {
+                12
+            } else {
+                4
+            };
             assert_eq!(cells.len(), want, "seed {seed} depth {}", layout.depth);
             assert_eq!(statue_capacity(layout), want);
             let distinct: std::collections::HashSet<_> = cells.iter().collect();

@@ -31,7 +31,7 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
 - 입구: `world(-1950, 1.1, 5456)`, 남향(`entranceDir=s`). 25층, 최종 보스 `barkan`(레벨 30·HP 600·guard 36·피해 7d12). 모델은 `barkan.glb`이며 기준 높이 2.5m·스케일 1이다. 이동·추적은 Orc Walk로 3.0m/s이며, 오른손에 룬 블레이드를 장착한다. 평타·사망은 기존 Mixamo 동작을 옮긴 임시 모션이다. 15초마다(첫 시전은 교전 6초 뒤) 평타 대신 룬 검격을 쓴다. 검을 들어 올리는 동안 정면을 고정하고, 2.55초에 검이 옆으로 지나갈 때 전방 90°(±45°)·4m 안의 플레이어에게 명중 굴림 없이 평타 피해 ×5를 준다. 시전(4.2초) 중에는 경직되지 않고, 끝난 뒤 평타 쿨다운(2.8초) 동안은 반격할 틈이 있다. 규칙은 `shared/src/monster_ai/skill.rs`.
 - 입구 주변 80×80m 범위의 지형은 모두 입구 높이 − 1m 이상이어야 한다. 서버는 이 범위에서 `입구 높이 − 4m × 층` ±2.5m를 그 층으로 판정하므로, 낮은 지면은 지하로 취급된다. 그래서 경사지가 아닌 평지에 둔다.
 - 몬스터는 `data-src/dungeon_spawns.csv`의 `bastion` 그룹이다. 모든 던전의 스폰은 이 파일에서 그룹·몬스터·깊이 범위별 행으로 정의하므로, 같은 몬스터를 던전마다 다른 깊이에 둘 수 있다. 모두 선공형이다.
-- 층수 상한은 `MAX_FLOORS`(25)이고, `floors`가 비어 있는 던전의 무작위 층수 범위 `MIN_DRAWN_FLOORS..=MAX_DRAWN_FLOORS`(5–20)는 기존 배치를 지키기 위해 그대로 둔다. 깊이 보정 몬스터 레벨 상한은 25다.
+- 층수 상한은 `MAX_FLOORS`(30)이고, `floors`가 비어 있는 던전의 무작위 층수 범위 `MIN_DRAWN_FLOORS..=MAX_DRAWN_FLOORS`(5–20)는 기존 배치를 지키기 위해 그대로 둔다. 깊이 보정 몬스터 레벨 상한은 25다.
 - 5·10·15·20·25층 문에 `bastion_key_5…25`. 아이콘·모델은 기존 열쇠를 재사용한다.
 - 최종 상자: 확정 보상 없음, 전용 롤(`chestRolls`) `rune_blade` 20%·`earth_amulet` 10%, 티어 5 확률 보상(`ring_of_protection` 20%)과 하위 티어 장비, 12,500–37,500c.
 - 바르칸 처치 칭호: `barkan_slayer`, 단독 처치 `barkan_slayer_solo`.
@@ -94,15 +94,16 @@ node tools/reserve-dungeon-land.mjs --dungeon skeleton_crypt --ownership /tmp/ow
 
 설계와 진행 상황은 [STONE_GARDEN.md](STONE_GARDEN.md)에 있다.
 
-- 입구: `world(-1836, 1.05, 6844)`, 서향. 25층, 최종 보스 `medusa`(레벨 45·HP 25,000·guard 40). 기술은 응시(`stone_gaze`)와 꼬리 휘두르기(`tail_sweep`)다.
-- `dungeons.csv`의 `depthOffset=20`, `levelCap=45`, `placeBonus=34:4`로 일반 몬스터가 1층 L28에서 24층 L40까지 오르고, 명중 보너스는 34에서 4층마다 1씩 오른다. 세 칸을 비운 던전은 기존 규칙을 따른다.
-- 몬스터는 `garden` 그룹이고 모두 기존 모델 대역이다.
-  - 1–5층: Waking Statue(`garden_statue`). Stone Golem 모델.
-  - 6–10층: Stonescale Serpent(`garden_serpent`). Lizardfolk 모델, 독.
-  - 11–15층: Half-Turned Excavator(`garden_excavator`). 광부 잔존자 모델.
-  - 16–24층: Serpent Handmaiden(`garden_handmaiden`, 돌의 손길)과 Stonebreaker(`garden_breaker`, 내려찍기).
-  - 25층: 메두사만 나온다. `layoutStyle=hall`이라 끝 방이 23×23 기둥 방이다(2×2 암반 기둥 12개).
-- 5·10·15·20·25층 문에 `garden_key_5…25`.
+- 입구: `world(-1836, 1.05, 6844)`, 서향. 30층, 최종 보스 `medusa`(레벨 45·HP 25,000·guard 40). 기술은 응시(`stone_gaze`)와 꼬리 휘두르기(`tail_sweep`)다.
+- `dungeons.csv`의 `depthOffset=20`, `levelCap=45`, `placeBonus=34:4`로 일반 몬스터가 1층 L28에서 29층 L42까지 오르고, 명중 보너스는 34에서 4층마다 1씩 오른다. 세 칸을 비운 던전은 기존 규칙을 따른다.
+- 몬스터는 `garden` 그룹이다.
+  - 1–5층: Temple Guardian(`garden_guardian`, Stone Golem 모델)과 Buried Digger(`garden_digger`, Skeleton Warrior 모델).
+  - 6–10층: Waking Statue(`garden_statue`).
+  - 11–15층: Stonescale Serpent(`garden_serpent`), 독.
+  - 16–20층: Half-Turned Excavator(`garden_excavator`).
+  - 21–29층: Serpent Handmaiden(`garden_handmaiden`, 돌의 손길)과 Stonebreaker(`garden_breaker`, 내려찍기).
+  - 30층: 메두사만 나온다. `layoutStyle=hall`이라 끝 방이 23×23 기둥 방이다(2×2 암반 기둥 12개).
+- 5층마다 문에 `garden_key_5…30`. 30층 열쇠가 금색이다.
 - 최종 상자: 티어 5 확률 보상에 전용 롤 `ring_of_teleport_control` 5%.
 
 ## 리셋과 재접속

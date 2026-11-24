@@ -77,9 +77,10 @@ pub const DUNGEON_DEPTH_ATTACK_BONUS: i32 = 3;
 pub const SURFACE_SAFE_METERS: f32 = 300.0;
 /// Metres beyond the safe ring per point of to-hit.
 pub const SURFACE_METERS_PER_ATTACK_BONUS: f32 = 20.0;
-/// The deepest floor's to-hit; the surface stops climbing there too.
-const MAX_PLACE_ATTACK_BONUS: i32 =
-    depth_attack_bonus(onlinerpg_shared::dungeon::MAX_FLOORS as i32);
+/// Floors of the deepest dungeons on the shared depth rule (tier 5).
+const TIER_FIVE_FLOORS: i32 = 25;
+/// The surface stops climbing at a tier-5 bottom floor's to-hit.
+const MAX_PLACE_ATTACK_BONUS: i32 = depth_attack_bonus(TIER_FIVE_FLOORS);
 
 const fn depth_attack_bonus(depth: i32) -> i32 {
     if depth > DUNGEON_SAFE_DEPTH {

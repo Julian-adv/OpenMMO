@@ -371,7 +371,7 @@
   "item.invisibility": "攻撃するまで透明",
   "item.maxHpPerLevel": "レベルごとに最大HP +{{value}}",
   "item.nonStackingEffect": "同じアイテムの効果は重複しない",
-  "item.carryCapacity": "所持重量上限 +{{value}}%",
+  "item.carryCapacity": "所持重量上限 +{{value}} kg",
   "item.criticalChance": "会心率 +{{value}}ポイント",
   "item.sustenance": "空腹の進行を抑える",
   "item.compare": "比較：{{item}}",

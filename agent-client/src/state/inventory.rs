@@ -71,7 +71,7 @@ impl SharedState {
             .self_equipped
             .values()
             .filter_map(|i| crate::item_defs::get(&i.item_def_id))
-            .map(|d| d.carry_bonus_percent())
+            .map(|d| d.carry_bonus_kg())
             .sum();
         let limit = onlinerpg_shared::inventory::carry_limit(str, self.self_carry_mult, gear);
         Some((carried, limit))

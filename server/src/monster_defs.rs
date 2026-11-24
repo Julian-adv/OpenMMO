@@ -248,6 +248,29 @@ mod tests {
     }
 
     #[test]
+    fn only_thieves_and_miners_drop_blindfolds() {
+        let defs = MonsterDefs::load();
+        let drops = |id: &str| {
+            defs.get(id)
+                .unwrap()
+                .drop_entries()
+                .iter()
+                .any(|(item, _)| item == "blindfold")
+        };
+        for id in [
+            "kobold_cutpurse",
+            "thief_king",
+            "shadow_master",
+            "mine_remnant",
+        ] {
+            assert!(drops(id), "{id}");
+        }
+        for id in ["goblin", "orc", "skeleton", "garden_handmaiden", "medusa"] {
+            assert!(!drops(id), "{id}");
+        }
+    }
+
+    #[test]
     fn deeper_miners_drop_the_harness_more_often() {
         let defs = MonsterDefs::load();
         let chance = |id: &str| {

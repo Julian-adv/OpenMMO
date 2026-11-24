@@ -371,7 +371,7 @@
   "item.invisibility": "공격하기 전까지 투명",
   "item.maxHpPerLevel": "레벨당 최대 HP +{{value}}",
   "item.nonStackingEffect": "동일 아이템 효과 중복 불가",
-  "item.carryCapacity": "운반 한도 +{{value}}%",
+  "item.carryCapacity": "운반 한도 +{{value}} kg",
   "item.criticalChance": "치명타 확률 +{{value}}%p",
   "item.sustenance": "허기 감소 속도 완화",
   "item.compare": "비교: {{item}}",

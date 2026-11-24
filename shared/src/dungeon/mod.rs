@@ -80,7 +80,7 @@ pub const DUNGEON_FLOOR_INDEX_BASE: u8 = crate::housing::MAX_FLOOR_LEVEL + 1;
 pub const MIN_DRAWN_FLOORS: u8 = 5;
 pub const MAX_DRAWN_FLOORS: u8 = 20;
 /// Deepest floor a registry `floors` override may ask for.
-pub const MAX_FLOORS: u8 = 25;
+pub const MAX_FLOORS: u8 = 30;
 
 /// Stair shaft footprint: `SHAFT_W` cells wide, `SHAFT_LEN` along the run.
 /// The run must stay ≤ 16 cells — stairwell intermediate floor keys get

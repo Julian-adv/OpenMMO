@@ -622,15 +622,15 @@ impl super::GameState {
             .min(100)
     }
 
-    /// The to-hit the place lends a monster standing there: a dungeon's own
-    /// curve where it sets one, else the shared depth and distance rule.
-    fn place_attack_bonus(&self, position: &Position, floor_level: i8) -> i32 {
+    /// The to-hit the place lends a monster standing there: the shared depth
+    /// and distance rule, or what a dungeon makes of it.
+    pub(super) fn place_attack_bonus(&self, position: &Position, floor_level: i8) -> i32 {
+        let shared = combat::place_attack_bonus(floor_level, self.town_distance(position));
         (floor_level < 0)
             .then(|| self.dungeon_defs.entrance_at(position.x, position.z))
             .flatten()
-            .and_then(|entrance| entrance.place_attack_bonus(floor_level.unsigned_abs()))
-            .unwrap_or_else(|| {
-                combat::place_attack_bonus(floor_level, self.town_distance(position))
+            .map_or(shared, |entrance| {
+                entrance.place_attack_bonus(floor_level.unsigned_abs(), shared)
             })
     }
 

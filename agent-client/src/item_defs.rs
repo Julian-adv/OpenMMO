@@ -53,7 +53,7 @@ impl ItemDef {
         self.consumable
     }
 
-    pub fn carry_bonus_percent(&self) -> u32 {
+    pub fn carry_bonus_kg(&self) -> u32 {
         self.effects
             .iter()
             .flat_map(|effects| effects.split(';'))

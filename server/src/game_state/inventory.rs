@@ -515,7 +515,7 @@ impl super::GameState {
             .get(player_id)
             .map_or(0, |inv| {
                 self.equipped_defs(inv)
-                    .map(|def| def.carry_bonus_percent())
+                    .map(|def| def.carry_bonus_kg())
                     .sum()
             });
         onlinerpg_shared::inventory::carry_limit(str, hunger, gear)

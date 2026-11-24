@@ -1,13 +1,16 @@
 use super::*;
 
+const MEDUSA_FLOOR: u8 = 30;
+
 #[tokio::test]
-async fn the_garden_levels_from_twenty_eight_to_forty_and_ends_at_medusa() {
+async fn the_garden_levels_from_twenty_eight_to_forty_two_and_ends_at_medusa() {
     let game_state = make_test_game_state("stone_garden_floors");
     for (depth, kinds, level) in [
-        (1, &["garden_statue"][..], 28),
-        (8, &["garden_serpent"], 32),
-        (13, &["garden_excavator"], 34),
-        (24, &["garden_handmaiden", "garden_breaker"], 40),
+        (1, &["garden_guardian", "garden_digger"][..], 28),
+        (8, &["garden_statue"], 32),
+        (13, &["garden_serpent"], 34),
+        (18, &["garden_excavator"], 37),
+        (29, &["garden_handmaiden", "garden_breaker"], 42),
     ] {
         let monsters = floor_monsters(&game_state, "stone_garden", depth).await;
         assert!(!monsters.is_empty(), "floor {depth}");
@@ -19,7 +22,7 @@ async fn the_garden_levels_from_twenty_eight_to_forty_and_ends_at_medusa() {
             assert_eq!(monster.level_override, Some(level), "floor {depth}");
         }
     }
-    let last = floor_monsters(&game_state, "stone_garden", 25).await;
+    let last = floor_monsters(&game_state, "stone_garden", MEDUSA_FLOOR).await;
     assert_eq!(last.len(), 1);
     assert_eq!(last[0].monster_type, "medusa");
     assert_eq!(last[0].level_override, Some(45));
@@ -31,13 +34,16 @@ async fn the_garden_levels_from_twenty_eight_to_forty_and_ends_at_medusa() {
 #[tokio::test(start_paused = true)]
 async fn a_pillar_of_the_hall_breaks_medusas_gaze() {
     let game_state = make_test_game_state("stone_garden_pillar");
-    let medusa = floor_monsters(&game_state, "stone_garden", 25).await[0]
+    let medusa = floor_monsters(&game_state, "stone_garden", MEDUSA_FLOOR).await[0]
         .id
         .clone();
     let entrance = game_state.dungeon_defs.get("stone_garden").unwrap().clone();
     let (cx, cz) = {
         let dungeons = game_state.dungeons.read().await;
-        let hall = *dungeons[&entrance.id].layouts[24].rooms.last().unwrap();
+        let hall = *dungeons[&entrance.id].layouts[MEDUSA_FLOOR as usize - 1]
+            .rooms
+            .last()
+            .unwrap();
         hall.center()
     };
     // As at boot, so the rock blocks what monsters see.
@@ -51,7 +57,7 @@ async fn a_pillar_of_the_hall_breaks_medusas_gaze() {
             ),
         );
     }
-    let at = |dx: i32, dz: i32| cell_center(&entrance.position(), 25, (cx + dx, cz + dz));
+    let at = |dx: i32, dz: i32| cell_center(&entrance.position(), MEDUSA_FLOOR, (cx + dx, cz + dz));
     // A pillar fills cells 8..=9 east and 3..=4 south of the centre.
     game_state
         .monsters
@@ -63,7 +69,7 @@ async fn a_pillar_of_the_hall_breaks_medusas_gaze() {
     for (name, spot) in [("hidden", at(10, 3)), ("open", at(10, 1))] {
         let mut player = make_player(name, spot.x, spot.z);
         player.position = spot;
-        player.floor_level = -25;
+        player.floor_level = -(MEDUSA_FLOOR as i8);
         player.health = 600;
         player.max_health = 600;
         game_state.add_player(player).await;
@@ -597,13 +603,13 @@ async fn garden_delver(game_state: &GameState, name: &str, depth: u8, dz: f32) -
 #[tokio::test(start_paused = true)]
 async fn statues_broken_to_death_join_the_floors_statues() {
     let game_state = make_test_game_state("garden_statues");
-    let medusa = floor_monsters(&game_state, "stone_garden", 25).await[0]
+    let medusa = floor_monsters(&game_state, "stone_garden", MEDUSA_FLOOR).await[0]
         .id
         .clone();
-    let watcher = pid("delver25");
+    let watcher = pid("delver30");
     let mut rx = game_state.register_direct_channel(&watcher).await;
     game_state
-        .send_floor_statues(&watcher, "stone_garden", 25)
+        .send_floor_statues(&watcher, "stone_garden", MEDUSA_FLOOR)
         .await;
     let before = statues_in(drain(&mut rx));
     assert_eq!(before.len(), 12);
@@ -612,13 +618,13 @@ async fn statues_broken_to_death_join_the_floors_statues() {
     let entrance = game_state.dungeon_defs.get("stone_garden").unwrap().clone();
     let (cx, cz) = {
         let dungeons = game_state.dungeons.read().await;
-        dungeons[&entrance.id].layouts[24]
+        dungeons[&entrance.id].layouts[MEDUSA_FLOOR as usize - 1]
             .rooms
             .last()
             .unwrap()
             .center()
     };
-    let at = |dx: i32, dz: i32| cell_center(&entrance.position(), 25, (cx + dx, cz + dz));
+    let at = |dx: i32, dz: i32| cell_center(&entrance.position(), MEDUSA_FLOOR, (cx + dx, cz + dz));
     game_state
         .monsters
         .write()
@@ -628,7 +634,7 @@ async fn statues_broken_to_death_join_the_floors_statues() {
         .position = at(2, 1);
     let mut victim = make_player("Victim", 0.0, 0.0);
     victim.position = at(6, 1);
-    victim.floor_level = -25;
+    victim.floor_level = -(MEDUSA_FLOOR as i8);
     victim.health = 200;
     victim.max_health = 200;
     game_state.add_player(victim).await;
@@ -660,7 +666,7 @@ async fn statues_broken_to_death_join_the_floors_statues() {
     later.day += 2;
     game_state.debug_set_datetime(&later);
     game_state
-        .send_floor_statues(&watcher, "stone_garden", 25)
+        .send_floor_statues(&watcher, "stone_garden", MEDUSA_FLOOR)
         .await;
     let moved = statues_in(drain(&mut rx));
     assert_eq!(moved.len(), 12);
