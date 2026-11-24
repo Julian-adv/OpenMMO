@@ -2,6 +2,7 @@
   import { inventoryStore } from '../stores/inventoryStore'
   import { skillsStore } from '../stores/skillsStore'
   import { coversEyes } from '../data/itemDefs'
+  import { cameraDistance } from '../stores/cameraStore'
 
   const covered = $derived(
     coversEyes($inventoryStore.equipped.head?.item_def_id)
@@ -10,11 +11,12 @@
 </script>
 
 {#if covered}
-  <div class="veil" class:telepathic></div>
+  <div class="veil" class:telepathic style:--zoom={$cameraDistance || 1}></div>
 {/if}
 
 <style>
-  /* Eyes covered: only what stands within arm's reach shows. Under the HUD. */
+  /* Eyes covered: only what stands within arm's reach shows, growing with
+     the camera zoom. Under the HUD. */
   .veil {
     position: fixed;
     inset: 0;
@@ -23,8 +25,8 @@
     background: radial-gradient(
       circle at 50% 46%,
       transparent 0,
-      transparent 50px,
-      #000 130px
+      transparent calc(50px * var(--zoom)),
+      #000 calc(130px * var(--zoom))
     );
   }
 
