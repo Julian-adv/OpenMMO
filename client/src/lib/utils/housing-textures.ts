@@ -362,6 +362,17 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     roughness: 0.8,
     masonry: true,
   }),
+  {
+    // Marble double door of a temple dungeon's entrance, mapped once across.
+    // Appended: houses store indices into this list.
+    label: 'Temple Door',
+    glb: '',
+    mapUrl: '/textures/dungeon/temple-door.webp',
+    fallbackColor: 0xd8d0c2,
+    roughness: 0.75,
+    fitSegment: true,
+    internal: true,
+  },
 ]
 
 /** Per-texture-index material cache (module-level singleton). */

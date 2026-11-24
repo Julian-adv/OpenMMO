@@ -121,6 +121,8 @@
   const CHEST_OPEN_CLIP = 'ChestOpen'
   /** A hall column is widened to fill its 2×2 pillar. */
   const HALL_COLUMN_GIRTH = 1.9
+  /** Entrance columns, about half a metre across. */
+  const ENTRANCE_COLUMN_GIRTH = 0.5
   /** How far the open lid's rear corner reaches behind the chest origin (along
    *  local −Z): the lid swings up and ~105° back over the hinge. Measured from
    *  chest_animated.glb. The chest is pushed this far (less the half-cell it
@@ -776,6 +778,24 @@
     })
   }
 
+  /** Stand temple columns round the surface entrance. */
+  async function addEntranceColumns(
+    group: THREE.Group,
+    model: string,
+    { spots, height }: { spots: { x: number; z: number }[]; height: number }
+  ) {
+    const template = await loadPropTemplate(model)
+    if (!template || entranceGroup !== group) return
+    const tall = height / measureProp(model, template).height
+    for (const { x, z } of spots) {
+      const clone = template.clone()
+      clone.position.set(x, -0.1, z)
+      clone.scale.set(ENTRANCE_COLUMN_GIRTH, tall, ENTRANCE_COLUMN_GIRTH)
+      tagDecorative(clone)
+      group.add(clone)
+    }
+  }
+
   /** The theme's column drawn over each 2×2 hall pillar. */
   async function addHallColumns(
     group: THREE.Group,
@@ -1159,14 +1179,25 @@
         const first = dungeonManager.layoutAt(1)
         if (first) {
           const c = dungeonManager.consts
-          const built = buildDungeonEntranceGroup(first.upShaft, {
-            grid: c.grid,
-            wallHeight: c.wallHeight,
-            floorHeight: c.floorHeight,
-            shaftW: c.shaftW,
-            shaftLen: c.shaftLen,
-          })
+          const { entrance } = dungeonCaveTheme(id, 1)
+          const built = buildDungeonEntranceGroup(
+            first.upShaft,
+            {
+              grid: c.grid,
+              wallHeight: c.wallHeight,
+              floorHeight: c.floorHeight,
+              shaftW: c.shaftW,
+              shaftLen: c.shaftLen,
+            },
+            entrance
+          )
           entranceGroup = built.group
+          if (entrance && built.colonnade)
+            void addEntranceColumns(
+              built.group,
+              entrance.column,
+              built.colonnade
+            )
           entranceDoors = built.doors
           doorOpenAmount = 0
           for (const leaf of built.doors)

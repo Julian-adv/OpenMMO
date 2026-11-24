@@ -8,11 +8,13 @@ function theme(
     propModels = {},
     treasureChest,
     hallColumn,
+    entrance,
   }: {
     masonry?: boolean
     propModels?: Record<string, string>
     treasureChest?: string
     hallColumn?: string
+    entrance?: { door: string; column: string }
   } = {}
 ) {
   const texture = (surface: string) =>
@@ -31,6 +33,15 @@ function theme(
     treasureChest,
     /** Drawn over a hall's rock pillars, which still block as rock. */
     hallColumn,
+    /** A temple-style surface entrance in this theme's stone. */
+    entrance: entrance && {
+      wallTexture: texture('wall'),
+      roofTexture: texture('floor'),
+      doorTexture: HOUSING_TEXTURES.findIndex(
+        (entry) => entry.mapUrl === `/textures/dungeon/${entrance.door}.webp`
+      ),
+      column: entrance.column,
+    },
   }
 }
 
@@ -49,6 +60,7 @@ export const DUNGEON_TEMPLE_THEME = theme('temple', {
   },
   treasureChest: 'garden_relic_chest',
   hallColumn: 'temple_column',
+  entrance: { door: 'temple-door', column: 'temple_column' },
 })
 
 const TEMPLES = new Set(

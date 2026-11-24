@@ -21,7 +21,6 @@ import {
   WALL_HALF_THICKNESS,
   DUNGEON_DOOR_TEXTURE_IDX,
   DUNGEON_LOCKED_DOOR_TEXTURE_IDX,
-  DUNGEON_ENTRANCE_WALL_TEXTURE_IDX,
   DUNGEON_WALL_TEXTURE_IDX,
   WALL_N,
   WALL_E,
@@ -159,7 +158,8 @@ export function addEntranceArch(
   entryLow: boolean,
   ctx: DungeonGeoCtx,
   top: number,
-  gableRise: number
+  gableRise: number,
+  textureIndex: number
 ) {
   const W = ctx.shaftW
   // Gabled top + sides, then the shared dome underside.
@@ -179,7 +179,7 @@ export function addEntranceArch(
     alongZ ? cr.x : cr.z,
     alongZ ? (entryLow ? cr.z : cr.z + cr.d) : entryLow ? cr.x : cr.x + cr.w,
     ENTRANCE_WALL_T,
-    DUNGEON_ENTRANCE_WALL_TEXTURE_IDX
+    textureIndex
   )
 }
 
@@ -304,7 +304,8 @@ function tagDoorLeaves(leaves: DoorLeaf[], depth: number, doorId: number) {
 export function buildEntranceDoors(
   entranceShaft: DungeonShaft,
   cr: { x: number; w: number; z: number; d: number },
-  ctx: DungeonGeoCtx
+  ctx: DungeonGeoCtx,
+  textureIndex: number
 ): DoorLeaf[] {
   const halfW = ctx.shaftW / 2
   const alongZ = entranceShaft.alongZ
@@ -316,7 +317,7 @@ export function buildEntranceDoors(
   const entryZ = nonrev ? cr.z : cr.z + cr.d
   const entryX = nonrev ? cr.x : cr.x + cr.w
 
-  const mat = getHousingMaterial(DUNGEON_DOOR_TEXTURE_IDX)
+  const mat = getHousingMaterial(textureIndex)
 
   // The two leaves hinge on opposite lateral jambs (low / high) and meet at the
   // doorway centre. `uHinge` is the image U at the hinge edge; both leaves run
