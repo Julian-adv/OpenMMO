@@ -157,7 +157,7 @@ apple,Apple,A crisp red apple.,0.3,,true,objects/apple.png,objects/apple.glb,foo
 bread,Bread,A fresh-baked loaf.,1,,true,objects/bread.png,objects/bread.glb,food,,,,60,,,,,,,,true,540,,,,,,,,,,,,,,
 cheese,Cheese,A wedge of hard cheese. Keeps well on the road.,0.4,,true,objects/cheese_wedge.png,objects/cheese_wedge.glb,food,,,,12,,,,,,,,true,180,,,,,,,,,,,,,,
 jerky,Jerky,Salted dried meat. Dense and easy to carry.,0.25,,true,objects/jerky.png,objects/jerky.glb,food,,,,30,,,,,,,,true,300,,,,,,,,,,,,,,
-floating_eye_meat,Floating Eye Meat,A cold quivering lump cut from a floating eye. Those who eat it are said to see without their eyes.,0.25,,true,objects/jerky.png,objects/jerky.glb,food,,,,2000,,,,,,,,true,100,,telepathy,,,,,,,,,,,,
+floating_eye_meat,Floating Eye Meat,A cold quivering lump cut from a floating eye. Those who eat it are said to see without their eyes.,0.25,,true,objects/floating_eye_meat.png,objects/floating_eye_meat.glb,food,,,,2000,,,,,,,,true,100,,telepathy,,,,,,,,,,,,
 lembas_wafer,Lembas Wafer,Elven waybread wrapped in leaves. One thin wafer carries a traveller through a full day's march.,0.15,,true,objects/lembas_wafer.png,objects/lembas_wafer.glb,food,,,,120,,,,,,,,true,600,,,,,,,,,,,,,,
 chicken_rice,Chicken Rice,A plate of sunlit chicken over rice with carrots and broccoli. Served at the inn table.,0.8,,true,objects/chicken_rice.png,objects/chicken_rice.glb,food,,,,80,,,,,,,,true,700,,,,,,,,,,,,,,
 chicken_curry,Chicken Curry,A plate of chicken curry over rice with carrots and greens. Served at the inn table.,0.8,,true,objects/chicken_rice.png,objects/chicken_rice.glb,food,,,,80,,,,,,,,true,700,,,,,,,,,,,,,,

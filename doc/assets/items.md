@@ -11,6 +11,12 @@
 - 정리(2026-10-25): 미리보기 PNG 3개·상세 검증 보고서 3개·재생성 가능한 중간 4K GLB·Blender 백업을 삭제했다. 최종 모델·아이콘, 원화·Tripo 원본·현재 Blender 파일·원본 텍스처와 간결한 검증·출처 기록은 보존했다.
 - 재현: `blender -b --python-exit-code 1 -P assets/items/rift_ring/tripo_v1/prepare.py`로 4K 원본과 임시 GLB를 생성한다. `tools/blender-scripts/export_item_asset.py`에 `--source assets/items/rift_ring/tripo_v1/rift_ring.glb --name rift_ring --size 0.15 --category accessory --icon-rotation 28 -8 -102`를 주어 바닥 모델·아이콘·Blender 작업 파일을 출력하고, `tools/optimize-modular-part.mjs`에 `--ktx2 --size=512`를 주어 원본 GLB에서 런타임 모델을 압축한다.
 
+## Floating Eye Meat — 떠도는 눈 고기
+
+- 원화: [concept_v1](../../assets/items/floating_eye_meat/concept_v1/concept.png). 돌 눈꺼풀 떠도는 눈(`assets/monsters/floating_eye/concepts/eye_stone.png`)을 참고로 그 눈알을 썰어낸 덩어리: 위엔 초록 홍채와 세로 동공, 잘린 면은 실핏줄 보이는 반투명 살, 뒤엔 돌 껍질. OpenAI Codex ImageGen(`codex exec -i`), ChatGPT Pro 20x, 2026-11-24.
+- 3D: 사용자가 Tripo 웹에서 원화 한 장으로 생성(`tripo_v1/source/model.glb`).
+- `export_item_asset.py --size 0.22 --category objects --icon-rotation -60 0 0 --exposure -0.5`로 바닥 모델(`client/public/models/objects/floating_eye_meat.glb`, 0.22×0.21×0.20m, 바닥에서 잘 보이게 육포보다 크게)과 아이콘을 만들었다.
+
 ## Ring of Teleport Control — 순간이동 제어 반지
 
 - 원화: [concept_v1](../../assets/items/ring_of_teleport_control/concept_v1/concept.png). 돌이 된 발굴단원이 끼고 있던 반지. 낡은 은 고리, 네 발로 물린 월장석 속 옅은 보라 소용돌이, 한 바퀴 돌아 제자리로 오는 길 무늬. OpenAI Codex ImageGen, ChatGPT Pro 20x, 2026-11-24(프롬프트·생성 기록은 같은 폴더).
