@@ -13,6 +13,7 @@ import {
   fract,
   length,
   max,
+  mix,
   modelWorldMatrixInverse,
   normalView,
   positionLocal,
@@ -53,6 +54,14 @@ const GLINT_SIZE = 0.42 * SIZE
 const MOTE_COUNT = 28
 const MOTE_COLOR = '#ffd9a0'
 const DAY_GLOW = 0.15
+/** Daylight shows the boughs pale and thin, with the core plain between
+ *  them. By day they are pulled to a deep fir green and cut out fuller, and
+ *  the core is shaded. Night keeps the model as built. */
+const DAY_FOLIAGE_TINT = [0.5, 0.72, 1.25]
+const DAY_FOLIAGE_CUTOFF = 0.2
+const DAY_CORE_SHADE = 0.5
+/** The solid cone inside the boughs in `winter_tree.glb`. */
+const CORE = 'winter_tree_core'
 /** Below this are the skirt and the presents, which stay unlit. */
 const DECOR_FLOOR = 0.75 * SIZE
 const GOLDEN_ANGLE = 2.399963229728653
@@ -60,18 +69,20 @@ const TAU = Math.PI * 2
 
 const crownTop = WINTER_TREE_STAR[1] - 0.3 * SIZE
 
-let glow: ReturnType<typeof createGlow> | null = null
+let dark: ReturnType<typeof createNight> | null = null
 
-function createGlow() {
-  const strength = uniform(DAY_GLOW)
+function createNight() {
+  const night = uniform(0)
   serverGameTime.subscribe((now) => {
-    strength.value = now?.isNight ? 1 : DAY_GLOW
+    night.value = now?.isNight ? 1 : 0
   })
-  return strength
+  return night
 }
 
-/** 1 at night and faint by day, shared by every tree. */
-const nightGlow = () => (glow ??= createGlow())
+/** 1 at night and 0 by day, shared by every tree. */
+const night = () => (dark ??= createNight())
+/** 1 at night and faint by day. */
+const nightGlow = (): N => mix(DAY_GLOW, 1, night())
 
 function additive<T extends THREE.Material>(material: T): T {
   material.transparent = true
@@ -281,6 +292,38 @@ export function buildWinterTreeGlow(): THREE.Group {
   return group
 }
 
+/** The boughs as built at night, deeper and fuller by day. */
+function dayFoliage(src: THREE.MeshStandardMaterial) {
+  const material = new MeshStandardNodeMaterial({
+    name: src.name,
+    normalMap: src.normalMap,
+    roughnessMap: src.roughnessMap,
+    metalnessMap: src.metalnessMap,
+    roughness: src.roughness,
+    metalness: src.metalness,
+    side: src.side,
+  })
+  const day = night().oneMinus()
+  const leaf = texture(src.map!)
+  const tint = mix(vec3(1), vec3(...DAY_FOLIAGE_TINT), day)
+  material.colorNode = vec4(leaf.rgb.mul(tint), leaf.a)
+  material.alphaTestNode = mix(src.alphaTest, DAY_FOLIAGE_CUTOFF, day)
+  return material
+}
+
+/** The dark core behind the boughs, sunk further into shadow by day. */
+function dayCore(src: THREE.MeshStandardMaterial) {
+  const material = new MeshStandardNodeMaterial({
+    name: src.name,
+    roughness: src.roughness,
+    metalness: src.metalness,
+    side: src.side,
+  })
+  const shade = mix(1, DAY_CORE_SHADE, night().oneMinus())
+  material.colorNode = vec3(...src.color.toArray()).mul(shade)
+  return material
+}
+
 /** Lets the star and the ornaments keep their colour in the dark. */
 function lightDecorations(model: THREE.Object3D) {
   const height = positionLocal.y
@@ -291,7 +334,16 @@ function lightDecorations(model: THREE.Object3D) {
   model.traverse((o) => {
     if (!(o instanceof THREE.Mesh)) return
     const src = o.material as THREE.MeshStandardMaterial
-    // Textured ornaments and the painted baubles; not cut-out boughs.
+    // The cut-outs are the boughs and the sprigs wound round them.
+    if (src.alphaTest > 0 && src.map) {
+      o.material = dayFoliage(src)
+      return
+    }
+    if (src.name === CORE) {
+      o.material = dayCore(src)
+      return
+    }
+    // Textured ornaments and the painted baubles.
     if (src.alphaTest > 0 || !(src.map || src.vertexColors)) return
     o.geometry.computeBoundingBox()
     if (o.geometry.boundingBox!.max.y < DECOR_FLOOR) return
