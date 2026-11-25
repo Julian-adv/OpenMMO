@@ -168,8 +168,10 @@ pure server/web-client work does not — say so and skip.
    ```bash
    ssh pc4090 'pwsh -NoProfile -Command "cd C:\Users\jake\work\OnlineRPG; $env:GOOGLE_CLI_CLIENT_SECRET=(Get-Content C:\Users\jake\.config\openmmo\cli-secret -Raw).Trim(); .\tools\package-agent-client.ps1"'
    ```
-   scp the zip back and verify the archive has zero backslash entry paths.
-4. `gh release create agent-client-vX.Y.0 <tarball> <zip>` — match the previous
+   scp the zip and `dist/openmmo-mcp-v*-pc-windows-msvc.exe` back, and verify the
+   archive has zero backslash entry paths.
+4. `gh release create agent-client-vX.Y.0 <tarball> <zip> dist/openmmo-mcp-vX.Y.0-*`
+   (installed openmmo-mcp extensions self-update from those) — match the previous
    release's Korean notes: why the protocol bumped, old versions refused at
    connect, what changed for agents, asset list.
 5. Add an in-game announcement telling agent operators to re-download (step 1's

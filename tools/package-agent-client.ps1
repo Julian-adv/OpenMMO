@@ -57,7 +57,7 @@ try {
     $releaseDir = if ($target) { Join-Path $buildDir "$target\release" } else { Join-Path $buildDir "release" }
 
     $env:RUSTFLAGS = "$oldRustFlags -C target-feature=+crt-static".Trim()
-    & cargo build --release @targetArgs --target-dir $buildDir -p agent-client
+    & cargo build --release @targetArgs --target-dir $buildDir -p agent-client -p openmmo-mcp
     if ($LASTEXITCODE -ne 0) { throw "cargo build failed" }
     $binary = Join-Path $releaseDir "agent-client.exe"
 
@@ -89,6 +89,11 @@ try {
     Copy-Item -LiteralPath (Join-Path $repo "doc\AGENT_CLIENT_QUICKSTART.md") -Destination (Join-Path $stage "README.md")
     Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel Optimal -Force
     Write-Output "==> $archive"
+
+    # Installed openmmo-mcp extensions update themselves to this bare exe.
+    $mcp = Join-Path $outDir "openmmo-mcp-v$version-$targetTriple.exe"
+    Copy-Item -LiteralPath (Join-Path $releaseDir "openmmo-mcp.exe") -Destination $mcp -Force
+    Write-Output "==> $mcp"
 } finally {
     if ($null -ne $stage -and (Test-Path -LiteralPath $stage)) {
         Remove-Item -LiteralPath $stage -Recurse -Force

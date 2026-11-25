@@ -1,3 +1,6 @@
+/// This build's release version; tags are `agent-client-v<VERSION>`.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+
 pub mod bgm_defs;
 pub mod claude;
 pub mod codex;

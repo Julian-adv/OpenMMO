@@ -1,5 +1,6 @@
 mod game;
 mod server;
+mod update;
 
 use rmcp::ServiceExt;
 
@@ -27,6 +28,9 @@ async fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         None => {
+            if let Some(code) = update::hand_over() {
+                std::process::exit(code);
+            }
             server::Server::new(game::Game::new(server, &terrain))
                 .serve(rmcp::transport::stdio())
                 .await?

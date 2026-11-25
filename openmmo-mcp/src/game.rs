@@ -56,7 +56,7 @@ fn google_config() -> GoogleAuthConfig {
     }
 }
 
-fn cache_dir() -> PathBuf {
+pub(crate) fn cache_dir() -> PathBuf {
     let set = |name: &str| std::env::var_os(name).filter(|value| !value.is_empty());
     set("XDG_CACHE_HOME")
         .or_else(|| set("LOCALAPPDATA"))
@@ -253,9 +253,19 @@ impl Game {
             )
             .await
         };
-        tokio::time::timeout(CONNECT_TIMEOUT, login)
+        let lobby = tokio::time::timeout(CONNECT_TIMEOUT, login)
             .await
-            .map_err(|_| anyhow::anyhow!("could not reach the game server at {}", self.server))?
+            .map_err(|_| anyhow::anyhow!("could not reach the game server at {}", self.server))?;
+        match lobby {
+            Err(err)
+                if err
+                    .chain()
+                    .any(|e| e.is::<agent_client::ws::BuildRefused>()) =>
+            {
+                Err(refused_build().await)
+            }
+            other => other,
+        }
     }
 
     pub async fn characters(&self) -> anyhow::Result<String> {
@@ -502,6 +512,22 @@ impl Game {
             Some(_) => "Left the game.".to_string(),
             None => "Was not in the game.".to_string(),
         }
+    }
+}
+
+/// The server no longer accepts this build: fetch the release that it does,
+/// which the next start of the extension runs.
+async fn refused_build() -> anyhow::Error {
+    match crate::update::download_newer().await {
+        Ok(Some(tag)) => anyhow::anyhow!(
+            "The game server runs a newer version. {tag} has been downloaded; ask the user to restart the OpenMMO extension (or Claude) and try again."
+        ),
+        Ok(None) => anyhow::anyhow!(
+            "The game server runs a newer version that has not been released yet. Try again later."
+        ),
+        Err(e) => anyhow::anyhow!(
+            "The game server runs a newer version, and downloading it failed: {e:#}"
+        ),
     }
 }
 

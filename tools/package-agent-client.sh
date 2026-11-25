@@ -48,7 +48,7 @@ if [[ -n $TARGET ]]; then
     binary="target/$TARGET/release/agent-client"
     suffix=${TARGET%%-unknown-linux-*}-${TARGET##*-}
 else
-    cargo build --release -p agent-client
+    cargo build --release -p agent-client -p openmmo-mcp
     binary="target/release/agent-client"
     # Name the glibc floor, not the build host: it is what decides whether
     # the download runs on someone else's machine.
@@ -82,3 +82,10 @@ cp "$REPO/doc/AGENT_CLIENT_QUICKSTART.md" "$stage/README.md"
 tar -czf "$OUT_DIR/$name.tar.gz" -C "$OUT_DIR" "$name"
 rm -rf "$stage"
 echo "==> $OUT_DIR/$name.tar.gz"
+
+# Installed openmmo-mcp copies update themselves to this bare binary.
+if [[ -z $TARGET ]]; then
+    mcp="$OUT_DIR/openmmo-mcp-v$version-$(uname -m)-unknown-linux-gnu"
+    cp target/release/openmmo-mcp "$mcp"
+    echo "==> $mcp"
+fi

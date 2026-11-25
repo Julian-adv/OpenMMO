@@ -15,7 +15,8 @@ fn releases_api_url() -> String {
     let repo = env!("CARGO_PKG_REPOSITORY").trim_start_matches("https://github.com/");
     format!("https://api.github.com/repos/{repo}/releases?per_page=10")
 }
-const TAG_PREFIX: &str = "agent-client-v";
+/// Releases are tagged `agent-client-v<version>`; openmmo-mcp ships in them too.
+pub const TAG_PREFIX: &str = "agent-client-v";
 /// Written after a successful install. When the latest tag equals this, the
 /// update already happened — without it, a release whose Cargo version was
 /// not bumped would re-download on every start.
@@ -65,15 +66,41 @@ struct Installed {
 }
 
 #[derive(serde::Deserialize)]
-struct Release {
-    tag_name: String,
-    assets: Vec<Asset>,
+pub struct Release {
+    pub tag_name: String,
+    pub assets: Vec<Asset>,
 }
 
 #[derive(serde::Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
+pub struct Asset {
+    pub name: String,
+    pub browser_download_url: String,
+}
+
+/// The newest published releases, newest first.
+pub async fn fetch_releases(client: &reqwest::Client) -> anyhow::Result<Vec<Release>> {
+    client
+        .get(releases_api_url())
+        .timeout(CHECK_TIMEOUT)
+        .send()
+        .await?
+        .error_for_status()?
+        .json()
+        .await
+        .context("parsing GitHub releases")
+}
+
+pub async fn download(client: &reqwest::Client, asset: &Asset) -> anyhow::Result<Vec<u8>> {
+    client
+        .get(&asset.browser_download_url)
+        .timeout(DOWNLOAD_TIMEOUT)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await
+        .map(|bytes| bytes.to_vec())
+        .context("downloading release asset")
 }
 
 /// Remove the previous binary left behind by a self-update (Windows cannot
@@ -117,15 +144,7 @@ async fn try_check(mode: AutoUpdate) -> anyhow::Result<Option<Installed>> {
     let client = reqwest::Client::builder()
         .user_agent(concat!("agent-client/", env!("CARGO_PKG_VERSION")))
         .build()?;
-    let releases: Vec<Release> = client
-        .get(releases_api_url())
-        .timeout(CHECK_TIMEOUT)
-        .send()
-        .await?
-        .error_for_status()?
-        .json()
-        .await
-        .context("parsing GitHub releases")?;
+    let releases = fetch_releases(&client).await?;
 
     let current = parse_version(env!("CARGO_PKG_VERSION")).context("own version unparsable")?;
     let Some(release) = releases.iter().find(|r| {
@@ -195,7 +214,7 @@ fn reexec(installed: &Installed) {
 #[cfg(windows)]
 fn reexec(_: &Installed) {}
 
-fn parse_version(s: &str) -> Option<(u64, u64, u64)> {
+pub fn parse_version(s: &str) -> Option<(u64, u64, u64)> {
     let mut it = s.split('.').map(|p| p.parse::<u64>().ok());
     match (it.next(), it.next(), it.next(), it.next()) {
         (Some(Some(a)), Some(Some(b)), Some(Some(c)), None) => Some((a, b, c)),
@@ -231,15 +250,7 @@ async fn install(client: &reqwest::Client, asset: &Asset) -> anyhow::Result<()> 
     let _ = std::fs::remove_dir_all(&work_dir);
     std::fs::create_dir_all(&work_dir)?;
 
-    let bytes = client
-        .get(&asset.browser_download_url)
-        .timeout(DOWNLOAD_TIMEOUT)
-        .send()
-        .await?
-        .error_for_status()?
-        .bytes()
-        .await
-        .context("downloading release asset")?;
+    let bytes = download(client, asset).await?;
 
     extract(&bytes, &work_dir)?;
     let root = package_root(&work_dir)?;
