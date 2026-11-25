@@ -1130,15 +1130,16 @@ impl super::GameState {
             .authenticated_use_action
     }
 
-    /// Use a consumable from the bag.
-    pub async fn use_item(&self, player_id: &PlayerId, instance_id: u64) {
+    /// Bed rest ends and the item's use effect, or `None` once the refusal
+    /// (reserved, missing or unusable) is sent.
+    async fn usable_effect(&self, player_id: &PlayerId, instance_id: u64) -> Option<UseEffect> {
         self.stop_bed_rest(player_id).await;
         if self
             .reject_if_trade_reserved(player_id, instance_id, "use")
             .await
         {
             self.cancel_teleport_effect(player_id).await;
-            return;
+            return None;
         }
         let effect = {
             let inventories = self.inventories.read().await;
@@ -1147,7 +1148,7 @@ impl super::GameState {
                 None => {
                     drop(inventories);
                     self.cancel_teleport_effect(player_id).await;
-                    return;
+                    return None;
                 }
             };
             let item = match inv.bag.iter().find(|i| i.instance_id == instance_id) {
@@ -1160,7 +1161,7 @@ impl super::GameState {
                     )
                     .await;
                     self.cancel_teleport_effect(player_id).await;
-                    return;
+                    return None;
                 }
             };
             let effect = self
@@ -1177,11 +1178,41 @@ impl super::GameState {
                     )
                     .await;
                     self.cancel_teleport_effect(player_id).await;
-                    return;
+                    return None;
                 }
             }
         };
+        Some(effect)
+    }
 
+    /// Read a summoning scroll at one party member.
+    pub async fn summon_party_member(
+        &self,
+        player_id: &PlayerId,
+        instance_id: u64,
+        member_id: PlayerId,
+    ) {
+        match self.usable_effect(player_id, instance_id).await {
+            Some(UseEffect::SummonParty) => {
+                self.use_party_summon_scroll(player_id, instance_id, Some(member_id))
+                    .await
+            }
+            Some(_) => {
+                self.send_system_message(
+                    player_id,
+                    localized("server.cannotUse", "This item cannot be used"),
+                )
+                .await
+            }
+            None => {}
+        }
+    }
+
+    /// Use a consumable from the bag.
+    pub async fn use_item(&self, player_id: &PlayerId, instance_id: u64) {
+        let Some(effect) = self.usable_effect(player_id, instance_id).await else {
+            return;
+        };
         match effect {
             UseEffect::ToggleMount(kind) => self.toggle_mount(player_id, kind).await,
             UseEffect::Heal(dice) => self.use_healing_item(player_id, instance_id, &dice).await,
@@ -1194,7 +1225,10 @@ impl super::GameState {
                 self.use_enchant_weapon_scroll(player_id, instance_id).await
             }
             UseEffect::EnchantArmor => self.use_enchant_armor_scroll(player_id, instance_id).await,
-            UseEffect::SummonParty => self.use_party_summon_scroll(player_id, instance_id).await,
+            UseEffect::SummonParty => {
+                self.use_party_summon_scroll(player_id, instance_id, None)
+                    .await
+            }
             UseEffect::OpenCoinPouch(dice) => {
                 self.use_coin_pouch(player_id, instance_id, &dice).await
             }
@@ -1705,11 +1739,16 @@ impl super::GameState {
         true
     }
 
-    /// Read a scroll of party summon: ask every other online party member to
+    /// Read a scroll of party summon: ask one online party member to
     /// teleport to the reader's side. Refuses — keeping the scroll — while
     /// defeated, in combat, or with no one to call, like the enchant
     /// scroll's guard.
-    async fn use_party_summon_scroll(&self, player_id: &PlayerId, instance_id: u64) {
+    async fn use_party_summon_scroll(
+        &self,
+        player_id: &PlayerId,
+        instance_id: u64,
+        target: Option<PlayerId>,
+    ) {
         if self
             .reject_if_defeated(player_id, "You can't read while defeated")
             .await
@@ -1733,10 +1772,25 @@ impl super::GameState {
             return;
         }
 
-        match self.try_cast_party_summon(player_id).await {
+        match self.try_cast_party_summon(player_id, target).await {
             SummonCast::Called => self.consume_one_and_sync(player_id, instance_id).await,
             SummonCast::NoMembers => {
                 self.send_system_message(player_id, "Summon: no party members to call.")
+                    .await
+            }
+            SummonCast::AllInside => {
+                self.send_system_message(
+                    player_id,
+                    "Summon: everyone you could call is already in this dungeon.",
+                )
+                .await
+            }
+            SummonCast::ChooseMember => {
+                self.send_system_message(player_id, "Summon: choose who to call.")
+                    .await
+            }
+            SummonCast::NotCallable => {
+                self.send_system_message(player_id, "Summon: that member can't be called.")
                     .await
             }
             SummonCast::CallStillOut => {

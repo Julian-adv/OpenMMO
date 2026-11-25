@@ -229,6 +229,8 @@
   "party.summonMessage": "{{name}} calls you to their side",
   "party.summonAnswer": "Answer",
   "party.summonIgnore": "Ignore",
+  "party.summonPickTitle": "Call whom?",
+  "party.summonPick": "Call",
   "party.title": "Party",
   "party.expand": "Expand party panel",
   "party.collapse": "Collapse party panel",

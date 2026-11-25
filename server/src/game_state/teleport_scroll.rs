@@ -2,8 +2,8 @@ use super::{inventory::consume_one, GameState};
 use crate::{dungeon_defs::place_label, item_defs::UseEffect, types::PlayerId};
 use onlinerpg_shared::{
     dungeon::{
-        dungeon_cache_key, floor_level_for_passability, passability_floor_for_level, world_to_cell,
-        GRID,
+        cell_center, dungeon_cache_key, floor_level_for_passability, passability_floor_for_level,
+        world_to_cell, DungeonEntranceDef, GRID,
     },
     pathfinding::{
         get_floor_y_base, is_cell_sealed, is_circle_blocked_on_floor, is_on_building_floor,
@@ -17,6 +17,8 @@ const MIN_DISTANCE: f32 = 32.0;
 const MAX_DISTANCE: f32 = 2_000.0;
 const ARRIVAL_RADIUS: f32 = 0.3;
 const DESTINATION_ATTEMPTS: usize = 128;
+/// Cells before the entrance shaft's top (negative runs) tried for a summons landing.
+const ENTRANCE_FRONT_RUNS: [i32; 6] = [-3, -4, -6, -8, -10, -12];
 const SURFACE_AREA: f64 = std::f64::consts::PI
     * (MAX_DISTANCE as f64 * MAX_DISTANCE as f64 - MIN_DISTANCE as f64 * MIN_DISTANCE as f64);
 
@@ -330,6 +332,52 @@ impl GameState {
             }
         }
         None
+    }
+
+    /// A surface spot outside `entrance`'s door and the rotation facing it.
+    /// Falls back to the top landing when nothing outside is landable.
+    pub(super) async fn dungeon_entrance_front(
+        &self,
+        mover: &PlayerId,
+        entrance: &DungeonEntranceDef,
+    ) -> (Position, f32) {
+        let door = entrance.position();
+        self.ensure_dungeon_runtime(&entrance.id).await;
+        let shaft = self
+            .dungeons
+            .read()
+            .await
+            .get(&entrance.id)
+            .and_then(|runtime| runtime.layouts.first())
+            .map(|layout| layout.up_shaft);
+        let Some(shaft) = shaft else {
+            return (door, 0.0);
+        };
+        // Midway across the shaft's width, `run` cells along it from the top.
+        let across = |run: i32| {
+            let a = cell_center(&door, 0, shaft.step_cell(run, 0));
+            let b = cell_center(&door, 0, shaft.step_cell(run, 1));
+            Position {
+                x: (a.x + b.x) * 0.5,
+                y: door.y,
+                z: (a.z + b.z) * 0.5,
+            }
+            .wrapped_x()
+        };
+        let facing = |at: &Position| at.bearing_xz_to(&door).unwrap_or(0.0);
+        for run in ENTRANCE_FRONT_RUNS {
+            let spot = across(run);
+            if let Some(spot) = self.teleport_surface_landing(spot.x, spot.z).await {
+                let beside = self.arrival_beside(mover, &spot);
+                let landing = self
+                    .teleport_surface_landing(beside.x, beside.z)
+                    .await
+                    .unwrap_or(spot);
+                return (landing, facing(&landing));
+            }
+        }
+        let landing = across(0);
+        (landing, facing(&across(ENTRANCE_FRONT_RUNS[0])))
     }
 
     /// Dry, level, unblocked ground outside every building.

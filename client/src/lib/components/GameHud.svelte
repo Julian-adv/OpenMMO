@@ -58,6 +58,7 @@
   import SalonDialog from './SalonDialog.svelte'
   import { impoundSession } from '../stores/impoundStore'
   import BookmarkDialog from './BookmarkDialog.svelte'
+  import PartySummonDialog from './PartySummonDialog.svelte'
   import BlessDialog from './BlessDialog.svelte'
   import { blessSession, bookmarkDialog } from '../stores/bookmarkStore'
   import { salonSession } from '../stores/salonStore'
@@ -92,7 +93,11 @@
   import { friendPanelVisible } from '../stores/friendStore'
   import { familyPanelVisible, familyHotkeyActive } from '../stores/familyStore'
   import { emotePanelVisible } from '../stores/emoteStore'
-  import { partyPanelVisible, partyHotkeyActive } from '../stores/partyStore'
+  import {
+    partyPanelVisible,
+    partyHotkeyActive,
+    summonPicker,
+  } from '../stores/partyStore'
   import { mountOverlay } from '../stores/overlayStack'
   import { networkManager, type AccountCharacter } from '../network/socket'
   import { tipHatDialog } from '../stores/tipHatStore'
@@ -565,6 +570,10 @@
 
 {#if $bookmarkDialog}
   <BookmarkDialog />
+{/if}
+
+{#if $summonPicker !== null}
+  <PartySummonDialog />
 {/if}
 
 {#if $blessSession}

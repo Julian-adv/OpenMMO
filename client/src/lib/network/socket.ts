@@ -36,7 +36,11 @@ import {
   localTeleportActive,
   resetTeleportEffects,
 } from '../stores/teleportEffectStore'
-import { resetPartyStores } from '../stores/partyStore'
+import {
+  partyRoster,
+  resetPartyStores,
+  summonPicker,
+} from '../stores/partyStore'
 import { resetFriendStores } from '../stores/friendStore'
 import { resetFamilyStores } from '../stores/familyStore'
 import { resetPlayerTrade } from '../stores/playerTradeStore'
@@ -843,6 +847,12 @@ class NetworkManager {
       openBookmarks(instanceId)
       return
     }
+    // With one other member the server calls them without a pick.
+    const partySize = get(partyRoster)?.members.length ?? 0
+    if (category === 'party_summon_scroll' && partySize > 2) {
+      summonPicker.set(instanceId)
+      return
+    }
     if (
       category === 'teleport_scroll' ||
       category === 'return_scroll' ||
@@ -872,6 +882,13 @@ class NetworkManager {
   sendTeleportToBookmark(instanceId: number, bookmarkId: number) {
     this.sendWithTeleportDeparture({
       TeleportToBookmark: { instance_id: instanceId, bookmark_id: bookmarkId },
+    })
+  }
+
+  /** Read a summoning scroll at one party member. */
+  sendSummonPartyMember(instanceId: number, memberId: number) {
+    this.sendMessage({
+      SummonPartyMember: { instance_id: instanceId, member_id: memberId },
     })
   }
 

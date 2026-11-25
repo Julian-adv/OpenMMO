@@ -1302,7 +1302,12 @@ pub(super) async fn handle_response(
         }
 
         // Worn gear comes off; other items are equipped or consumed.
-        if let AgentAction::Use { item, bookmark } = action {
+        if let AgentAction::Use {
+            item,
+            bookmark,
+            member,
+        } = action
+        {
             let mut s = state.lock().await;
             let Some((def_id, placed)) = s.find_carried(item) else {
                 warn!("use: nothing carried matching '{item}'");
@@ -1327,6 +1332,26 @@ pub(super) async fn handle_response(
                         onlinerpg_shared::ClientMessage::TeleportToBookmark {
                             instance_id,
                             bookmark_id,
+                        }
+                    } else if let Some(name) = member {
+                        let name = name.trim();
+                        let Some(member_id) = s
+                            .party_members
+                            .iter()
+                            .find(|m| m.name.eq_ignore_ascii_case(name))
+                            .map(|m| m.id)
+                        else {
+                            let roster: Vec<String> =
+                                s.party_members.iter().map(|m| m.name.clone()).collect();
+                            s.push_agent_event(format!(
+                                "[UseFailed] No party member is called '{name}' (party: {}); {def_id} was not read.",
+                                roster.join(", ")
+                            ));
+                            continue;
+                        };
+                        onlinerpg_shared::ClientMessage::SummonPartyMember {
+                            instance_id,
+                            member_id,
                         }
                     } else if def.is_some_and(|d| d.is_consumable()) {
                         onlinerpg_shared::ClientMessage::UseItem { instance_id }
@@ -2860,6 +2885,7 @@ mod tests {
             &AgentAction::Use {
                 item: "torch".to_string(),
                 bookmark: None,
+                member: None,
             },
             mark,
         )

@@ -229,6 +229,8 @@
   "party.summonMessage": "{{name}}さんがあなたを呼んでいます。",
   "party.summonAnswer": "応じる",
   "party.summonIgnore": "無視",
+  "party.summonPickTitle": "誰を呼びますか？",
+  "party.summonPick": "呼ぶ",
   "party.title": "パーティー",
   "party.expand": "パーティー欄を開く",
   "party.collapse": "パーティー欄を閉じる",

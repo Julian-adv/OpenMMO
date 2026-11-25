@@ -585,7 +585,7 @@ Use the readiness status above. Wait for server success or failure feedback."#,
         }
         for summon in self.live_party_summons() {
             lines.push(format!(
-                "{} calls you to their side (summoning scroll) — answer with summon_accept or summon_decline",
+                "{} calls you to their side, or to their dungeon's entrance if underground (summoning scroll) — answer with summon_accept or summon_decline",
                 summon.caster_name
             ));
         }

@@ -161,5 +161,8 @@ export interface PendingPartySummon {
 /** Unanswered summons, oldest first, same queue discipline as invites. */
 export const pendingPartySummons = writable<PendingPartySummon[]>([])
 
+/** The summoning scroll whose target is being picked, if any. */
+export const summonPicker = writable<number | null>(null)
+
 /** Party panel row under the cursor; Healing Prayer aims there first. */
 export const hoveredPartyMemberId = writable<number | null>(null)

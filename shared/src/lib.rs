@@ -321,7 +321,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v173: `MonsterStared`.
 /// v174: `Monster::dormant` and `MonsterDormant`.
 /// v175: `AdminFollowChanged`, the admin `/follow`.
-pub const PROTOCOL_VERSION: u32 = 175;
+/// v176: `SummonPartyMember`: a summoning scroll calls one chosen member.
+pub const PROTOCOL_VERSION: u32 = 176;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

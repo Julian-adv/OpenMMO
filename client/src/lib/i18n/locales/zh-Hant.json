@@ -229,6 +229,8 @@
   "party.summonMessage": "{{name}}召喚你到身邊。",
   "party.summonAnswer": "回應",
   "party.summonIgnore": "忽略",
+  "party.summonPickTitle": "召喚誰？",
+  "party.summonPick": "召喚",
   "party.title": "隊伍",
   "party.expand": "展開隊伍面板",
   "party.collapse": "收起隊伍面板",

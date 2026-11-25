@@ -1023,8 +1023,9 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             crate::state::merge_outcome(proposal)
         )),
         ServerMessage::PartySummonReceived { caster_name, .. } => Some(format!(
-            "[PartySummon] {caster_name} calls you to their side (summoning scroll). Accept \
-             with {{\"type\":\"summon_accept\"}} or decline with summon_decline."
+            "[PartySummon] {caster_name} calls you (summoning scroll): to their side, or to \
+             their dungeon's surface entrance if they are underground. Accept with \
+             {{\"type\":\"summon_accept\"}} or decline with summon_decline."
         )),
         ServerMessage::PartyState { members, .. } => Some(if members.is_empty() {
             "[Party] You are no longer in a party.".to_string()

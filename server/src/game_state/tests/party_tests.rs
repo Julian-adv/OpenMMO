@@ -933,14 +933,14 @@ async fn summon_accept_teleports_to_casters_side() {
     let mut observer_rx = add(&game_state, "observer", 500.0).await;
     form_party(&game_state, "alice", "bob").await;
     give_summon_scroll(&game_state, "alice").await;
-    // The caster waits on a dungeon floor: the arrival must match it.
+    // The caster waits upstairs in a house: the arrival must match the floor.
     game_state
         .players
         .write()
         .await
         .get_mut(&pid("alice"))
         .unwrap()
-        .floor_level = -2;
+        .floor_level = 1;
     drain(&mut alice_rx);
     drain(&mut bob_rx);
     drain(&mut observer_rx);
@@ -975,10 +975,10 @@ async fn summon_accept_teleports_to_casters_side() {
     let dist = (dx * dx + dz * dz).sqrt();
     assert!(dist <= 2.0, "bob should arrive beside alice, {dist}m away");
     assert!(dist > 0.5, "arrivals should not stack on the caster");
-    assert_eq!(bob.floor_level, -2);
+    assert_eq!(bob.floor_level, 1);
     let messages = super::drain(&mut bob_rx);
     let effect = messages.iter().position(|msg| matches!(msg,
-        ServerMessage::PlayerTeleportEffect { player_id, position, floor_level: -2, phase: onlinerpg_shared::TeleportPhase::Arriving }
+        ServerMessage::PlayerTeleportEffect { player_id, position, floor_level: 1, phase: onlinerpg_shared::TeleportPhase::Arriving }
         if *player_id == bob.id && *position == bob.position
     )).unwrap();
     let moved = messages
@@ -994,6 +994,134 @@ async fn summon_accept_teleports_to_casters_side() {
         }
     )));
     assert!(super::drain(&mut observer_rx).iter().any(|msg| matches!(msg, ServerMessage::PlayerTeleportEffect { player_id, floor_level: 0, phase: onlinerpg_shared::TeleportPhase::Departing, .. } if *player_id == bob.id)));
+}
+
+/// Put `name` on `floor` straight above or below the Garden of Stone's door.
+async fn place_at_garden(game_state: &GameState, name: &str, floor: i8) -> Position {
+    let door = onlinerpg_shared::dungeon::entrance("stone_garden")
+        .unwrap()
+        .position();
+    let mut players = game_state.players.write().await;
+    let player = players.get_mut(&pid(name)).unwrap();
+    player.position = Position {
+        x: door.x,
+        y: door.y - 4.0 * f32::from(floor.unsigned_abs()),
+        z: door.z,
+    };
+    player.floor_level = floor;
+    door
+}
+
+#[tokio::test]
+async fn summon_from_a_dungeon_lands_outsiders_at_its_door() {
+    let game_state = super::make_flat_world_game_state("summon_to_dungeon_door");
+    let mut alice_rx = add(&game_state, "alice", 0.0).await;
+    let mut bob_rx = add(&game_state, "bob", 500.0).await;
+    form_party(&game_state, "alice", "bob").await;
+    give_summon_scroll(&game_state, "alice").await;
+    let door = place_at_garden(&game_state, "alice", -5).await;
+    drain(&mut alice_rx);
+    drain(&mut bob_rx);
+
+    game_state.use_item(&pid("alice"), 9).await;
+    assert_eq!(summon_scrolls_left(&game_state, "alice").await, 0);
+    game_state
+        .respond_to_party_summon(&pid("bob"), &pid("alice"), true)
+        .await;
+
+    let bob = game_state.players.read().await[&pid("bob")].clone();
+    assert_eq!(bob.floor_level, 0, "bob stays on the surface");
+    let gap = ((bob.position.x - door.x).powi(2) + (bob.position.z - door.z).powi(2)).sqrt();
+    assert!(gap < 16.0, "bob should land by the door, {gap}m away");
+    assert!(
+        bob.position.x < door.x.floor(),
+        "bob should land west of the west-facing door, {:?}",
+        bob.position
+    );
+    assert!(drain(&mut bob_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::SystemMessage { message, .. } if message.contains("Garden of Stone entrance"))));
+    assert!(drain(&mut alice_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::SystemMessage { message, .. } if message.contains("bob is at the Garden of Stone entrance"))));
+}
+
+#[tokio::test]
+async fn summon_skips_members_in_the_same_dungeon() {
+    let game_state = make_test_game_state("summon_same_dungeon");
+    let mut alice_rx = add(&game_state, "alice", 0.0).await;
+    let mut bob_rx = add(&game_state, "bob", 500.0).await;
+    form_party(&game_state, "alice", "bob").await;
+    give_summon_scroll(&game_state, "alice").await;
+    place_at_garden(&game_state, "alice", -5).await;
+    place_at_garden(&game_state, "bob", -1).await;
+    drain(&mut alice_rx);
+    drain(&mut bob_rx);
+
+    game_state.use_item(&pid("alice"), 9).await;
+
+    assert_eq!(summon_scrolls_left(&game_state, "alice").await, 1);
+    assert!(drain(&mut alice_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::SystemMessage { message, .. } if message.contains("already in this dungeon"))));
+    assert!(!drain(&mut bob_rx)
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::PartySummonReceived { .. })));
+}
+
+#[tokio::test]
+async fn summon_refused_after_walking_into_the_casters_dungeon() {
+    let game_state = make_test_game_state("summon_walked_in");
+    let mut alice_rx = add(&game_state, "alice", 0.0).await;
+    let mut bob_rx = add(&game_state, "bob", 500.0).await;
+    form_party(&game_state, "alice", "bob").await;
+    give_summon_scroll(&game_state, "alice").await;
+    place_at_garden(&game_state, "alice", -5).await;
+    game_state.use_item(&pid("alice"), 9).await;
+    place_at_garden(&game_state, "bob", -1).await;
+    drain(&mut alice_rx);
+    drain(&mut bob_rx);
+
+    game_state
+        .respond_to_party_summon(&pid("bob"), &pid("alice"), true)
+        .await;
+
+    assert_eq!(game_state.players.read().await[&pid("bob")].floor_level, -1);
+    assert!(drain(&mut bob_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::SystemMessage { message, .. } if message.contains("already in that dungeon"))));
+}
+
+#[tokio::test]
+async fn summon_scroll_calls_only_the_chosen_member() {
+    let game_state = make_test_game_state("summon_chosen");
+    let mut alice_rx = add(&game_state, "alice", 0.0).await;
+    let mut bob_rx = add(&game_state, "bob", 500.0).await;
+    let mut carol_rx = add(&game_state, "carol", 900.0).await;
+    form_party(&game_state, "alice", "bob").await;
+    form_party(&game_state, "alice", "carol").await;
+    give_summon_scrolls(&game_state, "alice", 2).await;
+    drain(&mut alice_rx);
+    drain(&mut bob_rx);
+    drain(&mut carol_rx);
+
+    game_state.use_item(&pid("alice"), 9).await;
+    assert_eq!(summon_scrolls_left(&game_state, "alice").await, 2);
+    assert!(drain(&mut alice_rx).iter().any(|msg| matches!(msg,
+        ServerMessage::SystemMessage { message, .. } if message.contains("choose who"))));
+
+    game_state
+        .summon_party_member(&pid("alice"), 9, pid("carol"))
+        .await;
+    assert_eq!(summon_scrolls_left(&game_state, "alice").await, 1);
+    let called = |rx: &mut super::DirectRx| {
+        drain(rx)
+            .iter()
+            .any(|msg| matches!(msg, ServerMessage::PartySummonReceived { .. }))
+    };
+    assert!(called(&mut carol_rx));
+    assert!(!called(&mut bob_rx));
+
+    game_state
+        .summon_party_member(&pid("alice"), 9, pid("stranger"))
+        .await;
+    assert_eq!(summon_scrolls_left(&game_state, "alice").await, 1);
 }
 
 #[tokio::test]
@@ -1215,8 +1343,12 @@ async fn summon_teleport_voids_calls_aimed_at_the_mover() {
     form_party(&game_state, "alice", "carol").await;
     give_summon_scroll(&game_state, "alice").await;
     give_summon_scrolls(&game_state, "carol", 2).await;
-    game_state.use_item(&pid("alice"), 9).await;
-    game_state.use_item(&pid("carol"), 9).await;
+    game_state
+        .summon_party_member(&pid("alice"), 9, pid("bob"))
+        .await;
+    game_state
+        .summon_party_member(&pid("carol"), 9, pid("bob"))
+        .await;
     drain(&mut alice_rx);
     drain(&mut bob_rx);
     drain(&mut carol_rx);
@@ -1247,9 +1379,11 @@ async fn summon_teleport_voids_calls_aimed_at_the_mover() {
         })
     ));
 
-    // Carol can call Bob again; Alice still holds Carol's live call.
+    // Carol can call Bob again.
     drain(&mut carol_rx);
-    game_state.use_item(&pid("carol"), 9).await;
+    game_state
+        .summon_party_member(&pid("carol"), 9, pid("bob"))
+        .await;
     assert_eq!(summon_scrolls_left(&game_state, "carol").await, 0);
     let call_notice = std::iter::from_fn(|| carol_rx.try_recv().ok())
         .find_map(|msg| match msg {
@@ -1257,7 +1391,7 @@ async fn summon_teleport_voids_calls_aimed_at_the_mover() {
             _ => None,
         })
         .expect("carol should get a call notice");
-    assert!(call_notice.contains("calling 1"), "{call_notice}");
+    assert!(call_notice.contains("calling bob"), "{call_notice}");
     assert!(matches!(
         bob_rx.try_recv(),
         Ok(ServerMessage::PartySummonReceived { .. })

@@ -896,6 +896,11 @@ pub enum ClientMessage {
         instance_id: u64,
         bookmark_id: i64,
     },
+    /// Read a party summoning scroll at one party member.
+    SummonPartyMember {
+        instance_id: u64,
+        member_id: PlayerId,
+    },
     /// Ask the blesser for the blessing window; off duty she declines aloud.
     AskBlessing {
         npc_player_id: PlayerId,
@@ -1467,6 +1472,7 @@ impl ClientMessage {
             | UseItem { .. }
             | SaveBookmark { .. }
             | TeleportToBookmark { .. }
+            | SummonPartyMember { .. }
             | AskBlessing { .. }
             | BlessScrolls { .. }
             | UseLandDocument { .. }

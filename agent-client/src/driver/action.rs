@@ -446,6 +446,9 @@ pub(super) enum AgentAction {
         /// Aim a teleport scroll at one of our bookmarks, by name.
         #[serde(default, alias = "destination")]
         bookmark: Option<String>,
+        /// The party member a summoning scroll calls, by name.
+        #[serde(default, alias = "call", alias = "summon")]
+        member: Option<String>,
     },
     /// Bookmark the spot we stand on as a teleport destination.
     #[serde(rename = "bookmark", alias = "save_bookmark")]
@@ -883,6 +886,8 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
   outside at night (it lights on equip, so other players see your light too,
   and goes out when you take it off):
   {"type": "use", "target": "torch"}
+  A party summoning scroll calls one member; name them when you have more than one:
+  {"type": "use", "target": "scroll_of_party_summon", "member": "darkcocoa"}
   Teleport scrolls wait for completion and discard the remaining position-dependent
   actions in this reply. Plan your next move from the refreshed world state."#,
     },
@@ -1169,7 +1174,8 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
         names: &["summon_accept", "summon_decline"],
         aliases: &["accept_summon", "decline_summon"],
         doc: r#"- Answer a party summon (the [PartySummon] event): a party member read a
-  summoning scroll asking everyone to teleport to their side. Accepting
+  summoning scroll calling you to their side (to their dungeon's surface
+  entrance if they are underground). Accepting
   moves you there instantly; you cannot accept mid-combat. With several
   pending, name the caster — bare answers the oldest. Accepting waits for completion
   and discards the remaining position-dependent actions in this reply:
@@ -2948,7 +2954,7 @@ mod tests {
 
     #[test]
     fn an_aimed_use_names_its_bookmark_and_a_save_is_sent_directly() {
-        let AgentAction::Use { item, bookmark } = parse_single_action(
+        let AgentAction::Use { item, bookmark, .. } = parse_single_action(
             r#"{"actions": [{"type": "use", "target": "blessed_scroll_of_teleportation", "bookmark": "mine"}]}"#,
         ) else {
             panic!("expected Use");
@@ -2957,6 +2963,12 @@ mod tests {
             (item.as_str(), bookmark.as_deref()),
             ("blessed_scroll_of_teleportation", Some("mine"))
         );
+        let AgentAction::Use { member, .. } = parse_single_action(
+            r#"{"actions": [{"type": "use", "target": "scroll_of_party_summon", "member": "bob"}]}"#,
+        ) else {
+            panic!("expected Use");
+        };
+        assert_eq!(member.as_deref(), Some("bob"));
         let save = parse_single_action(r#"{"actions": [{"type": "bookmark", "name": "mine"}]}"#);
         assert!(matches!(
             action_to_command(&save, None),
@@ -3755,6 +3767,7 @@ mod tests {
             AgentAction::Use {
                 item: "torch".to_string(),
                 bookmark: None,
+                member: None,
             },
             AgentAction::PartyLeave,
         ] {

@@ -269,7 +269,7 @@
   "scroll_of_medium_house.name": "中型住宅の巻物",
   "scroll_of_medium_two_story_house.description": "自分の領地に中型の二階建て住宅を建てます。リカの店で見学できます。",
   "scroll_of_medium_two_story_house.name": "中型二階建て住宅の巻物",
-  "scroll_of_party_summon.description": "ルーンを読むとパーティー全員を呼び寄せます。各自が召喚に応じるか選べます。",
+  "scroll_of_party_summon.description": "ルーンを読むと選んだパーティーメンバー一人を呼び寄せます。相手は召喚に応じるか選べます。",
   "scroll_of_party_summon.name": "パーティー召喚の巻物",
   "scroll_of_return.description": "神秘のルーンを読むと、閃光とともに町へ帰還します。",
   "scroll_of_return.name": "帰還の巻物",

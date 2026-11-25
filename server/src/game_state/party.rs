@@ -1,4 +1,5 @@
 use super::consent::{answer_consent, PendingConsent};
+use crate::dungeon_defs::dungeon_at;
 use crate::types::{Player, PlayerId, ServerMessage};
 use onlinerpg_shared::messages::LocalizedMessage;
 use onlinerpg_shared::messages::{
@@ -72,10 +73,18 @@ impl Parties {
     }
 }
 
+/// The dungeon a player stands in, by entrance id; `None` above ground.
+fn dungeon_id_at(player: &Player) -> Option<&'static str> {
+    dungeon_at(&player.position, player.floor_level).map(|entrance| entrance.id.as_str())
+}
+
 /// What reading a summoning scroll did; only `Called` consumes the scroll.
 pub(crate) enum SummonCast {
     Called,
     NoMembers,
+    AllInside,
+    ChooseMember,
+    NotCallable,
     CallStillOut,
 }
 
@@ -544,63 +553,71 @@ impl super::GameState {
             .retain(|(_, to), _| to != player_id);
     }
 
-    /// Fan a summoning scroll out as consent requests to every online member
-    /// without a live call from this caster — re-reading while one is out
-    /// must neither refresh nor re-pop it (the invites' ack-only rule). Like
-    /// invites, a block changes only the delivery: a suppressed member still
-    /// gets an entry, they just never see the toast.
-    pub(crate) async fn try_cast_party_summon(&self, caster_id: &PlayerId) -> SummonCast {
+    /// Send one consent request for a summoning scroll: to `target`, or to
+    /// the only callable member when none is named. A call already out to
+    /// that member is neither refreshed nor re-popped (the invites' ack-only
+    /// rule). A block changes only the delivery: the entry stays, the toast
+    /// never shows.
+    pub(crate) async fn try_cast_party_summon(
+        &self,
+        caster_id: &PlayerId,
+        target: Option<PlayerId>,
+    ) -> SummonCast {
         let members = self.other_party_members(caster_id).await;
         if members.is_empty() {
             return SummonCast::NoMembers;
         }
-        let caster_name = self.player_name_of(caster_id).await;
-        let suppressed: HashSet<PlayerId> = {
-            let blocked = self.blocked_names.read().await;
-            members
-                .iter()
-                .filter(|id| {
-                    blocked
-                        .get(id)
-                        .is_some_and(|names| names.contains(&caster_name))
-                })
-                .copied()
-                .collect()
-        };
-        let callable: Vec<PlayerId> = {
-            let mut parties = self.parties.write().await;
-            parties.sweep_expired_summons();
-            let expires_at = Instant::now() + PARTY_SUMMON_TTL;
+        // Those already inside the caster's dungeon stay where they are.
+        let (callable, caster_name) = {
+            let players = self.players.read().await;
+            let Some(caster) = players.get(caster_id) else {
+                return SummonCast::NoMembers;
+            };
+            let dungeon = dungeon_id_at(caster);
             let callable: Vec<PlayerId> = members
                 .into_iter()
-                .filter(|member| !parties.summons.contains_key(&(*caster_id, *member)))
+                .filter(|id| {
+                    dungeon.is_none() || players.get(id).and_then(dungeon_id_at) != dungeon
+                })
                 .collect();
-            for member in &callable {
-                parties.summons.insert((*caster_id, *member), expires_at);
-            }
-            callable
+            (callable, caster.name.clone())
         };
-        if callable.is_empty() {
-            return SummonCast::CallStillOut;
+        let member = match target {
+            _ if callable.is_empty() => return SummonCast::AllInside,
+            Some(id) if callable.contains(&id) => id,
+            Some(_) => return SummonCast::NotCallable,
+            None if callable.len() == 1 => callable[0],
+            None => return SummonCast::ChooseMember,
+        };
+        let member_name = self.player_name_of(&member).await;
+        let suppressed = self
+            .blocked_names
+            .read()
+            .await
+            .get(&member)
+            .is_some_and(|names| names.contains(&caster_name));
+        {
+            let mut parties = self.parties.write().await;
+            parties.sweep_expired_summons();
+            if parties.summons.contains_key(&(*caster_id, member)) {
+                return SummonCast::CallStillOut;
+            }
+            parties
+                .summons
+                .insert((*caster_id, member), Instant::now() + PARTY_SUMMON_TTL);
         }
-        let recipients: Vec<PlayerId> = callable
-            .iter()
-            .filter(|m| !suppressed.contains(m))
-            .copied()
-            .collect();
-        self.send_direct_message_to_players(
-            &recipients,
-            ServerMessage::PartySummonReceived {
-                caster_id: *caster_id,
-                caster_name,
-            },
-        )
-        .await;
-        self.send_system_message(
-            caster_id,
-            format!("Summon: calling {} party member(s).", callable.len()),
-        )
-        .await;
+        if !suppressed {
+            self.send_direct_message(
+                &member,
+                ServerMessage::PartySummonReceived {
+                    caster_id: *caster_id,
+                    caster_name,
+                },
+            )
+            .await;
+        }
+        self.send_system_message(caster_id, format!("Summon: calling {member_name}."))
+            .await;
         SummonCast::Called
     }
 
@@ -644,7 +661,7 @@ impl super::GameState {
             return true;
         }
         // Keep refused calls available for a retry until they expire.
-        let (member_name, refusal) = {
+        let (member_name, member_dungeon, refusal) = {
             let players = self.players.read().await;
             let Some(member) = players.get(member_id) else {
                 return false;
@@ -656,7 +673,7 @@ impl super::GameState {
             } else {
                 None
             };
-            (member.name.clone(), refusal)
+            (member.name.clone(), dungeon_id_at(member), refusal)
         };
         if let Some(reason) = refusal {
             self.send_system_message(member_id, format!("Summon: {reason}"))
@@ -696,17 +713,47 @@ impl super::GameState {
             self.send_system_message(member_id, message).await;
             return false;
         }
+        let entrance = dungeon_at(&center, floor);
+        if entrance.is_some() && member_dungeon == entrance.map(|e| e.id.as_str()) {
+            self.parties.write().await.summons.remove(&key);
+            self.send_system_message(member_id, "Summon: you are already in that dungeon.")
+                .await;
+            return false;
+        }
+        let (arrival, facing, arrival_floor, at) = match entrance {
+            Some(entrance) => {
+                let (arrival, facing) = self.dungeon_entrance_front(member_id, entrance).await;
+                (
+                    arrival,
+                    facing,
+                    0,
+                    format!(" at the {} entrance", entrance.name),
+                )
+            }
+            None => (
+                self.arrival_beside(member_id, &center),
+                rotation,
+                floor,
+                String::new(),
+            ),
+        };
+        info!(
+            member = %member_name,
+            caster = %caster_name,
+            floor,
+            entrance = entrance.map(|e| e.id.as_str()),
+            "party summon accepted"
+        );
         // Teleporting clears every summons aimed at the mover.
-        let arrival = self.arrival_beside(member_id, &center);
-        info!(member = %member_name, caster = %caster_name, "party summon accepted");
-        self.teleport_player_with_effects(member_id, arrival, rotation, floor)
+        self.teleport_player_with_effects(member_id, arrival, facing, arrival_floor)
             .await;
         self.send_system_message(
             member_id,
-            format!("Summon: you answer {caster_name}'s call."),
+            format!("Summon: you answer {caster_name}'s call{at}."),
         )
         .await;
-        self.send_system_message(caster_id, format!("Summon: {member_name} is at your side."))
+        let beside = if at.is_empty() { " at your side" } else { &at };
+        self.send_system_message(caster_id, format!("Summon: {member_name} is{beside}."))
             .await;
         true
     }

@@ -229,6 +229,8 @@
   "party.summonMessage": "{{name}} 님이 곁으로 부릅니다.",
   "party.summonAnswer": "응하기",
   "party.summonIgnore": "무시",
+  "party.summonPickTitle": "누구를 부를까요?",
+  "party.summonPick": "부르기",
   "party.title": "파티",
   "party.expand": "파티 창 펼치기",
   "party.collapse": "파티 창 접기",

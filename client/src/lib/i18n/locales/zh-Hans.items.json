@@ -269,7 +269,7 @@
   "scroll_of_medium_house.name": "中型住宅卷轴",
   "scroll_of_medium_two_story_house.description": "在自己的领地建造中型双层住宅。可前往莉卡的商店参观样式。",
   "scroll_of_medium_two_story_house.name": "中型双层住宅卷轴",
-  "scroll_of_party_summon.description": "读出符文可召唤全体队友，每位队友都可选择接受或忽略。",
+  "scroll_of_party_summon.description": "读出符文可召唤一位选定的队友，对方可选择接受或忽略。",
   "scroll_of_party_summon.name": "队伍召唤卷轴",
   "scroll_of_return.description": "读出神秘符文，便会在闪光中返回城镇。",
   "scroll_of_return.name": "回城卷轴",

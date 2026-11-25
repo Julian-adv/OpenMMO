@@ -150,11 +150,18 @@ pub fn depth_band_start(depth: u8) -> u8 {
     depth.saturating_sub(1) / DEPTH_BAND_FLOORS * DEPTH_BAND_FLOORS + 1
 }
 
+/// The dungeon a position on `floor_level` lies in; `None` above ground.
+pub fn dungeon_at(position: &Position, floor_level: i8) -> Option<&'static DungeonEntranceDef> {
+    (floor_level < 0)
+        .then(|| entrance_at(position.x, position.z))
+        .flatten()
+}
+
 /// Where a position is, for log lines: the dungeon and depth underground, the
 /// house floor above ground level, or the open surface.
 pub fn place_label(position: &Position, floor_level: i8) -> String {
     if floor_level < 0 {
-        return match entrance_at(position.x, position.z) {
+        return match dungeon_at(position, floor_level) {
             Some(entrance) => format!("dungeon '{}' depth {}", entrance.id, -floor_level),
             None => format!("dungeon floor {floor_level}"),
         };

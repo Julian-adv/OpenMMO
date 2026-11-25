@@ -1283,6 +1283,16 @@ async fn handle_client_message(
                     .await;
             }
         }
+        ClientMessage::SummonPartyMember {
+            instance_id,
+            member_id,
+        } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .summon_party_member(id, instance_id, member_id)
+                    .await;
+            }
+        }
         ClientMessage::AskBlessing { npc_player_id } => {
             if let Some(id) = &state.player_id {
                 game_state.ask_blessing(id, &npc_player_id).await;

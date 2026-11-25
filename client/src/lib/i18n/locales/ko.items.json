@@ -269,7 +269,7 @@
   "scroll_of_medium_house.name": "중형 주택 주문서",
   "scroll_of_medium_two_story_house.description": "자신의 영지에 중형 2층집을 짓습니다. 리카의 상점에서 미리 볼 수 있습니다.",
   "scroll_of_medium_two_story_house.name": "중형 2층집 주문서",
-  "scroll_of_party_summon.description": "주문을 읽으면 모든 파티원에게 소환을 요청합니다. 각자 수락하거나 무시할 수 있습니다.",
+  "scroll_of_party_summon.description": "주문을 읽으면 고른 파티원 한 명에게 소환을 요청합니다. 상대는 수락하거나 무시할 수 있습니다.",
   "scroll_of_party_summon.name": "파티 소환 주문서",
   "scroll_of_return.description": "신비한 주문을 읽으면 빛과 함께 마을로 귀환합니다.",
   "scroll_of_return.name": "귀환 주문서",
