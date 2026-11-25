@@ -5,6 +5,7 @@ use tracing::info;
 
 use crate::game::combat;
 use onlinerpg_shared::monster_body::BodyFootprint;
+use onlinerpg_shared::occupancy::BODY_RADIUS_M;
 
 fn default_weapon_drop_chance() -> f32 {
     1.0
@@ -126,6 +127,9 @@ pub struct MonsterDefinition {
     /// centre, so a long body is struck from outside it.
     #[serde(rename = "bodyRadius", default)]
     pub body_radius: f32,
+    /// csv `hoverRadius` m: the body's footprint on the ground.
+    #[serde(rename = "hoverRadius", default)]
+    pub hover_radius: f32,
 }
 
 fn parse_footprint<'de, D: serde::Deserializer<'de>>(
@@ -141,6 +145,15 @@ fn parse_footprint<'de, D: serde::Deserializer<'de>>(
 }
 
 impl MonsterDefinition {
+    /// Round body radius on the ground, for separation. Footprint bodies are
+    /// walls in passability instead.
+    pub fn standing_radius(&self) -> f32 {
+        if self.body.is_some() {
+            return BODY_RADIUS_M;
+        }
+        self.hover_radius.max(self.body_radius).max(BODY_RADIUS_M)
+    }
+
     pub fn max_health(&self) -> u32 {
         self.health
             .unwrap_or_else(|| combat::monster_max_health_for_level(self.level))
@@ -181,7 +194,7 @@ impl MonsterDefinition {
 #[derive(Debug, Clone)]
 pub struct MonsterDefs {
     defs: Arc<HashMap<String, MonsterDefinition>>,
-    max_body_radius: f32,
+    max_standing_radius: f32,
 }
 
 impl MonsterDefs {
@@ -221,15 +234,23 @@ impl MonsterDefs {
             );
         }
 
-        let max_body_radius = defs.values().map(|def| def.body_radius).fold(0.0, f32::max);
+        let max_standing_radius = defs
+            .values()
+            .map(MonsterDefinition::standing_radius)
+            .fold(0.0, f32::max);
         Self {
             defs: Arc::new(defs),
-            max_body_radius,
+            max_standing_radius,
         }
     }
 
-    pub fn max_body_radius(&self) -> f32 {
-        self.max_body_radius
+    pub fn max_standing_radius(&self) -> f32 {
+        self.max_standing_radius
+    }
+
+    pub fn standing_radius(&self, monster_type: &str) -> f32 {
+        self.get(monster_type)
+            .map_or(BODY_RADIUS_M, MonsterDefinition::standing_radius)
     }
 
     pub fn get(&self, monster_type: &str) -> Option<&MonsterDefinition> {

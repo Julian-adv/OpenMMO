@@ -325,25 +325,11 @@ impl MonsterBrain {
             None => return BehaviorStatus::Failure,
         };
 
-        // Stacked attackers in one cell: the smallest id keeps it, the rest
-        // yield back to chase for slots of their own. Entry stays refused
-        // while the re-slot walk is under way so a yielder doesn't stop at
-        // the first cell boundary, still overlapped. A committed swing lands
-        // first, as with the range release below.
-        if self.swing_left_ms <= 0.0 {
-            if self.cell_yield {
-                self.reslotting = true;
-                return BehaviorStatus::Failure;
-            }
-            if self.reslotting && self.state != AiState::Attack {
-                return BehaviorStatus::Failure;
-            }
-            if self.state == AiState::Attack
-                && self.overlap_check_left_ms <= 0.0
-                && self.step_off_players(&target.position, nearby_players, path_provider)
-            {
-                return BehaviorStatus::Failure;
-            }
+        // A committed swing lands first, as with the range release below.
+        if self.swing_left_ms <= 0.0
+            && self.leave_overlap(&target.position, nearby_players, path_provider)
+        {
+            return BehaviorStatus::Failure;
         }
 
         let range = param(params, "range", self.attack_range);
@@ -396,19 +382,34 @@ impl MonsterBrain {
         BehaviorStatus::Running
     }
 
-    /// A player stands in us: walk to a free slot when one is reachable,
-    /// re-slotting like a yield. Without one, keep swinging where we are.
-    fn step_off_players(
+    /// True when we stay out of the attack to re-slot. A smaller-id monster
+    /// in our cell always makes us yield. A player, or a smaller-id monster
+    /// overlapping us from the next cell, only when a free slot is reachable:
+    /// players never yield back, and a forced yield there could hold forever.
+    fn leave_overlap(
         &mut self,
         target_pos: &crate::Position,
         nearby_players: &[NearbyPlayer],
         path_provider: &dyn PathProvider,
     ) -> bool {
+        if self.cell_yield {
+            self.reslotting = true;
+            return true;
+        }
+        if self.state != AiState::Attack {
+            // Still walking to the new slot: stopping at the first cell
+            // boundary would leave us overlapped.
+            return self.reslotting;
+        }
+        if self.overlap_check_left_ms > 0.0 {
+            return false;
+        }
         self.overlap_check_left_ms = OVERLAP_CHECK_MS;
-        let overlapped = nearby_players
-            .iter()
-            .any(|p| p.health > 0 && p.position.dist_xz_sq(&self.position) < OVERLAP_M * OVERLAP_M);
-        if !overlapped {
+        let crowded = self.body_yield
+            || nearby_players.iter().any(|p| {
+                p.health > 0 && p.position.dist_xz_sq(&self.position) < OVERLAP_M * OVERLAP_M
+            });
+        if !crowded {
             return false;
         }
         if !self.path_to_chase_slot(target_pos, nearby_players, path_provider) {

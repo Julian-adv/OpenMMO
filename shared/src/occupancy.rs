@@ -18,11 +18,12 @@ pub fn cell_center(cell: Cell) -> (f32, f32) {
 }
 
 /// Who holds which cells around a mover, excluding the mover itself.
-/// Standers block walking and slots; other bodies only block slots: their own
-/// cell, and any cell centre inside their clearance.
+/// Standers block walking into their own cell; every body blocks slots at its
+/// cell and at any cell centre inside its clearance.
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Occupancy {
     standers: Vec<Cell>,
+    stander_bodies: Vec<Body>,
     others: Vec<Body>,
 }
 
@@ -35,6 +36,19 @@ struct Body {
 }
 
 impl Body {
+    fn new(x: f32, z: f32, clearance: f32) -> Self {
+        Self {
+            cell: cell_of(x, z),
+            x,
+            z,
+            clearance,
+        }
+    }
+
+    fn holds(&self, cell: Cell, (x, z): (f32, f32)) -> bool {
+        self.cell == cell || self.within(x, z)
+    }
+
     fn within(&self, x: f32, z: f32) -> bool {
         let (dx, dz) = (shortest_world_delta_x(self.x, x), z - self.z);
         dx * dx + dz * dz < self.clearance * self.clearance
@@ -44,23 +58,24 @@ impl Body {
 impl Occupancy {
     pub fn clear(&mut self) {
         self.standers.clear();
+        self.stander_bodies.clear();
         self.others.clear();
     }
 
-    pub fn add_stander(&mut self, cell: Cell) {
-        self.standers.push(cell);
+    pub fn add_stander(&mut self, x: f32, z: f32, clearance: f32) {
+        let body = Body::new(x, z, clearance);
+        self.standers.push(body.cell);
+        self.stander_bodies.push(body);
     }
 
     /// `(x, z, clearance)` per body; clearance 0 holds only its cell.
     pub fn set_others(&mut self, bodies: impl IntoIterator<Item = (f32, f32, f32)>) {
         self.others.clear();
-        self.others
-            .extend(bodies.into_iter().map(|(x, z, clearance)| Body {
-                cell: cell_of(x, z),
-                x,
-                z,
-                clearance,
-            }));
+        self.others.extend(
+            bodies
+                .into_iter()
+                .map(|(x, z, clearance)| Body::new(x, z, clearance)),
+        );
     }
 
     pub fn standers(&self) -> &[Cell] {
@@ -72,13 +87,11 @@ impl Occupancy {
     }
 
     pub fn blocks_slot(&self, cell: Cell) -> bool {
-        if self.blocks_walk(cell) {
-            return true;
-        }
-        let (x, z) = cell_center(cell);
-        self.others
+        let center = cell_center(cell);
+        self.stander_bodies
             .iter()
-            .any(|body| body.cell == cell || body.within(x, z))
+            .chain(&self.others)
+            .any(|body| body.holds(cell, center))
     }
 
     /// Whether `(x, z)` stands inside another body's clearance.
@@ -138,7 +151,7 @@ mod tests {
     #[test]
     fn only_standers_block_walking() {
         let mut occupancy = Occupancy::default();
-        occupancy.add_stander((1, 1));
+        occupancy.add_stander(1.5, 1.5, 0.0);
         occupancy.set_others([(2.9, 2.5, 0.0), (5.05, 4.5, 0.62)]);
         assert!(occupancy.blocks_walk((1, 1)) && occupancy.blocks_slot((1, 1)));
         assert!(!occupancy.blocks_walk((2, 2)) && occupancy.blocks_slot((2, 2)));

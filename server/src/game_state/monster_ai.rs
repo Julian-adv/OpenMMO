@@ -324,6 +324,10 @@ impl super::GameState {
         brain.path_floor = passability_floor_for_level(monster.floor_level);
         brain.rotation = monster.rotation;
         brain.body = def.and_then(|d| d.body);
+        brain.radius = def.map_or(
+            onlinerpg_shared::occupancy::BODY_RADIUS_M,
+            crate::monster_defs::MonsterDefinition::standing_radius,
+        );
         brain.ranged_range = def.map_or(0.0, |d| d.ranged_attack_range);
         brain.reaction_ms = def.map_or(0.0, |d| d.reaction_ms);
         brain.staggers = !def.is_some_and(|d| d.stagger_immune);
@@ -501,6 +505,7 @@ impl super::GameState {
                             position: m.position,
                             state: m.state,
                             path_floor: passability_floor_for_level(m.floor_level),
+                            radius: self.monster_defs.standing_radius(&m.monster_type),
                         });
                 }
                 if !brains.entries.contains_key(&m.id) {

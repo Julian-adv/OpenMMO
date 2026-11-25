@@ -97,6 +97,9 @@ pub struct MonsterBrain {
     /// A standing monster with a smaller id shares our cell this tick — we
     /// are the one who moves aside. Rebuilt each tick.
     pub(super) cell_yield: bool,
+    /// A smaller-id stander overlaps our body from another cell. Rebuilt each
+    /// tick; acted on like a player overlap.
+    pub(super) body_yield: bool,
     /// Walking off a shared cell to a slot of our own after a yield. Attack
     /// entry stays refused until arrival, or the yielder would stop at the
     /// first cell boundary, still overlapped.
@@ -105,6 +108,8 @@ pub struct MonsterBrain {
     pub(super) detour_goal: Option<(f32, f32)>,
     /// A solid body fixes the facing and moves every reach to its surface.
     pub body: Option<crate::monster_body::BodyFootprint>,
+    /// Round body radius on the ground, for separation.
+    pub radius: f32,
     /// Plain swings past melee reach land this far out; 0 for none.
     pub ranged_range: f32,
     /// How long a player must stay in sight before it gives chase; 0 reacts
@@ -209,9 +214,11 @@ impl MonsterBrain {
             chase_goal_cell: None,
             occupancy: Default::default(),
             cell_yield: false,
+            body_yield: false,
             reslotting: false,
             detour_goal: None,
             body: None,
+            radius: crate::occupancy::BODY_RADIUS_M,
             ranged_range: 0.0,
             reaction_ms: 0.0,
             noticing: None,
@@ -743,6 +750,7 @@ impl MonsterBrain {
         }
         self.occupancy.clear();
         self.cell_yield = false;
+        self.body_yield = false;
         let my_cell = cell_of(self.position.x, self.position.z);
         for m in nearby_monsters {
             if !m.state.is_stationary()
@@ -751,12 +759,17 @@ impl MonsterBrain {
             {
                 continue;
             }
-            let cell = cell_of(m.position.x, m.position.z);
-            self.occupancy.add_stander(cell);
-            // Sharing a cell with a smaller-id stander: we are the one who
-            // yields (see bt_attack_target / the door-wait spread).
-            if cell == my_cell && m.id.as_str() < self.monster_id.as_str() {
-                self.cell_yield = true;
+            let clearance = m.radius + self.radius;
+            self.occupancy
+                .add_stander(m.position.x, m.position.z, clearance);
+            // A smaller-id stander in our cell or body: we are the one who
+            // yields (see leave_overlap / the door-wait spread).
+            if m.id.as_str() < self.monster_id.as_str() {
+                if cell_of(m.position.x, m.position.z) == my_cell {
+                    self.cell_yield = true;
+                } else if m.position.dist_xz_sq(&self.position) < clearance * clearance {
+                    self.body_yield = true;
+                }
             }
         }
         if !self.state.is_engaged() {

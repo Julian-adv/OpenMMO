@@ -120,17 +120,14 @@ impl GameState {
     /// Footprint bodies are walls in passability; this covers the round ones.
     /// Movers count too: server positions are current, unlike a client's.
     async fn monster_bodies_near(&self, player: &Player, radius: f32) -> Vec<(Position, f32)> {
-        let reach = radius + self.monster_defs.max_body_radius();
+        let reach = radius + self.monster_defs.max_standing_radius();
         self.monsters
             .read()
             .await
             .alive_within(&player.position, player.floor_level, reach)
             .map(|monster| {
-                let body = self
-                    .monster_defs
-                    .get(&monster.monster_type)
-                    .map_or(0.0, |def| def.body_radius);
-                (monster.position, BODY_RADIUS_M + body.max(BODY_RADIUS_M))
+                let body = self.monster_defs.standing_radius(&monster.monster_type);
+                (monster.position, BODY_RADIUS_M + body)
             })
             .collect()
     }

@@ -1355,6 +1355,7 @@ fn view_of(brains: &[&MonsterBrain]) -> Vec<NearbyMonster> {
             position: b.position,
             state: b.network_state(),
             path_floor: b.path_floor,
+            radius: b.radius,
         })
         .collect()
 }
@@ -1376,16 +1377,7 @@ fn chase_until_attack(players: &[NearbyPlayer], monsters: &[NearbyMonster]) -> M
 
 #[test]
 fn chase_goal_avoids_a_cell_occupied_by_a_stander() {
-    let stander = vec![NearbyMonster {
-        id: "m2".into(),
-        position: Position {
-            x: 11.5,
-            y: 0.0,
-            z: 10.5,
-        },
-        state: MonsterState::Idle,
-        path_floor: 0,
-    }];
+    let stander = vec![stander_at("m2", 11.5, 10.5)];
     let brain = chase_until_attack(&attacker_at(10.0, 10.5), &stander);
     assert_ne!(
         cell_of(brain.position.x, brain.position.z),
@@ -1435,6 +1427,56 @@ fn an_attacker_steps_off_a_player_who_walks_into_it() {
     assert!(
         gap >= crate::occupancy::OVERLAP_M,
         "still in the player at {gap:.2} m"
+    );
+}
+
+#[test]
+fn a_golem_and_a_skeleton_on_one_target_end_apart() {
+    let mut golem = brain_at("a_golem", 14.0, 10.5);
+    golem.radius = 0.9;
+    golem.attack_range = 2.0;
+    let mut skeleton = brain_at("b_skeleton", 14.0, 11.5);
+    skeleton.radius = 0.45;
+    skeleton.attack_range = 1.6;
+    let players = attacker_at(10.0, 10.5);
+    let tree = chase_attack_tree();
+    let mut rng = SmallRng::seed_from_u64(3);
+    for _ in 0..120 {
+        let view = view_of(&[&golem, &skeleton]);
+        golem.tick_with_behavior_tree(200.0, &players, &view, &tree, &DirectPath, &mut rng);
+        skeleton.tick_with_behavior_tree(200.0, &players, &view, &tree, &DirectPath, &mut rng);
+    }
+
+    assert_eq!(golem.state(), AiState::Attack);
+    assert_eq!(skeleton.state(), AiState::Attack);
+    let gap = golem.position.dist_xz_sq(&skeleton.position).sqrt();
+    assert!(
+        gap >= golem.radius + skeleton.radius,
+        "bodies overlap: {gap:.2} m apart"
+    );
+}
+
+#[test]
+fn an_attacker_steps_out_of_a_big_stander_beside_it() {
+    let players = attacker_at(10.0, 10.5);
+    let mut brain = chase_until_attack(&players, &[]);
+    let (cx, cz) = cell_center(cell_of(brain.position.x, brain.position.z));
+    let golem = vec![NearbyMonster {
+        state: MonsterState::Attack,
+        radius: 0.9,
+        ..stander_at("a_golem", cx, cz + 1.0)
+    }];
+    let tree = chase_attack_tree();
+    let mut rng = SmallRng::seed_from_u64(5);
+    for _ in 0..60 {
+        brain.tick_with_behavior_tree(200.0, &players, &golem, &tree, &DirectPath, &mut rng);
+    }
+
+    assert_eq!(brain.state(), AiState::Attack);
+    let gap = brain.position.dist_xz_sq(&golem[0].position).sqrt();
+    assert!(
+        gap >= golem[0].radius + brain.radius,
+        "still inside the golem: {gap:.2} m"
     );
 }
 
@@ -1616,16 +1658,11 @@ fn a_sidestep_reports_the_turn_it_makes() {
     let players = attacker_at(15.5, 13.5);
     for stander_x in 11..15 {
         for stander_z in 10..14 {
-            let stander = vec![NearbyMonster {
-                id: "stander".into(),
-                position: Position {
-                    x: stander_x as f32 + 0.5,
-                    y: 0.0,
-                    z: stander_z as f32 + 0.5,
-                },
-                state: MonsterState::Idle,
-                path_floor: 0,
-            }];
+            let stander = vec![stander_at(
+                "stander",
+                stander_x as f32 + 0.5,
+                stander_z as f32 + 0.5,
+            )];
             let mut brain = brain_at("m1", 10.5, 10.5);
             let mut rng = SmallRng::seed_from_u64(42);
             let mut reported = brain.position;
@@ -1941,16 +1978,7 @@ fn sidestep_rejects_a_leg_through_an_occupied_cell() {
     let tree = chase_attack_tree();
     let mut rng = SmallRng::seed_from_u64(42);
     let players = attacker_at(12.5, 9.0);
-    let stander = vec![NearbyMonster {
-        id: "m2".into(),
-        position: Position {
-            x: 10.5,
-            y: 0.0,
-            z: 11.5,
-        },
-        state: MonsterState::Idle,
-        path_floor: 0,
-    }];
+    let stander = vec![stander_at("m2", 10.5, 11.5)];
 
     let mut moved_late = 0.0_f32;
     for step in 0..300 {
@@ -2021,12 +2049,7 @@ fn sidestep_rejects_a_euclidean_shortcut_that_is_route_farther() {
     let tree = chase_attack_tree();
     let mut rng = SmallRng::seed_from_u64(42);
     let players = attacker_at(12.5, 11.9);
-    let stander = |x: f32, z: f32, id: &str| NearbyMonster {
-        id: id.into(),
-        position: Position { x, y: 0.0, z },
-        state: MonsterState::Idle,
-        path_floor: 0,
-    };
+    let stander = |x: f32, z: f32, id: &str| stander_at(id, x, z);
     // South dip blocked, east/west taken: the only free neighbor is the
     // north pocket.
     let others = vec![
@@ -2133,6 +2156,7 @@ fn stander_at(id: &str, x: f32, z: f32) -> NearbyMonster {
         position: Position { x, y: 0.0, z },
         state: MonsterState::Idle,
         path_floor: 0,
+        radius: crate::occupancy::BODY_RADIUS_M,
     }
 }
 

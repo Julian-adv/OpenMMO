@@ -86,6 +86,8 @@ pub struct NearbyMonster {
     /// position is wrong for a mover.
     pub state: MonsterState,
     pub path_floor: u8,
+    /// Round body radius on the ground, for separation.
+    pub radius: f32,
 }
 
 /// The chased player and the radius the chase stops and swings at, so a
