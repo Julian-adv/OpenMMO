@@ -132,7 +132,7 @@ pub(super) fn cell_blocked(blocked: &[(i32, i32)], x: i32, z: i32) -> bool {
 }
 
 /// Whether a mover walking `(x0, z0)`→`(x1, z1)` enters any of `cells`
-/// (canonical, see `monster_ai::cell_of`). Sampled at quarter-cell steps so
+/// (canonical, see `occupancy::cell_of`). Sampled at quarter-cell steps so
 /// no 1m cell is skipped; the start cell is exempt. The chase gate, the
 /// occupied-leg check and the smoother all use this one sweep so they agree
 /// on which cells a leg touches.

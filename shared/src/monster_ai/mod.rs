@@ -128,21 +128,7 @@ const MAX_SLOT_PATH_TRIES: usize = 6;
 /// stand" and the chase waits instead.
 const MIN_PARTIAL_PROGRESS_METERS: f32 = 0.5;
 
-/// Separation cell for the 1m grid (doc/MONSTER_SEPARATION.md) — one standing
-/// monster per cell, NetHack-style.
-pub(crate) fn cell_of(x: f32, z: f32) -> (i32, i32) {
-    (
-        crate::world::wrap_world_x(x).floor() as i32,
-        z.floor() as i32,
-    )
-}
-
-fn cell_center(cell: (i32, i32)) -> (f32, f32) {
-    (
-        crate::world::wrap_world_x(cell.0 as f32 + 0.5),
-        cell.1 as f32 + 0.5,
-    )
-}
+pub(crate) use crate::occupancy::{cell_center, cell_of};
 
 /// Total XZ length of a waypoint path starting from `(x, z)`.
 fn path_len(x: f32, z: f32, waypoints: &[crate::pathfinding::PathWaypoint]) -> f32 {

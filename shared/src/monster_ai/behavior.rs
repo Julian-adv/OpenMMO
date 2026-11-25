@@ -12,6 +12,7 @@ use super::{
     FLEE_SAFE_DIST_MARGIN, MAX_SLOT_PATH_TRIES, MIN_PARTIAL_PROGRESS_METERS,
     NETWORK_SYNC_INTERVAL_MS, SIDESTEP_MAX_PATH_METERS,
 };
+use crate::occupancy::ranked_cells;
 use crate::world::{shortest_world_delta_x, wrap_world_x};
 use rand::Rng;
 use std::collections::HashMap;
@@ -637,7 +638,7 @@ impl MonsterBrain {
             let cell = (here.0 + ox, here.1 + oz);
             let (cx, cz) = cell_center(cell);
             if cell == target_cell
-                || self.occupied_cells.contains(&cell)
+                || self.occupancy.blocks_walk(cell)
                 || !path_provider.cell_passable(cx, cz, self.path_floor)
             {
                 continue;
@@ -667,7 +668,7 @@ impl MonsterBrain {
                     self.position.x,
                     self.position.z,
                     &result.waypoints,
-                    &self.occupied_cells,
+                    self.occupancy.standers(),
                 )
             {
                 continue;
@@ -722,7 +723,7 @@ impl MonsterBrain {
             local_goal_x,
             goal_z,
             self.path_floor,
-            &self.occupied_cells,
+            self.occupancy.standers(),
             DETOUR_MAX_NODES,
         );
         for wp in &mut result.waypoints {
@@ -758,16 +759,16 @@ impl MonsterBrain {
             self.chase_goal_cell = None;
             return false;
         }
-        // Players occupy slots but, unlike standing monsters, don't gate the walk.
         let reach_sq = (max_d + 1.0) * (max_d + 1.0);
-        let player_cells: Vec<_> = nearby_players
-            .iter()
-            .filter(|p| p.health > 0 && p.position.dist_xz_sq(target_pos) <= reach_sq)
-            .map(|p| cell_of(p.position.x, p.position.z))
-            .collect();
+        self.occupancy.set_others(
+            nearby_players
+                .iter()
+                .filter(|p| p.health > 0 && p.position.dist_xz_sq(target_pos) <= reach_sq)
+                .map(|p| (p.position.x, p.position.z, 0.0)),
+        );
 
         if let Some(cell) = self.chase_goal_cell {
-            if self.chase_cell_valid(cell, target_pos, max_d, &player_cells, path_provider)
+            if self.chase_cell_valid(cell, target_pos, max_d, path_provider)
                 && self.try_goal_cell(cell, path_provider)
             {
                 return true;
@@ -775,9 +776,6 @@ impl MonsterBrain {
         }
 
         let target_cell = cell_of(target_pos.x, target_pos.z);
-        let r = max_d.ceil() as i32;
-        let base_x = target_pos.x.floor();
-        let base_z = target_pos.z.floor();
         // Our side of the target first (side 0), nearest the engage distance
         // within that side: ranking the whole ring by our own distance let a
         // chaser settle on the first cell that merely had the target in reach
@@ -788,36 +786,25 @@ impl MonsterBrain {
         let engage = engage_limit(self.attack_range);
         let approach_x = shortest_world_delta_x(target_pos.x, self.position.x);
         let approach_z = self.position.z - target_pos.z;
-        let mut candidates: Vec<((i32, i32), (u8, f32))> = Vec::new();
-        for ox in -r..=r {
-            for oz in -r..=r {
-                let cx = wrap_world_x(base_x + ox as f32 + 0.5);
-                let cz = base_z + oz as f32 + 0.5;
-                let cell = cell_of(cx, cz);
-                let Some(target_d_sq) =
-                    self.chase_cell_open(cell, target_cell, target_pos, max_d, &player_cells)
-                else {
-                    continue;
-                };
-                let tdx = shortest_world_delta_x(target_pos.x, cx);
-                let tdz = cz - target_pos.z;
-                let cost = if tdx * approach_x + tdz * approach_z >= 0.0 {
-                    (0, (target_d_sq.sqrt() - engage).abs())
-                } else {
-                    let dx = shortest_world_delta_x(self.position.x, cx);
-                    let dz = cz - self.position.z;
-                    (1, dx * dx + dz * dz)
-                };
-                candidates.push((cell, cost));
-            }
-        }
-        candidates.sort_by(|a, b| a.1 .0.cmp(&b.1 .0).then(a.1 .1.total_cmp(&b.1 .1)));
+        let candidates = ranked_cells(target_cell, max_d.ceil() as i32, |cell| {
+            let target_d_sq = self.chase_cell_open(cell, target_cell, target_pos, max_d)?;
+            let (cx, cz) = cell_center(cell);
+            let tdx = shortest_world_delta_x(target_pos.x, cx);
+            let tdz = cz - target_pos.z;
+            Some(if tdx * approach_x + tdz * approach_z >= 0.0 {
+                (0, (target_d_sq.sqrt() - engage).abs())
+            } else {
+                let dx = shortest_world_delta_x(self.position.x, cx);
+                let dz = cz - self.position.z;
+                (1, dx * dx + dz * dz)
+            })
+        });
 
         // The raycast half of validity is deferred to here — the sort
         // discards most of the scan, so only cells about to be path-tested
         // pay it. Invalid cells don't consume path tries.
         let mut tries = 0;
-        for (cell, _) in candidates {
+        for cell in candidates {
             if tries >= MAX_SLOT_PATH_TRIES {
                 break;
             }
@@ -862,17 +849,13 @@ impl MonsterBrain {
         target_cell: (i32, i32),
         target_pos: &crate::Position,
         max_d: f32,
-        player_cells: &[(i32, i32)],
     ) -> Option<f32> {
         let (cx, cz) = cell_center(cell);
         let dx = shortest_world_delta_x(cx, target_pos.x);
         let dz = target_pos.z - cz;
         let d_sq = dx * dx + dz * dz;
-        (d_sq <= max_d * max_d
-            && cell != target_cell
-            && !self.occupied_cells.contains(&cell)
-            && !player_cells.contains(&cell))
-        .then_some(d_sq)
+        (d_sq <= max_d * max_d && cell != target_cell && !self.occupancy.blocks_slot(cell))
+            .then_some(d_sq)
     }
 
     /// Raycast half of candidate validity: standable, and with a clear attack
@@ -904,17 +887,10 @@ impl MonsterBrain {
         cell: (i32, i32),
         target_pos: &crate::Position,
         max_d: f32,
-        player_cells: &[(i32, i32)],
         path_provider: &dyn PathProvider,
     ) -> bool {
-        self.chase_cell_open(
-            cell,
-            cell_of(target_pos.x, target_pos.z),
-            target_pos,
-            max_d,
-            player_cells,
-        )
-        .is_some()
+        self.chase_cell_open(cell, cell_of(target_pos.x, target_pos.z), target_pos, max_d)
+            .is_some()
             && self.chase_cell_attackable(cell, target_pos, path_provider)
     }
 

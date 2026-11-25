@@ -343,7 +343,7 @@ impl MonsterBrain {
     }
 
     /// Like `follow_path`, but when `gated` refuses to step into a cell in
-    /// `occupied_cells` — the mover holds in place instead (NetHack-style
+    /// a standing monster's cell — the mover holds in place instead (NetHack-style
     /// queueing, doc/MONSTER_SEPARATION.md). Returns (reached, held).
     pub(super) fn follow_path_gated(&mut self, delta_ms: f32, gated: bool) -> (bool, bool) {
         if self.current_waypoint_idx >= self.waypoints.len() {
@@ -369,7 +369,7 @@ impl MonsterBrain {
         if gated {
             let to = super::cell_of(nx, nz);
             if to != super::cell_of(self.position.x, self.position.z)
-                && self.occupied_cells.contains(&to)
+                && self.occupancy.blocks_walk(to)
             {
                 return (false, true);
             }

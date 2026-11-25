@@ -2145,14 +2145,16 @@ async fn last_status(
 }
 
 #[tokio::test]
-async fn arriving_on_a_standing_player_walks_one_step_aside() {
-    let (game, walker, standing, mut rx) = arrive_on_stander("sidestep_open", false).await;
+async fn arriving_on_a_standing_player_walks_one_cell_aside() {
+    let (game, walker, _, mut rx) = arrive_on_stander("sidestep_open", false).await;
     assert_eq!(last_status(&mut rx).await, (1, None));
     advance(&game, walker, 1.0).await;
-    let players = game.players.read().await;
-    let gap = xz_gap(players[&walker].position, players[&standing].position);
-    assert!((gap - 0.8).abs() < 0.01, "gap {gap}");
-    drop(players);
+    let end = game.players.read().await[&walker].position;
+    assert_eq!(
+        (end.x, end.z),
+        (6.5, 0.5),
+        "sideways into the next cell's centre"
+    );
     assert_eq!(last_status(&mut rx).await, (0, Some(MoveStatus::Arrived)));
 }
 
@@ -2166,7 +2168,7 @@ async fn a_walled_side_step_takes_the_open_direction() {
     advance(&game, walker, 1.0).await;
     let end = game.players.read().await[&walker].position;
     assert!(
-        (end.x - 6.3).abs() < 0.01 && (end.z - 1.5).abs() < 0.01,
+        (end.x - 6.5).abs() < 0.01 && (end.z - 1.5).abs() < 0.01,
         "{end:?}"
     );
 }

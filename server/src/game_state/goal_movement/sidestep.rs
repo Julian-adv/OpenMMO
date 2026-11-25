@@ -1,65 +1,57 @@
 use super::synchronization::BODY_RADIUS;
 use super::*;
-use std::f32::consts::PI;
+use onlinerpg_shared::occupancy::{cell_center, cell_of, ranked_cells, window_reach, Occupancy};
 
 pub(super) const OVERLAP_M: f32 = 2.0 * BODY_RADIUS;
-/// One body width plus a gap; the second ring is for crowds.
-const STEP_RINGS_M: [f32; 2] = [0.8, 1.6];
-/// Fractions of a half turn off the heading: sideways first, back last.
-const STEP_TURNS: [f32; 8] = [0.5, -0.5, 0.25, -0.25, 0.75, -0.75, 0.0, 1.0];
+/// Cells searched around the arrival; the second ring is for crowds.
+const SEARCH_CELLS: i32 = 2;
+/// Extra cost of stepping back the way the walker came.
+const BACKWARD_PENALTY_M: f32 = 0.3;
 const MAX_STEP_RISE_M: f32 = 0.5;
 /// Bounds a chain of walkers stepping onto each other's side spots.
 pub(super) const MAX_SIDESTEPS: u8 = 2;
 
 impl GameState {
-    /// A one-waypoint walk off another body the player came to rest on;
-    /// `None` when the spot is clear or every neighbour is blocked or taken.
+    /// A one-waypoint walk to the nearest free cell centre when the player
+    /// came to rest on another body; `None` when clear or nothing is free.
     pub(super) async fn sidestep_waypoints(&self, player: &Player) -> Option<Vec<MoveWaypoint>> {
         let from = player.position;
-        let bodies = self
-            .visible_bodies_near(player, STEP_RINGS_M[1] + OVERLAP_M)
-            .await;
-        let taken = |at: &Position| {
-            bodies
-                .iter()
-                .any(|(body, clearance)| at.dist_xz_sq(body) < clearance * clearance)
-        };
-        if !taken(&from) {
+        let reach = window_reach(SEARCH_CELLS) + OVERLAP_M;
+        let mut occupancy = Occupancy::default();
+        occupancy.set_others(
+            self.visible_bodies_near(player, reach)
+                .await
+                .into_iter()
+                .map(|(at, clearance)| (at.x, at.z, clearance)),
+        );
+        if !occupancy.overlaps(from.x, from.z) {
             return None;
         }
-        let side = if player.id.get().is_multiple_of(2) {
-            1.0
-        } else {
-            -1.0
-        };
-        let (floor, open) = {
-            let cache = self.passability_read();
-            let floor = pathfinding::start_floor_at(&cache, from.x, from.z, from.y);
-            let open: Vec<_> = STEP_RINGS_M
-                .into_iter()
-                .flat_map(|radius| STEP_TURNS.map(|turn| (radius, turn)))
-                .map(|(radius, turn)| {
-                    let angle = player.rotation + side * turn * PI;
-                    Position {
-                        x: wrap_world_x(from.x + angle.sin() * radius),
-                        y: from.y,
-                        z: from.z + angle.cos() * radius,
-                    }
-                })
-                .filter(|to| {
-                    !taken(to)
-                        && !swept_blocked(
-                            &cache,
-                            from,
-                            shortest_world_delta_x(from.x, to.x),
-                            to.z - from.z,
-                            floor,
-                        )
-                })
-                .collect();
-            (floor, open)
-        };
-        for mut to in open {
+        let (heading_x, heading_z) = (player.rotation.sin(), player.rotation.cos());
+        let candidates = ranked_cells(cell_of(from.x, from.z), SEARCH_CELLS, |cell| {
+            if occupancy.blocks_slot(cell) {
+                return None;
+            }
+            let (x, z) = cell_center(cell);
+            let (dx, dz) = (shortest_world_delta_x(from.x, x), z - from.z);
+            let behind = dx * heading_x + dz * heading_z < -0.1;
+            Some((
+                0,
+                dx.hypot(dz) + if behind { BACKWARD_PENALTY_M } else { 0.0 },
+            ))
+        });
+        for cell in candidates {
+            let (x, z) = cell_center(cell);
+            let mut to = Position { x, y: from.y, z };
+            let floor = {
+                let cache = self.passability_read();
+                let floor = pathfinding::start_floor_at(&cache, from.x, from.z, from.y);
+                let (dx, dz) = (shortest_world_delta_x(from.x, x), z - from.z);
+                if swept_blocked(&cache, from, dx, dz, floor) {
+                    continue;
+                }
+                floor
+            };
             let Some(y) = self.dash_landing_y(player.floor_level, to).await else {
                 continue;
             };

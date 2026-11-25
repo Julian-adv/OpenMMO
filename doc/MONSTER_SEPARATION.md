@@ -180,7 +180,7 @@ pub struct NearbyMonster {
 | 웹 클라 | `monsterManager.ts:544` tick 호출부 | `this.monsters` (`monster.state` 보유) |
 | agent-client | `monster_ai.rs` `tick_all` | `state.nearby_monsters` |
 
-1m 셀은 `mod.rs`의 `cell_of`(floor 격자, 패스파인딩 그리드와 일치)로 암시적이다.
+1m 셀과 점유는 `shared/src/occupancy.rs`(`cell_of`, `Occupancy`, `ranked_cells`)에 있다. floor 격자라 패스파인딩 그리드와 일치한다.
 상수는 `CHASE_CELL_RANGE_MARGIN`(0.15 — 대각 앞칸 ~1.8m가 유효해야 2칸 폭 통로에
 공격자 2마리가 앉는다)과 `SIDESTEP_MAX_PATH_METERS`(3.0). behavior tree
 파라미터로는 빼지 않는다.
@@ -190,6 +190,19 @@ pub struct NearbyMonster {
 A*는 도달 불가 목표를 조기 거부하지 않으므로, 후보 셀은 `cell_passable`
 (`is_cell_sealed` 기반, 4번의 이동 차단 검사)로 먼저 걸러 벽 안 후보가 탐색을
 범람시키지 않게 한다. 서버 부하 0 (5,000 동접 무관).
+
+## 플레이어와 함께 쓰는 칸 (`occupancy.rs`)
+
+플레이어 클릭 이동의 비켜서기(`goal_movement/sidestep.rs`)도 같은 1m 칸과 후보 탐색
+(`ranked_cells`)을 쓴다. 한 칸에 한 몸, 최선 노력.
+
+- `Occupancy`의 **서 있는 몬스터**는 걷기(전진 게이트·사이드스텝·우회)와 자리 선택을
+  막고, **그 밖의 몸**(플레이어, 비켜서는 중인 도착 칸)은 자리 선택만 막는다. 몬스터는
+  플레이어를 뚫고 지나간다. 몬스터는 추격 자리를 고를 때만 대상 근처 플레이어를 넣는다.
+- 플레이어는 도착 지점이 다른 몸의 거리 안에 들면, 주변 2칸 안에서 가장 가까운 빈 칸
+  중앙으로 걸어간다. 살아 있는 몬스터는 움직이는 중이어도 몸으로 친다.
+- 서로의 예약은 보지 않는다(이동 처리 중에 몬스터 AI 잠금을 기다릴 수 없다). 그래서
+  순간 겹침은 남는다.
 
 ## 후속 개선 후보
 

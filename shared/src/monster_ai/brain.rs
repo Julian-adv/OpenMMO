@@ -91,8 +91,9 @@ pub struct MonsterBrain {
     /// The free cell near the target the chase is heading to; kept while it
     /// stays free so re-slotting doesn't oscillate.
     pub(super) chase_goal_cell: Option<(i32, i32)>,
-    /// Cells occupied by standing nearby monsters, rebuilt each tick.
-    pub(super) occupied_cells: Vec<(i32, i32)>,
+    /// Standing nearby monsters' cells, rebuilt each tick; nearby players are
+    /// added when a chase slot is chosen.
+    pub(super) occupancy: crate::occupancy::Occupancy,
     /// A standing monster with a smaller id shares our cell this tick — we
     /// are the one who moves aside. Rebuilt each tick.
     pub(super) cell_yield: bool,
@@ -204,7 +205,7 @@ impl MonsterBrain {
             cast: None,
             cast_left_ms: 0.0,
             chase_goal_cell: None,
-            occupied_cells: Vec::new(),
+            occupancy: Default::default(),
             cell_yield: false,
             reslotting: false,
             detour_goal: None,
@@ -298,7 +299,7 @@ impl MonsterBrain {
             self.detour_goal,
             self.target_player_id,
             self.last_known_target_pos.map(|p| (p.x, p.z)),
-            self.occupied_cells.len(),
+            self.occupancy.standers().len(),
             self.cell_yield,
             self.reslotting,
             self.stagger_left_ms,
@@ -736,7 +737,7 @@ impl MonsterBrain {
         if self.state == AiState::Dead || self.health == 0 {
             return vec![];
         }
-        self.occupied_cells.clear();
+        self.occupancy.clear();
         self.cell_yield = false;
         let my_cell = cell_of(self.position.x, self.position.z);
         for m in nearby_monsters {
@@ -747,7 +748,7 @@ impl MonsterBrain {
                 continue;
             }
             let cell = cell_of(m.position.x, m.position.z);
-            self.occupied_cells.push(cell);
+            self.occupancy.add_stander(cell);
             // Sharing a cell with a smaller-id stander: we are the one who
             // yields (see bt_attack_target / the door-wait spread).
             if cell == my_cell && m.id.as_str() < self.monster_id.as_str() {

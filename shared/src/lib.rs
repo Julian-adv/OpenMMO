@@ -38,6 +38,7 @@ pub mod moon;
 pub mod mount;
 pub mod mount_movement;
 pub mod notice_board;
+pub mod occupancy;
 pub mod pathfinding;
 pub mod pricing;
 pub mod reach;
