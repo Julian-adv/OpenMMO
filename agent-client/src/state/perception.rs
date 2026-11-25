@@ -253,10 +253,9 @@ impl SharedState {
                 newly.push((
                     key,
                     format!(
-                        "[Sighted] {} [{id}] HP {}/{} — at ({:.0}, {:.0}), {:.0}m {}.",
+                        "[Sighted] {} [{id}] {} — at ({:.0}, {:.0}), {:.0}m {}.",
                         crate::monster_defs::monster_name(&m.monster_type),
-                        m.health,
-                        m.max_health,
+                        crate::state::hp_text(m.health, m.max_health),
                         m.position.x,
                         m.position.z,
                         d.dist,

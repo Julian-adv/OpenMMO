@@ -41,6 +41,8 @@
   let screen = $state<AppScreen>('login')
   let serverUrl = $state('')
   let accountName = $state('')
+  /** The account's character another connection is playing, if any. */
+  let accountPlaying = $state<string | null>(null)
   let accountCharacters = $state<AccountCharacter[]>([])
   let selectedCharacterId = $state<number | null>(null)
   let characterSlotLayout = $state<CharacterSlotLayout[]>([])
@@ -162,6 +164,17 @@
     screen = 'game'
   }
 
+  async function handleWatchPlaying(): Promise<{
+    ok: boolean
+    message?: string
+  }> {
+    if (!(await loadGameScreen()))
+      return { ok: false, message: $t('loading.failed') }
+    const result = await networkManager.requestWatchPlaying()
+    if (result.ok) enterGameScreen()
+    return result
+  }
+
   async function handleWatch(
     url: string,
     googleIdToken: string
@@ -199,6 +212,7 @@
       const characters = result.characters ?? []
       serverUrl = url
       accountName = result.accountName ?? ''
+      accountPlaying = result.playing ?? null
       accountCharacters = characters
       selectedCharacterId = characters.length > 0 ? characters[0].id : null
       screen = 'character-select'
@@ -318,6 +332,7 @@
     const result = await networkManager.requestReauthenticate()
     if (result.ok) {
       accountCharacters = result.characters ?? []
+      accountPlaying = result.playing ?? null
       if (result.accountName) accountName = result.accountName
       if (accountCharacters.length > 0) {
         const stillExists = accountCharacters.some(
@@ -472,6 +487,8 @@
       slotLayout={characterSlotLayout}
       onSlotClick={handleCharacterSlotClick}
       onStartGame={handleStartGame}
+      playing={accountPlaying}
+      onWatch={handleWatchPlaying}
       onDeleteCharacter={handleDeleteCharacter}
       onLogout={handleLogoutToLogin}
     />

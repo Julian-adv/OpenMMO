@@ -398,6 +398,8 @@
   "characterSelect.account": "Account",
   "characterSelect.back": "Back",
   "characterSelect.start": "Start",
+  "characterSelect.playing": "{{name}} is in the game from another connection.",
+  "characterSelect.watch": "Watch",
   "characterSelect.starting": "Starting...",
   "characterSelect.delete": "Delete",
   "characterSelect.deleting": "Deleting...",

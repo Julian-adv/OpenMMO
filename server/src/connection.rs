@@ -525,6 +525,13 @@ async fn handle_client_message(
         }
     }
 
+    if client_msg.needs_account_session() {
+        if let Err(refusal) = account::claim_account_session(game_state, auth_service, state).await
+        {
+            return Ok(refusal);
+        }
+    }
+
     match client_msg {
         ClientMessage::Authenticate { google_id_token } => {
             return Ok(account::authenticate(
@@ -546,6 +553,10 @@ async fn handle_client_message(
                 google_id_token,
             )
             .await);
+        }
+
+        ClientMessage::WatchPlaying => {
+            return Ok(account::watch_playing(game_state, auth_service, state).await);
         }
 
         ClientMessage::AuthenticateNpc {

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { watchWaiting } from '../stores/watchStore'
   import { onMount } from 'svelte'
   import type { AccountCharacter } from '../network/socket'
   import { t } from '../i18n'
@@ -20,6 +21,8 @@
       cancel?: boolean
     ) => Promise<{ ok: boolean; message?: string }>
     onLogout: () => void
+    playing: string | null
+    onWatch: () => Promise<{ ok: boolean; message?: string }>
   }
 
   let {
@@ -31,10 +34,13 @@
     onStartGame,
     onDeleteCharacter,
     onLogout,
+    playing,
+    onWatch,
   }: Props = $props()
 
   let isStarting = $state(false)
   let isDeleting = $state(false)
+  let isWatching = $state(false)
   let errorMessage = $state('')
   let now = $state(Date.now())
   onMount(() => {
@@ -51,7 +57,16 @@
   const compact = $derived(viewportWidth <= 600 || viewportHeight <= 700)
 
   function isBusy() {
-    return isStarting || isDeleting
+    return isStarting || isDeleting || isWatching
+  }
+
+  async function handleWatch() {
+    if (isBusy()) return
+    isWatching = true
+    errorMessage = ''
+    const result = await onWatch()
+    isWatching = false
+    if (!result.ok) errorMessage = result.message ?? ''
   }
 
   async function handleStart(characterId?: number) {
@@ -142,6 +157,24 @@
     </p>
   {/if}
 
+  {#if playing}
+    <div class="playing-notice" role="status">
+      <span>
+        {isWatching && $watchWaiting
+          ? $t('login.watchWaiting')
+          : $t('characterSelect.playing', { name: playing })}
+      </span>
+      <button
+        type="button"
+        class="primary"
+        onclick={handleWatch}
+        disabled={isBusy()}
+      >
+        {isWatching ? $t('login.connecting') : $t('characterSelect.watch')}
+      </button>
+    </div>
+  {/if}
+
   <div class="bottom-row">
     <button
       type="button"
@@ -187,6 +220,25 @@
 </div>
 
 <style>
+  .playing-notice {
+    position: absolute;
+    left: 50%;
+    top: 96px;
+    z-index: 5;
+    transform: translateX(-50%);
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    border: 1px solid #63b3ed;
+    border-radius: 8px;
+    background: rgba(10, 20, 35, 0.85);
+    color: #bee3f8;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
   .deletion-notice {
     position: fixed;
     bottom: max(60px, calc(env(safe-area-inset-bottom) + 54px));

@@ -398,6 +398,8 @@
   "characterSelect.account": "アカウント",
   "characterSelect.back": "戻る",
   "characterSelect.start": "開始",
+  "characterSelect.playing": "{{name}} は別の接続でプレイ中です。",
+  "characterSelect.watch": "観戦する",
   "characterSelect.starting": "開始中...",
   "characterSelect.delete": "削除",
   "characterSelect.deleting": "削除中...",

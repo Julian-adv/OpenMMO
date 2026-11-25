@@ -322,6 +322,7 @@ function draw() {
     const [sx, sy] = w2s(m.position.x, m.position.z);
     const dead = m.state === "dead";
     // Radius tracks toughness: kobold (5 HP) small, bosses big.
+    // Hidden HP (no stethoscope) arrives as max_health 0.
     const mr = (3.5 + Math.min(4, m.max_health / 8)) * devicePixelRatio;
     ctx.beginPath();
     ctx.arc(sx, sy, mr, 0, 7);
@@ -332,7 +333,7 @@ function draw() {
       ctx.beginPath(); ctx.arc(sx, sy, mr + 3 * devicePixelRatio, 0, 7); ctx.stroke();
     }
     if (!dead && detail) {
-      hpbar(sx, sy, m.health / m.max_health);
+      if (m.max_health > 0) hpbar(sx, sy, m.health / m.max_health);
       label(sx, sy, m.monster_type, "#f0b9b9");
     }
   }

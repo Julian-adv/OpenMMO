@@ -177,7 +177,8 @@ impl Interest {
         }
     }
 
-    /// Stethoscope put on or taken off: resend the HP of every player in view.
+    /// Stethoscope put on or taken off: resend the HP of every player and
+    /// monster in view; `send` hides it again for a viewer without one.
     pub(super) fn set_health_viewer(&mut self, viewer: PlayerId, sees: bool) {
         let changed = if sees {
             self.health_viewers.insert(viewer)
@@ -194,22 +195,31 @@ impl Interest {
         let events: Vec<_> = view
             .subjects
             .iter()
-            .filter(|id| id.starts_with("player:") && **id != own)
+            .filter(|id| **id != own)
             .filter_map(|id| {
                 let subject = self.subjects.get(id)?;
-                let player = subject.snapshot.iter().find_map(|message| match message {
-                    ServerMessage::PlayerAppeared { player } => Some(player),
+                let update = subject.snapshot.iter().find_map(|message| match message {
+                    ServerMessage::PlayerAppeared { player } => {
+                        Some(ServerMessage::PlayerHealthUpdate {
+                            player_id: player.id,
+                            health: player.health,
+                            max_health: player.max_health,
+                        })
+                    }
+                    ServerMessage::MonsterSpawned { monster } => {
+                        Some(ServerMessage::MonsterHealthUpdate {
+                            monster_id: monster.id.clone(),
+                            health: monster.health,
+                            max_health: monster.max_health,
+                        })
+                    }
                     _ => None,
                 })?;
                 Some(WorldEvent {
                     subject: id.clone(),
                     revision: subject.revision,
                     change: InterestChange::Update,
-                    messages: vec![ServerMessage::PlayerHealthUpdate {
-                        player_id: player.id,
-                        health: player.health,
-                        max_health: player.max_health,
-                    }],
+                    messages: vec![update],
                 })
             })
             .collect();
@@ -427,6 +437,7 @@ impl Interest {
             return;
         };
         let health_owners = message.health_owners();
+        let carries_health = !health_owners.is_empty() || message.carries_monster_health();
         let mut hidden_health = HashMap::new();
         let mut sent = HashSet::new();
         for cell in area_cells(std::slice::from_ref(&area), EVENT_DELIVERY_RADIUS) {
@@ -450,9 +461,7 @@ impl Interest {
                     else {
                         continue;
                     };
-                    if health_owners.is_empty()
-                        || health_owners == [*id]
-                        || self.health_viewers.contains(id)
+                    if !carries_health || health_owners == [*id] || self.health_viewers.contains(id)
                     {
                         let _ = view.tx.send(bytes.clone());
                         continue;
@@ -722,10 +731,9 @@ impl Interest {
             .strip_prefix("player:")
             .and_then(|n| n.parse::<u64>().ok())
             .map(PlayerId::from);
-        // Only bodies that carry the subject's HP need a hidden twin.
-        let carries_health = |messages: &[ServerMessage]| {
-            health_owner.is_some() && messages.iter().any(|m| !m.health_owners().is_empty())
-        };
+        // Only bodies that carry someone's HP need a hidden twin.
+        let carries_health =
+            |messages: &[ServerMessage]| messages.iter().any(ServerMessage::carries_health);
         let (enter_health, update_health) =
             (carries_health(enter_messages), carries_health(&changes));
         let mut bodies = HashMap::new();
@@ -778,6 +786,16 @@ impl Interest {
                 let hide = carries
                     && health_owner != Some(viewer)
                     && !self.health_viewers.contains(&viewer);
+                // Hidden, a monster's HP update says only "alive", which the
+                // viewer already knows.
+                if hide
+                    && change == InterestChange::Update
+                    && changes
+                        .iter()
+                        .all(|m| matches!(m, ServerMessage::MonsterHealthUpdate { .. }))
+                {
+                    continue;
+                }
                 let body = bodies.entry((change, hide)).or_insert_with(|| {
                     let mut event = event();
                     if hide {

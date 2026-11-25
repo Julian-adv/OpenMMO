@@ -398,6 +398,8 @@
   "characterSelect.account": "账号",
   "characterSelect.back": "返回",
   "characterSelect.start": "开始",
+  "characterSelect.playing": "{{name}} 正在其他连接中游戏。",
+  "characterSelect.watch": "观战",
   "characterSelect.starting": "启动中...",
   "characterSelect.delete": "删除",
   "characterSelect.deleting": "删除中...",

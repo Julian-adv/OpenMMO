@@ -659,11 +659,10 @@ Use the readiness status above. Wait for server success or failure feedback."#,
                     ""
                 };
                 lines.push(format!(
-                    "Monster: {} [{}]{undead} HP {}/{} state={} at ({:.1}, {:.1}, {:.1})",
+                    "Monster: {} [{}]{undead} {} state={} at ({:.1}, {:.1}, {:.1})",
                     crate::monster_defs::monster_name(&m.monster_type),
                     m.id,
-                    m.health,
-                    m.max_health,
+                    hp_text(m.health, m.max_health),
                     m.state,
                     m.position.x,
                     m.position.y,

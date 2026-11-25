@@ -923,6 +923,7 @@ export function handleServerMessage(
       events.authSuccess.emit({
         accountName: data.account_name,
         characters,
+        playing: data.playing ?? null,
       })
       break
     }

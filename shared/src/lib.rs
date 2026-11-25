@@ -324,7 +324,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v175: `AdminFollowChanged`, the admin `/follow`.
 /// v176: `SummonPartyMember`: a summoning scroll calls one chosen member.
 /// v177: `WatchAccount`, `WatchWaiting`, `WatchTarget`: watching the account's character.
-pub const PROTOCOL_VERSION: u32 = 177;
+/// v178: `WatchPlaying` and `AuthSuccess.playing`: login no longer takes over a
+/// session in the world until the player enters or edits a character.
+pub const PROTOCOL_VERSION: u32 = 178;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

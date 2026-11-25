@@ -32,6 +32,9 @@ pub(super) struct ConnectionState {
     pub(super) account_name: Option<String>,
     pub(super) account_session_id: Option<u64>,
     pub(super) account_rx: Option<mpsc::UnboundedReceiver<KickNotice>>,
+    /// Signed in while another connection plays the account: the session is
+    /// taken over only when this one enters or edits a character.
+    pub(super) deferred_kick_tx: Option<mpsc::UnboundedSender<KickNotice>>,
     pub(super) player_id: Option<PlayerId>,
     /// In game but no `WorldReady` yet; spares the per-message gate a lock.
     pub(super) awaiting_world_ready: bool,
@@ -99,6 +102,7 @@ impl ConnectionState {
             account_name: None,
             account_session_id: None,
             account_rx: None,
+            deferred_kick_tx: None,
             player_id: None,
             awaiting_world_ready: false,
             character_name: None,

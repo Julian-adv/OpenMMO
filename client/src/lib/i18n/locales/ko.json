@@ -398,6 +398,8 @@
   "characterSelect.account": "계정",
   "characterSelect.back": "뒤로",
   "characterSelect.start": "시작",
+  "characterSelect.playing": "{{name}} 캐릭터가 다른 곳에서 게임 중입니다.",
+  "characterSelect.watch": "관전하기",
   "characterSelect.starting": "시작 중...",
   "characterSelect.delete": "삭제",
   "characterSelect.deleting": "삭제 중...",

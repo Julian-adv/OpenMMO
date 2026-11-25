@@ -1,0 +1,17 @@
+{
+  "name": "openmmo",
+  "owner": {
+    "name": "Julian-adv"
+  },
+  "metadata": {
+    "description": "Claude Code plugins for OpenMMO."
+  },
+  "plugins": [
+    {
+      "name": "openmmo",
+      "description": "Play OpenMMO from Claude Code: the openmmo-mcp game tools plus how to play with them.",
+      "version": "0.1.0",
+      "source": "./openmmo-mcp/plugin"
+    }
+  ]
+}

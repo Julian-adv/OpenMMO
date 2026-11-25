@@ -14,8 +14,9 @@ use tracing::{error, info, warn};
 
 const FALLBACK_DEFAULT_MAX_HP: u32 = 13;
 
-/// Shared tail of both auth paths: replace any account session, load
-/// characters, and build the AuthSuccess reply.
+/// Shared tail of both auth paths: take the account session (unless another
+/// connection is playing it), load characters, and build the AuthSuccess
+/// reply.
 pub(super) async fn finish_auth(
     game_state: &GameState,
     auth_service: &AuthService,
@@ -29,18 +30,23 @@ pub(super) async fn finish_auth(
     // here, not at character select, because the account carries it. Checked
     // and registered under the one lock `/ban` also takes, so a ban landing
     // in between cannot admit a session it can no longer see to evict.
-    let account_session_id = {
+    let playing = {
         let _sessions = game_state.lock_character_sessions().await;
-        if let Some(refusal) = ban_refusal(auth_service, &account_name).await {
+        let playing = game_state.account_playing(&account_name).await;
+        if playing.is_some() {
+            if let Some(refusal) = ban_refusal(auth_service, &account_name).await {
+                return refusal;
+            }
+            state.deferred_kick_tx = Some(kick_tx);
+        } else if let Err(refusal) =
+            register_session_locked(game_state, auth_service, state, &account_name, kick_tx).await
+        {
             return refusal;
         }
-        game_state
-            .register_account_session_locked(&account_name, kick_tx, auth_service)
-            .await
+        playing
     };
 
     state.account_name = Some(account_name.clone());
-    state.account_session_id = Some(account_session_id);
     state.account_rx = Some(kick_rx);
     state.is_official_npc = is_official_npc;
     state.pending_character_attributes = None;
@@ -85,7 +91,67 @@ pub(super) async fn finish_auth(
         account_name,
         characters,
         cape_upload_token,
+        playing,
     }]
+}
+
+/// A login that deferred to a playing session takes it over now, before it
+/// enters or edits a character.
+pub(super) async fn claim_account_session(
+    game_state: &GameState,
+    auth_service: &AuthService,
+    state: &mut ConnectionState,
+) -> Result<(), Vec<ServerMessage>> {
+    let (Some(account_name), Some(kick_tx)) =
+        (state.account_name.clone(), state.deferred_kick_tx.take())
+    else {
+        return Ok(());
+    };
+    let _sessions = game_state.lock_character_sessions().await;
+    info!(ip = %state.client_ip, account = account_name, "Login takes over the playing session");
+    register_session_locked(game_state, auth_service, state, &account_name, kick_tx).await
+}
+
+/// The ban gate and the session it admits, under `lock_character_sessions`,
+/// which `/ban` also takes, so a ban cannot land in between.
+async fn register_session_locked(
+    game_state: &GameState,
+    auth_service: &AuthService,
+    state: &mut ConnectionState,
+    account_name: &str,
+    kick_tx: mpsc::UnboundedSender<crate::game_state::KickNotice>,
+) -> Result<(), Vec<ServerMessage>> {
+    if let Some(refusal) = ban_refusal(auth_service, account_name).await {
+        return Err(refusal);
+    }
+    state.account_session_id = Some(
+        game_state
+            .register_account_session_locked(account_name, kick_tx, auth_service)
+            .await,
+    );
+    Ok(())
+}
+
+/// From character select: this signed-in connection becomes a watcher and
+/// gives up any session it holds, so the player is left in the world.
+pub(super) async fn watch_playing(
+    game_state: &GameState,
+    auth_service: &AuthService,
+    state: &mut ConnectionState,
+) -> Vec<ServerMessage> {
+    let (Some(account_name), None) = (state.account_name.clone(), state.player_id) else {
+        return vec![ServerMessage::AuthError {
+            message: "Sign in at character select to watch".to_string(),
+        }];
+    };
+    if let Some(session_id) = state.account_session_id.take() {
+        game_state
+            .end_account_session(&account_name, session_id, auth_service)
+            .await;
+    }
+    state.deferred_kick_tx = None;
+    state.account_rx = None;
+    start_watching(game_state, auth_service, state, account_name).await
 }
 
 /// Checked under `lock_character_sessions`, which `/ban` also takes, so a
@@ -188,11 +254,20 @@ pub(super) async fn watch_account(
     state: &mut ConnectionState,
     google_id_token: String,
 ) -> Vec<ServerMessage> {
-    let account_name =
-        match account_from_token(auth_service, auth_ctx, state, &google_id_token).await {
-            Ok((name, _)) => name,
-            Err(responses) => return responses,
-        };
+    match account_from_token(auth_service, auth_ctx, state, &google_id_token).await {
+        Ok((account_name, _)) => {
+            start_watching(game_state, auth_service, state, account_name).await
+        }
+        Err(responses) => responses,
+    }
+}
+
+async fn start_watching(
+    game_state: &GameState,
+    auth_service: &AuthService,
+    state: &mut ConnectionState,
+    account_name: String,
+) -> Vec<ServerMessage> {
     let watch = game_state.account_watch(&account_name);
     let rx = {
         let _sessions = game_state.lock_character_sessions().await;

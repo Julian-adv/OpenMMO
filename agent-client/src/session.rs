@@ -610,6 +610,7 @@ mod tests {
                                 onlinerpg_shared::Gender::Male,
                             )],
                             cape_upload_token: String::new(),
+                            playing: None,
                         }]
                     }
                     ClientMessage::EnterGame { .. } => vec![

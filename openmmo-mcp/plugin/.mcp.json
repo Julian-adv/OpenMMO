@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "openmmo": {
+      "command": "openmmo-mcp"
+    }
+  }
+}

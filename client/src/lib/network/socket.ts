@@ -74,9 +74,10 @@ import initWasm, {
 import { createEvent } from './networkEvents'
 import { handleServerMessage, resetTerrainDownloads } from './messageHandlers'
 import { worldView } from './worldView'
-import { watchMode } from '../stores/watchStore'
+import { setWatchMode, watchMode } from '../stores/watchStore'
 import type {
   AccountCharacter,
+  AuthSuccessPayload,
   CharacterClass,
   CharacterAppearance,
   CharacterRollResult,
@@ -160,10 +161,7 @@ class NetworkManager {
   // Events
   readonly respawnRequested = createEvent<() => void>()
   readonly playerRespawned = createEvent<(playerId: number) => void>()
-  readonly authSuccess =
-    createEvent<
-      (payload: { accountName: string; characters: AccountCharacter[] }) => void
-    >()
+  readonly authSuccess = createEvent<(payload: AuthSuccessPayload) => void>()
   readonly authError = createEvent<(message: string) => void>()
   readonly joinSuccess = createEvent<() => void>()
   readonly watchWaiting = createEvent<() => void>()
@@ -1553,6 +1551,31 @@ class NetworkManager {
     this.connect(serverUrl)
     if (!(await this.waitForSocketOpen(5000)))
       return { ok: false, message: 'Failed to connect to server' }
+    return this.awaitWatch(onWaiting, () =>
+      this.sendWatchAccount(googleIdToken)
+    )
+  }
+
+  /// From character select: this signed-in socket starts watching the
+  /// account's character in the world instead of taking it over.
+  async requestWatchPlaying(): Promise<{
+    ok: boolean
+    message?: string
+    refused?: boolean
+  }> {
+    setWatchMode(true)
+    const result = await this.awaitWatch(
+      () => {},
+      () => this.sendAndSerialize('WatchPlaying')
+    )
+    if (!result.ok) setWatchMode(false)
+    return result
+  }
+
+  private awaitWatch(
+    onWaiting: () => void,
+    send: () => boolean
+  ): Promise<{ ok: boolean; message?: string; refused?: boolean }> {
     return new Promise((resolve) => {
       const unsubs = [
         this.joinSuccess.on(() => settle({ ok: true })),
@@ -1569,8 +1592,7 @@ class NetworkManager {
         for (const unsub of unsubs) unsub()
         resolve(result)
       }
-      if (!this.sendWatchAccount(googleIdToken))
-        settle({ ok: false, message: 'Socket is not connected' })
+      if (!send()) settle({ ok: false, message: 'Socket is not connected' })
     })
   }
 
@@ -1592,6 +1614,7 @@ class NetworkManager {
   /// Drop cached credentials so a later reconnect can't re-auth as this user.
   /// Call on logout/kick, not on transient disconnects (which must reconnect).
   clearSession() {
+    setWatchMode(false)
     this.authenticated = false
     this.lastCharacterId = null
     setApiAuthToken(null)
@@ -1605,6 +1628,7 @@ class NetworkManager {
     message?: string
     accountName?: string
     characters?: AccountCharacter[]
+    playing?: string | null
   }> {
     await this.ensureWasm()
     this.connect(serverUrl)
@@ -1623,6 +1647,7 @@ class NetworkManager {
               ok: true,
               accountName: payload.accountName,
               characters: payload.characters,
+              playing: payload.playing,
             })
           })
         )
@@ -1947,6 +1972,7 @@ class NetworkManager {
     message?: string
     accountName?: string
     characters?: AccountCharacter[]
+    playing?: string | null
   }> {
     this.resetAllState()
     this.lastCharacterId = null
@@ -1974,6 +2000,7 @@ class NetworkManager {
               ok: true,
               accountName: payload.accountName,
               characters: payload.characters,
+              playing: payload.playing,
             })
           })
         )
@@ -2013,6 +2040,7 @@ function allowedWhileWatching(msg: ClientMessage): boolean {
   return (
     msg === 'Heartbeat' ||
     msg === 'ResyncWorld' ||
+    msg === 'WatchPlaying' ||
     (typeof msg === 'object' && 'WatchAccount' in msg)
   )
 }

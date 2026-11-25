@@ -1,9 +1,16 @@
 import { writable } from 'svelte/store'
 
-/// The page watches its account's character instead of playing it.
-export const watchMode =
+const watchLink =
   typeof location !== 'undefined' &&
   new URLSearchParams(location.search).has('watch')
+
+/// The page watches its account's character instead of playing it: from a
+/// `?watch` link, or chosen at character select until sign-out.
+export let watchMode = watchLink
+
+export function setWatchMode(on: boolean) {
+  watchMode = on || watchLink
+}
 /// Watching, and the account has no character in the world right now.
 export const watchWaiting = writable(false)
 /// The watched character, drawn as any other player would see it. The page's

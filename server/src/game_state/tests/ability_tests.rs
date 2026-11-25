@@ -2693,3 +2693,43 @@ async fn death_drops_the_hymn_buff() {
     gs.clear_debuffs(&pid("bard")).await;
     assert_eq!(hymn_speed(&gs, "bard").await, 1.0);
 }
+
+#[tokio::test]
+async fn monster_hp_reaches_only_stethoscope_wearers() {
+    let gs = make_test_game_state("monster_hp_privacy");
+    let mut watcher = add_ward_player(&gs, "watcher", 3.0, 3).await;
+    let mut doctor = add_ward_player(&gs, "doctor", 4.0, 4).await;
+    let mut gear = gs.inventories.read().await[&pid("doctor")].clone();
+    gear.equipped
+        .insert(EquipSlot::Neck, bag_item(9, "stethoscope", 1));
+    gs.set_player_gear(&pid("doctor"), &gear).await;
+    let monster = gs
+        .spawn_monster(
+            "goblin".to_string(),
+            Position {
+                x: 5.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            0.0,
+            0,
+            MonsterLifecycle::Ambient,
+            None,
+            true,
+        )
+        .await
+        .expect("goblin spawns");
+    let seen = |messages: Vec<ServerMessage>| {
+        messages.into_iter().rev().find_map(|m| match m {
+            ServerMessage::MonsterSpawned { monster: seen } if seen.id == monster.id => {
+                Some((seen.health, seen.max_health))
+            }
+            _ => None,
+        })
+    };
+    assert_eq!(seen(drain(&mut watcher)), Some((1, 0)));
+    assert_eq!(
+        seen(drain(&mut doctor)),
+        Some((monster.health, monster.max_health))
+    );
+}

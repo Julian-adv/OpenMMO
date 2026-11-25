@@ -312,11 +312,10 @@ pub fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<String> 
             if !dialogue_only {
                 for m in monsters.values() {
                 lines.push(format!(
-                    "  Monster: {} [{}] HP {}/{}",
+                    "  Monster: {} [{}] {}",
                     crate::monster_defs::monster_name(&m.monster_type),
                     m.id,
-                    m.health,
-                    m.max_health
+                    crate::state::hp_text(m.health, m.max_health)
                 ));
                 }
             }

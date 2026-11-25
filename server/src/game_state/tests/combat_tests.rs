@@ -959,7 +959,7 @@ async fn dagger_skill_first_hit_kill_reports_skipped_second_strike_without_dupli
 }
 
 #[tokio::test]
-async fn non_lethal_hits_publish_the_monster_health_left() {
+async fn non_lethal_hits_publish_that_the_monster_still_lives() {
     let game = make_test_game_state("monster_health_update");
     let mut rx = setup_dagger_skill(&game, "dagger").await;
     seed_subjects(&game).await;
@@ -984,7 +984,8 @@ async fn non_lethal_hits_publish_the_monster_health_left() {
         .unwrap()
         .health;
     assert!(left < 500);
-    assert_eq!(updates.last(), Some(&(left, 500)));
+    // The exact HP is for stethoscope wearers only.
+    assert_eq!(updates.last(), Some(&(1, 0)));
 }
 
 #[tokio::test]

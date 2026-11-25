@@ -398,6 +398,8 @@
   "characterSelect.account": "帳號",
   "characterSelect.back": "返回",
   "characterSelect.start": "開始",
+  "characterSelect.playing": "{{name}} 正在其他連線中遊戲。",
+  "characterSelect.watch": "觀戰",
   "characterSelect.starting": "啟動中...",
   "characterSelect.delete": "刪除",
   "characterSelect.deleting": "刪除中...",

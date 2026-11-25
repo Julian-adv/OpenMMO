@@ -633,6 +633,9 @@ pub enum ClientMessage {
     WatchAccount {
         google_id_token: String,
     },
+    /// From character select: turn this signed-in connection into a watcher
+    /// of the account's character in the world, leaving its session alone.
+    WatchPlaying,
     /// Headless bot login, gated by the server's shared NPC token. The
     /// account is auto-created on first use.
     AuthenticateNpc {
@@ -1442,6 +1445,19 @@ impl ClientMessage {
     /// Acts a player turned to stone may not take (doc/DEBUFF.md
     /// `petrifies`). Movement and facing check `Player.petrified` where they
     /// apply, off this per-message path. Admins keep their slash commands.
+    /// Character-select requests that take the account over from a session
+    /// playing it elsewhere; signing in alone does not.
+    pub fn needs_account_session(&self) -> bool {
+        matches!(
+            self,
+            Self::EnterGame { .. }
+                | Self::CreateCharacter { .. }
+                | Self::DeleteCharacter { .. }
+                | Self::CancelCharacterDeletion { .. }
+                | Self::RenameCharacter { .. }
+        )
+    }
+
     pub fn blocked_while_petrified(&self, is_admin: bool) -> bool {
         use ClientMessage::*;
         match self {
@@ -1559,6 +1575,10 @@ pub enum ServerMessage {
         /// an hour while a session runs all evening.
         #[serde(default)]
         cape_upload_token: String,
+        /// The account's character already in the world, played from another
+        /// connection that this login has not taken over.
+        #[serde(default)]
+        playing: Option<String>,
     },
     JoinSuccess {
         player: Player,
@@ -3000,7 +3020,8 @@ impl ServerMessage {
             | Self::PlayerAppeared { player }
             | Self::PlayerRespawned { player } => vec![player.id],
             Self::PlayerHealthUpdate { player_id, .. }
-            | Self::MonsterAttackedPlayer { player_id, .. } => vec![*player_id],
+            | Self::MonsterAttackedPlayer { player_id, .. }
+            | Self::CartStruckPlayer { player_id, .. } => vec![*player_id],
             Self::MonsterSkillStruck { victims, .. } => {
                 victims.iter().map(|victim| victim.player_id).collect()
             }
@@ -3008,32 +3029,53 @@ impl ServerMessage {
         }
     }
 
-    /// Leave `viewer` only whether other players are alive, not their HP.
-    /// Covers the same messages as `health_owners`.
+    /// Whether the message holds a monster's HP, which only stethoscope
+    /// wearers see.
+    pub fn carries_monster_health(&self) -> bool {
+        matches!(
+            self,
+            Self::MonsterSpawned { .. } | Self::MonsterHealthUpdate { .. }
+        )
+    }
+
+    /// Whether a viewer without the stethoscope must not see the HP in it.
+    pub fn carries_health(&self) -> bool {
+        self.carries_monster_health() || !self.health_owners().is_empty()
+    }
+
+    /// Leave `viewer` only whether other players and monsters are alive, not
+    /// their HP. Covers the messages `carries_health` names.
     pub fn hide_health(&mut self, viewer: PlayerId) {
         let alive = |health: &mut u32| *health = (*health).min(1);
+        let hide = |health: &mut u32, max_health: &mut u32| {
+            alive(health);
+            *max_health = 0;
+        };
         match self {
+            Self::MonsterSpawned { monster } => hide(&mut monster.health, &mut monster.max_health),
+            Self::MonsterHealthUpdate {
+                health, max_health, ..
+            } => hide(health, max_health),
             Self::PlayerJoined { player }
             | Self::PlayerAppeared { player }
             | Self::PlayerRespawned { player }
                 if player.id != viewer =>
             {
-                alive(&mut player.health);
-                player.max_health = 0;
+                hide(&mut player.health, &mut player.max_health)
             }
             Self::PlayerHealthUpdate {
                 player_id,
                 health,
                 max_health,
-            } if *player_id != viewer => {
-                alive(health);
-                *max_health = 0;
-            }
+            } if *player_id != viewer => hide(health, max_health),
             Self::MonsterAttackedPlayer {
                 player_id,
                 current_health,
                 ..
             } if *player_id != viewer => alive(current_health),
+            Self::CartStruckPlayer {
+                player_id, health, ..
+            } if *player_id != viewer => alive(health),
             Self::MonsterSkillStruck { victims, .. } => {
                 for victim in victims.iter_mut().filter(|v| v.player_id != viewer) {
                     alive(&mut victim.current_health);

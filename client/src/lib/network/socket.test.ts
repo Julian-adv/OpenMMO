@@ -49,7 +49,11 @@ class TestWebSocket {
 }
 
 const authenticate = () =>
-  networkManager.authSuccess.emit({ accountName: 'account', characters: [] })
+  networkManager.authSuccess.emit({
+    accountName: 'account',
+    characters: [],
+    playing: null,
+  })
 
 async function expectBlocked(cancel = false) {
   expect(await networkManager.requestDeleteCharacter(42, cancel)).toEqual({

@@ -198,6 +198,7 @@ export type ClientMessage =
         google_id_token: string
       }
     }
+  | 'WatchPlaying'
   | {
       CreateCharacter: {
         character_name: string
@@ -697,6 +698,8 @@ export type ServerMeal = {
 export type AuthSuccessPayload = {
   accountName: string
   characters: AccountCharacter[]
+  /** The account's character in the world, played from another connection. */
+  playing: string | null
 }
 
 export type MoveGoal = {

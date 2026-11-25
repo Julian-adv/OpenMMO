@@ -109,3 +109,80 @@ async fn a_watcher_follows_the_session_without_taking_it_over() {
         .any(|msg| matches!(msg, ServerMessage::WatchWaiting));
     assert!(waiting);
 }
+
+#[tokio::test]
+async fn a_login_waits_to_take_over_a_playing_session() {
+    let game = Arc::new(crate::game_state::tests::make_test_game_state(
+        "watch_deferred",
+    ));
+    let auth = Arc::new(crate::game_state::tests::make_test_auth("watch_deferred"));
+    let auth_ctx = test_auth_ctx();
+    let account = auth.login_google("watch-deferred").unwrap();
+    let character = auth
+        .create_character(
+            &account,
+            "Played",
+            &roll_character_attributes(&CharacterClass::Knight, crate::types::Gender::Male),
+            16,
+            CharacterClass::Knight,
+            crate::types::Gender::Male,
+        )
+        .unwrap();
+    let send = async |state: &mut ConnectionState, msg: ClientMessage| {
+        let encoded = onlinerpg_shared::serialize_client_msg(&msg).unwrap();
+        handle_client_message(&encoded, &game, &auth, &auth_ctx, state)
+            .await
+            .unwrap()
+    };
+    let login = async || {
+        let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+        handle_handshake(
+            &client_info(onlinerpg_shared::PROTOCOL_VERSION, "web"),
+            &mut state,
+        );
+        let responses = finish_auth(&game, &auth, &mut state, account.clone(), false).await;
+        (state, responses)
+    };
+    let enter = ClientMessage::EnterGame {
+        character_id: character.id,
+    };
+
+    let (mut owner, _) = login().await;
+    send(&mut owner, enter).await;
+    let owner_session = owner.account_session_id.unwrap();
+
+    let (mut lobby, responses) = login().await;
+    assert!(matches!(
+        responses.as_slice(),
+        [ServerMessage::AuthSuccess { playing: Some(name), .. }] if name == "Played"
+    ));
+    assert!(
+        game.is_current_account_session(&account, owner_session)
+            .await
+    );
+
+    let (mut watcher, _) = login().await;
+    let responses = send(&mut watcher, ClientMessage::WatchPlaying).await;
+    assert!(responses
+        .iter()
+        .any(|msg| matches!(msg, ServerMessage::JoinSuccess { .. })));
+    assert!(watcher.watcher.is_some());
+    assert!(
+        game.is_current_account_session(&account, owner_session)
+            .await
+    );
+
+    send(
+        &mut lobby,
+        ClientMessage::EnterGame {
+            character_id: character.id,
+        },
+    )
+    .await;
+    assert!(
+        !game
+            .is_current_account_session(&account, owner_session)
+            .await
+    );
+    assert!(lobby.player_id.is_some());
+}

@@ -297,6 +297,21 @@ impl super::GameState {
         session_id
     }
 
+    /// The account's character in the world, if a session is playing one.
+    pub(crate) async fn account_playing(&self, account_name: &str) -> Option<String> {
+        let player_id = self
+            .account_sessions
+            .read()
+            .await
+            .get(&account_name.to_ascii_lowercase())?
+            .player_id?;
+        self.players
+            .read()
+            .await
+            .get(&player_id)
+            .map(|player| player.name.clone())
+    }
+
     pub(crate) async fn is_current_account_session(
         &self,
         account_name: &str,
