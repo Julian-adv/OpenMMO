@@ -105,3 +105,15 @@ async fn old_movement_progress_cannot_overwrite_a_teleport() {
     assert_eq!(s.self_floor_level, 0);
     assert!(s.move_status.is_none());
 }
+
+#[test]
+fn a_worn_ring_of_teleport_control_says_plain_scrolls_can_aim() {
+    let (mut s, _rx) = teleport_state(onlinerpg_shared::bookmark::SCROLL);
+    let hint = "lets a plain Scroll of Teleportation go to a bookmark";
+    assert!(!s.format_world_state().contains(hint));
+    s.self_equipped.insert(
+        onlinerpg_shared::inventory::EquipSlot::Ring,
+        bag_item(101, "ring_of_teleport_control", 1),
+    );
+    assert!(s.format_world_state().contains(hint));
+}

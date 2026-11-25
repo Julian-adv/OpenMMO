@@ -103,6 +103,24 @@
     "minZ": 0,
     "maxZ": 0.634
   },
+  "garden_relic_chest": {
+    "minX": -0.563,
+    "maxX": 0.563,
+    "minZ": -0.578,
+    "maxZ": 0.578
+  },
+  "garden_stone_chest": {
+    "minX": -0.467,
+    "maxX": 0.467,
+    "minZ": -0.44,
+    "maxZ": 0.44
+  },
+  "garden_petrified_adventurer": {
+    "minX": -0.408,
+    "maxX": 0.408,
+    "minZ": -0.414,
+    "maxZ": 0.414
+  },
   "terraclash_dormant": {
     "minX": -5.248,
     "maxX": 4.967,

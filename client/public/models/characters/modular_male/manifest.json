@@ -1,5 +1,5 @@
 {
-  "source": "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard, tuxedo and guard equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
+  "source": "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard, tuxedo and guard equipment, Helm of Brilliance, blindfold and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
   "inputs": {
     "assets/modular_human_male_01/fitted/base.glb": "0e629865af6c3feac3a4444e0cb2d5f2d3861bf2350d643cbff0f9858b83535a",
     "assets/modular_human_male_01/fitted/hair_crop.glb": "5e8acb389f575331008c36dd94afcbf3831c90f53ca21ab0a7bbe666539f2472",
@@ -66,7 +66,8 @@
     "assets/modular_human_male_01/guard/tripo_v1/boots_guard.glb": "b211ff73679321bb7b4666bcd882f3a752a60631ba8bec0017df163738a6e3c1",
     "assets/modular_human_male_01/guard/tripo_v1/tabard_guard.glb": "893dc976ddcd733f5b4010619c1e1be7813d3695d68c04f36573a4d94e35a62a",
     "client/public/models/animations/spear.glb": "8bfb15a28edaa7eaba5e7ad9e809f0325f5cd0d303d6e5e42c4ea9c754ebdf18",
-    "client/public/models/animations/snow_dig.glb": "cd603ba6fbd30f0d9c69b1fc07466a7e8ce86dfddfa0a25b5eeb16e70d3da33f"
+    "client/public/models/animations/snow_dig.glb": "cd603ba6fbd30f0d9c69b1fc07466a7e8ce86dfddfa0a25b5eeb16e70d3da33f",
+    "assets/items/blindfold/tripo_male_v1/fitted/helmet_blindfold.glb": "d4339f2c85dec08ee9b9a39278f204204a6d93773d51de739caeb05f051e62a6"
   },
   "outputs": {
     "base.glb": "abf1a12178d5df11269afed6793e46ed16796c47174e356708ee73bdf590bdad",
@@ -219,6 +220,7 @@
     "animations/snow_dig.glb": {
       "sha256": "0b48b31eed00a3e81971718b2414596ac7190e2955731549ba65df945c759cd6",
       "clips": ["snow_dig"]
-    }
+    },
+    "helmet_blindfold.glb": "357943ec469adddb9ae1fd33b63946fd608c4c9f578142a1f756423f8d172e68"
   }
 }

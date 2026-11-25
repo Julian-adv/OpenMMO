@@ -140,7 +140,7 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 
 ### 광부의 멜빵 (miner_harness)
 
-- 허리띠 칸 장비. 착용 중 최대 하중 +10% (`effects`의 `carry+10%`, 허기 배수와 곱연산). 거래 가능.
+- 허리띠 칸 장비. 착용 중 최대 하중 +30kg (`effects`의 `carry+30`, 힘×15에 더한 뒤 허기 배수를 곱함, 사용자 결정 2026-11-25). 거래 가능.
 - 체스트 풀에서 제외. Blackvein Mine의 광부 몬스터만 드랍한다: Lingering Miner 0.03%, Crystallized Miner 0.06%, Twisted Miner 0.1%, Rampaging Foreman 3%. Veinfused·Deep Predator는 드랍하지 않는다.
 - 목표 기대값은 완주 10회에 1개(리스폰 재처치 제외).
 

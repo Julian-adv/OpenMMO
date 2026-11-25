@@ -25,7 +25,7 @@ pub enum ItemEffect {
     /// Max HP bonus per character level (doc/TIER5_FIELD_RAID.md).
     MaxHpPerLevel(u32),
     CriticalChance(u8),
-    /// Carry limit bonus in percent while equipped.
+    /// Carry limit bonus in kg while equipped.
     CarryCapacity(u8),
     /// Slows satiation drain while equipped (doc/HUNGER.md).
     Sustenance,
@@ -55,8 +55,8 @@ impl ItemEffect {
                 .filter(|n| *n <= 100)
                 .map(ItemEffect::CriticalChance);
         }
-        if let Some(percent) = onlinerpg_shared::inventory::carry_bonus_token(token) {
-            return Some(ItemEffect::CarryCapacity(percent));
+        if let Some(kg) = onlinerpg_shared::inventory::carry_bonus_token(token) {
+            return Some(ItemEffect::CarryCapacity(kg));
         }
         if let Some(amount) = token.strip_prefix("cha") {
             return amount.parse().ok().map(ItemEffect::Cha);
@@ -353,11 +353,11 @@ impl ItemDefinition {
             .sum()
     }
 
-    pub fn carry_bonus_percent(&self) -> u32 {
+    pub fn carry_bonus_kg(&self) -> u32 {
         self.effects
             .iter()
             .map(|effect| match effect {
-                ItemEffect::CarryCapacity(percent) => u32::from(*percent),
+                ItemEffect::CarryCapacity(kg) => u32::from(*kg),
                 _ => 0,
             })
             .sum()
@@ -827,7 +827,7 @@ mod tests {
         let defs = ItemDefs::load();
         let harness = defs.get("miner_harness").unwrap();
         assert_eq!(harness.equip_slot, Some(EquipSlot::Belt));
-        assert_eq!(harness.effects(), &[ItemEffect::CarryCapacity(10)]);
+        assert_eq!(harness.effects(), &[ItemEffect::CarryCapacity(30)]);
         assert!(!harness.untradeable);
         for tier in 1..=5 {
             assert!(!table_ids(&defs, tier).contains(&harness.id));

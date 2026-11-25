@@ -514,7 +514,7 @@ async fn healing_prayer_prompt_shows_targets_range_roll_and_undead() {
     assert!(prompt.contains("Needs 6 MP and works with any gear. The target must be within 10m"));
     assert!(prompt.contains("restores 2d6 + Level/3 + WIS modifier HP"));
     assert!(prompt.contains(
-        "harms only undead monsters (Forgotten Dead, Skeleton, Skeleton Knight, Skeleton Warrior)"
+        "harms only undead monsters (Buried Digger, Forgotten Dead, Skeleton, Skeleton Knight, Skeleton Warrior)"
     ));
     assert!(prompt.contains("Cooldown 8s."));
     assert!(prompt.contains("Monster: Skeleton [m21] (undead) HP"));

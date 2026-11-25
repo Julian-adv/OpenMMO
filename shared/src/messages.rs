@@ -2010,6 +2010,16 @@ pub enum ServerMessage {
         player_id: PlayerId,
         damage: u32,
     },
+    /// A waking statue came to life, or settled back into stone.
+    MonsterDormant {
+        monster_id: String,
+        dormant: bool,
+    },
+    /// A floating eye blinks at whoever struck it, about to hold them.
+    MonsterStared {
+        monster_id: String,
+        player_id: PlayerId,
+    },
     /// A plain swing at a distant target: the ground where it stood erupts
     /// after `impact_ms`, striking whoever is still within `radius`.
     MonsterGroundStrike {
@@ -3095,7 +3105,8 @@ impl ServerMessage {
             | Self::MealEaten { .. }
             | Self::MealRemoved { .. }
             | Self::PlayerRadianceToggled { .. }
-            | Self::PlayerRageToggled { .. } => DeliveryClass::NearbyState,
+            | Self::PlayerRageToggled { .. }
+            | Self::MonsterDormant { .. } => DeliveryClass::NearbyState,
             Self::PlayerTeleportEffect { .. }
             | Self::DungeonChestOpened { .. }
             | Self::ChatMessage { .. }
@@ -3111,6 +3122,7 @@ impl ServerMessage {
             | Self::MonsterSkillStarted { .. }
             | Self::MonsterSkillStruck { .. }
             | Self::MonsterSkillReflected { .. }
+            | Self::MonsterStared { .. }
             | Self::MonsterGroundStrike { .. }
             | Self::MonsterAttackedPlayer { .. }
             | Self::PlayerInstrumentNotes { .. }

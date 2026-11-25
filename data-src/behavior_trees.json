@@ -346,6 +346,74 @@
           }
         ]
       }
+    },
+    "ambush": {
+      "description": "Waking statue: fights like an aggressive monster once awake, then walks home to sleep as stone instead of wandering.",
+      "root": {
+        "type": "selector",
+        "children": [
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "is_beyond_leash",
+                "params": {
+                  "range": 50.0
+                }
+              },
+              {
+                "type": "condition",
+                "name": "chance",
+                "params": {
+                  "probability": 0.7
+                }
+              },
+              {
+                "type": "action",
+                "name": "return_to_spawn"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "target_in_range"
+              },
+              {
+                "type": "action",
+                "name": "attack_target"
+              }
+            ]
+          },
+          {
+            "type": "sequence",
+            "children": [
+              {
+                "type": "condition",
+                "name": "target_in_range"
+              },
+              {
+                "type": "action",
+                "name": "chase_target"
+              }
+            ]
+          },
+          {
+            "type": "action",
+            "name": "return_to_spawn",
+            "params": {
+              "arriveDist": 1.0
+            }
+          },
+          {
+            "type": "action",
+            "name": "idle"
+          }
+        ]
+      }
     }
   }
 }

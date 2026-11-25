@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { GroundReflection } from '../effects/ground-reflection'
   import { setupPointShadow } from '../utils/pointShadow'
   import { deferShaderBuilds } from '../utils/deferredShaderBuild'
   import { T, useTask, useThrelte } from '@threlte/core'
@@ -40,6 +41,17 @@
   import GameSceneRiverRocksLayer from './game-scene/GameSceneRiverRocksLayer.svelte'
   import GameSceneShoreSprayLayer from './game-scene/GameSceneShoreSprayLayer.svelte'
   import GameSceneFootprintsLayer from './game-scene/GameSceneFootprintsLayer.svelte'
+  import {
+    FootstepSounds,
+    FOOTSTEP_HEARING_RANGE_M,
+    type Walker,
+  } from '../effects/footstep-sounds'
+  import { walkSurfaceAt } from '../utils/walkSurface'
+  import { shortestWrappedDeltaX } from '../terrain/world-wrap'
+  import {
+    playFootstepSound,
+    preloadFootstepSounds,
+  } from '../managers/sfxManager'
   import GameSceneGrassLayer from './game-scene/GameSceneGrassLayer.svelte'
   import GameSceneTreeLayer from './game-scene/GameSceneTreeLayer.svelte'
   import GameSceneWindParticles from './game-scene/GameSceneWindParticles.svelte'
@@ -271,11 +283,33 @@
   let waterCamDir = $state<THREE.Vector3 | null>(null)
   let waterMoonBrightness = $state(0)
   let waterTorchLight = $state<THREE.PointLight | null>(null)
+  const groundReflection = new GroundReflection()
   let waterGroup = $state<THREE.Group | undefined>(undefined)
   let waterLayerRef = $state<GameSceneWaterFieldLayer | undefined>(undefined)
   let riverRocksRef = $state<GameSceneRiverRocksLayer | undefined>(undefined)
   let shoreSprayRef = $state<GameSceneShoreSprayLayer | undefined>(undefined)
   let footprintsRef = $state<GameSceneFootprintsLayer | undefined>(undefined)
+
+  preloadFootstepSounds()
+  const footsteps = new FootstepSounds(walkSurfaceAt, playFootstepSound)
+
+  function* nearbyWalkers(): Generator<[number, Walker]> {
+    const self = currentPlayer?.position
+    if (!self) return
+    for (const [id, pose] of remotePlayerManager.players) {
+      const { x, z } = pose.position
+      if (
+        Math.abs(shortestWrappedDeltaX(self.x, x)) >=
+          FOOTSTEP_HEARING_RANGE_M ||
+        Math.abs(z - self.z) >= FOOTSTEP_HEARING_RANGE_M
+      ) {
+        continue
+      }
+      const walking =
+        pose.state === 'moving' && !isMounted(otherPlayers.get(id))
+      yield [id, { ...pose.position, walking, mode: pose.movementMode }]
+    }
+  }
   let grassLayerRef = $state<GameSceneGrassLayer | undefined>(undefined)
   let treeLayerRef = $state<GameSceneTreeLayer | undefined>(undefined)
   let windParticlesRef = $state<GameSceneWindParticles | undefined>(undefined)
@@ -760,6 +794,15 @@
         if (tl) waterTorchLight = tl
       }
 
+      if (currentPlayer && camera)
+        groundReflection.update(
+          renderer,
+          scene,
+          camera,
+          currentPlayer.position,
+          $isUnderground
+        )
+
       // Update monster animations
       const monsterAnimationStart = performance.now()
       for (const monsterModel of monsterModels) {
@@ -919,6 +962,18 @@
 
       // Age footprints and stamp new trails.
       footprintsRef?.update(deltaTime, snowCover.value)
+      footsteps.update(
+        currentPlayer
+          ? {
+              ...currentPlayer.position,
+              walking:
+                currentPlayerState.state === 'moving' &&
+                !isMounted(currentPlayer),
+              mode: currentPlayerState.movementMode,
+            }
+          : null,
+        nearbyWalkers()
+      )
 
       // Update camera with preserved offset
       const cameraUpdateStart = performance.now()

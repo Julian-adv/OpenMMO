@@ -46,6 +46,27 @@ export function modularRigId(root: THREE.Object3D): string {
   return [...ids][0]
 }
 
+function visibleRaycast(
+  this: THREE.SkinnedMesh,
+  raycaster: THREE.Raycaster,
+  hits: THREE.Intersection[]
+) {
+  if (this.visible)
+    THREE.SkinnedMesh.prototype.raycast.call(this, raycaster, hits)
+}
+
+/** Character parts are never frustum culled, so three would skin every vertex
+ *  to find their bounds when first picked. Give them padded bind-pose bounds,
+ *  and let hidden outfit parts skip picking. */
+export function prepareCharacterPart(mesh: THREE.SkinnedMesh) {
+  mesh.frustumCulled = false
+  const geometry = mesh.geometry
+  if (!geometry.boundingSphere) geometry.computeBoundingSphere()
+  mesh.boundingSphere = geometry.boundingSphere!.clone()
+  mesh.boundingSphere.radius *= 1.5
+  mesh.raycast = visibleRaycast
+}
+
 export function skinnedParts(root: THREE.Object3D): THREE.SkinnedMesh[] {
   const result: THREE.SkinnedMesh[] = []
   // Meshes hung off a bone (the cape rig) carry their own skeleton.
@@ -124,6 +145,7 @@ export interface ModularOutfit {
     | 'bard'
     | 'brilliance'
     | 'guard'
+    | 'blindfold'
 }
 
 export const SELECTABLE_HAIR_PARTS = new Set<ModularOutfit['hair']>([
@@ -164,13 +186,18 @@ const HAT_HAIR_CUTS: Partial<
 > = { priest: 'priest_hat_hair', bard: 'bard_hat_hair' }
 
 const hatHairCut = (helmet: ModularOutfit['helmet']) => HAT_HAIR_CUTS[helmet]
+// Worn over the hair, which stays as chosen.
+const HAIR_KEEPING_HELMETS = new Set<ModularOutfit['helmet']>([
+  'none',
+  'blindfold',
+])
 
 export function modularOutfitParts(outfit: ModularOutfit): Set<string> {
   const selected = new Set<string>()
   if (outfit.pants !== 'none') selected.add(`pants_${outfit.pants}`)
   if (
     outfit.hair !== 'none' &&
-    (outfit.helmet === 'none' || hatHairCut(outfit.helmet))
+    (HAIR_KEEPING_HELMETS.has(outfit.helmet) || hatHairCut(outfit.helmet))
   )
     selected.add(outfit.hair)
   if (outfit.top === 'linen' || outfit.top === 'leather')

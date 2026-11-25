@@ -105,6 +105,13 @@ const PRESENTATION: Record<
     applied: 'The eye stares back and you cannot move!',
     expired: 'The stare lets go of you.',
   },
+  stone_gaze: {
+    labelKey: 'debuff.petrified.name',
+    noteKey: 'debuff.petrified.note',
+    icon: '🐍',
+    applied: 'You meet her eyes and turn to stone!',
+    expired: 'The stone cracks away and you can move again.',
+  },
   petrified: {
     labelKey: 'debuff.petrified.name',
     noteKey: 'debuff.petrified.note',

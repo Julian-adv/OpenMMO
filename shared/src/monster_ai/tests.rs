@@ -6,6 +6,7 @@ use rand::rngs::SmallRng;
 use rand::SeedableRng;
 
 mod aggro_tests;
+mod ambush_tests;
 mod return_tests;
 mod skill_tests;
 

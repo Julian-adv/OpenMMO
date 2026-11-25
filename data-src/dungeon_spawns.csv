@@ -53,8 +53,10 @@ mine_crystal_6_10,mine,mine_crystal,6,10,1,true
 mine_twisted_11_15,mine,mine_twisted,11,15,1,true
 mine_veinfused_16_20,mine,mine_veinfused,16,20,1,true
 mine_predator_21_24,mine,mine_predator,21,24,1,true
-garden_statue_1_5,garden,garden_statue,1,5,1,true
-garden_serpent_6_10,garden,garden_serpent,6,10,1,true
-garden_excavator_11_15,garden,garden_excavator,11,15,1,true
-garden_handmaiden_16_24,garden,garden_handmaiden,16,24,1,true
-garden_breaker_16_24,garden,garden_breaker,16,24,1,true
+garden_guardian_1_5,garden,garden_guardian,1,5,1,true
+garden_digger_1_5,garden,garden_digger,1,5,1,true
+garden_statue_6_10,garden,garden_statue,6,10,1,true
+garden_serpent_11_15,garden,garden_serpent,11,15,1,true
+garden_excavator_16_20,garden,garden_excavator,16,20,1,true
+garden_handmaiden_21_29,garden,garden_handmaiden,21,29,1,true
+garden_breaker_21_29,garden,garden_breaker,21,29,1,true

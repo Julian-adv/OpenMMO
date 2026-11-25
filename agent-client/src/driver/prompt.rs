@@ -733,12 +733,12 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
                     " It deals {damage} whatever your armor; drink a potion now if your HP is {damage} or less."
                 ),
                 SkillDamage::Roll(dice) => format!(" It deals {dice} whatever your armor."),
-                SkillDamage::Scaled { .. } => String::new(),
+                SkillDamage::Scaled { .. } | SkillDamage::None => String::new(),
             };
             let gaze = if def.gaze {
-                " It strikes everyone it can see: get out of the fan, put a wall or pillar between you, or stand facing it with a mirror shield equipped. A blindfold on your head spares you too."
+                format!(" It turns everyone it can see to stone, and the monster then comes to break each statue for {}: get out of the fan, put a wall or pillar between you, or stand facing it with a mirror shield equipped. A blindfold on your head spares you too.", onlinerpg_shared::monster_ai::STONE_BREAK_ROLL)
             } else {
-                ""
+                String::new()
             };
             Some(format!(
                 "[MonsterSkill] {monster_id} winds up {skill:?}: in {strike_s:.1}s it strikes {area}.{marks}{damage}{gaze}"
@@ -770,6 +770,21 @@ pub(crate) fn format_event(state: &SharedState, msg: &ServerMessage) -> Option<S
             damage,
         } => Some(format!(
             "[MonsterSkillReflected] {}'s mirror shield threw {monster_id}'s {skill:?} back for {damage}",
+            player_name(state, player_id)
+        )),
+        ServerMessage::MonsterDormant {
+            monster_id,
+            dormant,
+        } => Some(if *dormant {
+            format!("[MonsterDormant] {monster_id} settles back into stone")
+        } else {
+            format!("[MonsterDormant] {monster_id} wakes from stone and attacks")
+        }),
+        ServerMessage::MonsterStared {
+            monster_id,
+            player_id,
+        } => Some(format!(
+            "[MonsterStared] {monster_id} blinks at {}, about to hold them still",
             player_name(state, player_id)
         )),
         ServerMessage::MonsterGroundStrike {

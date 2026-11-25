@@ -392,7 +392,7 @@
   "item.invisibility": "Invisible until you attack",
   "item.maxHpPerLevel": "Max HP +{{value}} per level",
   "item.nonStackingEffect": "Duplicate item effects do not stack",
-  "item.carryCapacity": "Carry limit +{{value}}%",
+  "item.carryCapacity": "Carry limit +{{value}} kg",
   "item.criticalChance": "Critical chance +{{value}} percentage points",
   "item.sustenance": "Slows hunger",
   "item.compare": "vs {{item}}",

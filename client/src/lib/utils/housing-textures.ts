@@ -4,6 +4,8 @@ import type { MeshStandardNodeMaterial } from 'three/webgpu'
 import { loadSplatLayer } from './splatLayerLoader'
 import { snowyStandardMaterial } from '../shaders/snow-cover-nodes'
 
+export type WalkSurface = 'wood'
+
 export interface HousingTextureEntry {
   label: string
   glb: string
@@ -32,9 +34,42 @@ export interface HousingTextureEntry {
   /** Enable standard alpha-blend transparency (transparent + depthWrite off). */
   transparent?: boolean
   decal?: boolean
+  /** What a walker's steps sound like on it. */
+  surface?: WalkSurface
 }
 
 /** Shared texture catalog for walls, floors, and roofs. */
+/** A dungeon theme's wall and floor (dungeon-cave-themes.ts). */
+function caveTextures(theme: {
+  id: string
+  color: number
+  roughness: number
+  /** Laid blocks and tiles rather than bare rock. */
+  masonry?: boolean
+}): HousingTextureEntry[] {
+  return ['wall', 'floor'].map((surface) => {
+    const masonryWall = !!theme.masonry && surface === 'wall'
+    return {
+      label: `Cave ${theme.id} ${surface}`,
+      glb: '',
+      mapUrl: `/textures/dungeon/cave-${theme.id}-${surface}.webp`,
+      uvScale: masonryWall ? 2 : 1,
+      fallbackColor: theme.color,
+      roughness: theme.roughness,
+      vertexColors: masonryWall,
+      ghostOpacity: masonryWall ? 0.22 : undefined,
+      bumpScale: masonryWall
+        ? 0.012
+        : surface === 'wall'
+          ? 0.09
+          : theme.masonry
+            ? 0
+            : 0.035,
+      internal: true,
+    }
+  })
+}
+
 export const HOUSING_TEXTURES: HousingTextureEntry[] = [
   // Stone
   {
@@ -59,30 +94,35 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
   {
     label: 'Wood',
     glb: 'housing/planks_brown_10_1k',
+    surface: 'wood',
     fallbackColor: 0x8b6914,
     sortOrder: 10,
   },
   {
     label: 'Plank',
     glb: 'housing/wood_planks_1k',
+    surface: 'wood',
     fallbackColor: 0x9e7c4e,
     sortOrder: 11,
   },
   {
     label: 'Dark Wood',
     glb: 'housing/dark_wooden_planks_1k',
+    surface: 'wood',
     fallbackColor: 0x4a3728,
     sortOrder: 12,
   },
   {
     label: 'Weathered',
     glb: 'housing/weathered_planks_1k',
+    surface: 'wood',
     fallbackColor: 0x8a8070,
     sortOrder: 13,
   },
   {
     label: 'Log Wall',
     glb: 'housing/wood_trunk_wall_1k',
+    surface: 'wood',
     fallbackColor: 0x7a5c3a,
     sortOrder: 14,
   },
@@ -95,6 +135,7 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
   {
     label: 'Plank Wall',
     glb: 'housing/wood_plank_wall_1k',
+    surface: 'wood',
     fallbackColor: 0x8b7355,
     sortOrder: 16,
   },
@@ -220,33 +261,14 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     uvScale: 0.8,
     internal: true,
   },
-  ...[
-    { id: 'limestone', color: 0x89867d, roughness: 0.94 },
-    { id: 'moss', color: 0x6c7362, roughness: 0.88 },
-    { id: 'masonry', color: 0x626763, roughness: 0.93 },
-  ].flatMap(({ id, color, roughness }) =>
-    ['wall', 'floor'].map((surface) => {
-      const masonryWall = id === 'masonry' && surface === 'wall'
-      return {
-        label: `Cave ${id} ${surface}`,
-        glb: '',
-        mapUrl: `/textures/dungeon/cave-${id}-${surface}.webp`,
-        uvScale: masonryWall ? 2 : 1,
-        fallbackColor: color,
-        roughness,
-        vertexColors: masonryWall,
-        ghostOpacity: masonryWall ? 0.22 : undefined,
-        bumpScale: masonryWall
-          ? 0.012
-          : surface === 'wall'
-            ? 0.09
-            : id === 'masonry'
-              ? 0
-              : 0.035,
-        internal: true,
-      }
-    })
-  ),
+  ...caveTextures({ id: 'limestone', color: 0x89867d, roughness: 0.94 }),
+  ...caveTextures({ id: 'moss', color: 0x6c7362, roughness: 0.88 }),
+  ...caveTextures({
+    id: 'masonry',
+    color: 0x626763,
+    roughness: 0.93,
+    masonry: true,
+  }),
   ...['wall-weathering-decals', 'wall-cracks-cobwebs'].map((id) => ({
     label: `Dungeon ${id}`,
     glb: '',
@@ -330,6 +352,24 @@ export const HOUSING_TEXTURES: HousingTextureEntry[] = [
     fallbackColor: 0xd8d8d8,
     roughness: 0.9,
     vertexColors: true,
+    fitSegment: true,
+    internal: true,
+  },
+  // Appended: persisted texture indices above must not shift.
+  ...caveTextures({
+    id: 'temple',
+    color: 0xb9b0a0,
+    roughness: 0.8,
+    masonry: true,
+  }),
+  {
+    // Marble double door of a temple dungeon's entrance, mapped once across.
+    // Appended: houses store indices into this list.
+    label: 'Temple Door',
+    glb: '',
+    mapUrl: '/textures/dungeon/temple-door.webp',
+    fallbackColor: 0xd8d0c2,
+    roughness: 0.75,
     fitSegment: true,
     internal: true,
   },

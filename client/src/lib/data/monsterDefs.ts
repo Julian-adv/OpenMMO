@@ -52,6 +52,8 @@ export interface MonsterDefinition {
   /** Lights the model's blue-violet crystal like the mine's clusters
    *  (`applyCrystalGlow`). */
   crystalGlow?: boolean
+  /** 'locomotion' releases the tail to the attack clips when movement ends. */
+  bodyTrail?: boolean | 'locomotion'
   /** Solid body as `halfWidth|front|back` meters; fixes the facing and moves
    *  reach to the body surface (shared `monster_body`). */
   footprint?: string

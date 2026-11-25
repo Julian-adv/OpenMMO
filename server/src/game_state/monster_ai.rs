@@ -5,7 +5,7 @@ use onlinerpg_shared::ability::PRIMAL_ROAR_STAGGER_MS;
 use onlinerpg_shared::dungeon::passability_floor_for_level;
 use onlinerpg_shared::monster_ai::{
     self, AiCommand, AiState, BehaviorTree, ChaseAim, MonsterBrain, NearbyMonster, NearbyPlayer,
-    SwingReach, AGGRESSIVE_BEHAVIOR, DEFAULT_BEHAVIOR,
+    SwingReach, AGGRESSIVE_BEHAVIOR, AMBUSH_BEHAVIOR, DEFAULT_BEHAVIOR,
 };
 use onlinerpg_shared::pathfinding::{is_movement_blocked, segment_touches_box, PathTermination};
 use onlinerpg_shared::shortest_world_delta_x;
@@ -297,7 +297,10 @@ impl super::GameState {
 
     fn new_brain(&self, monster: &Monster) -> MonsterBrain {
         let def = self.monster_defs.get(&monster.monster_type);
-        let behavior = if monster.aggressive {
+        let ambush_range = def.map_or(0.0, |d| d.ambush_range);
+        let behavior = if ambush_range > 0.0 {
+            AMBUSH_BEHAVIOR.to_string()
+        } else if monster.aggressive {
             AGGRESSIVE_BEHAVIOR.to_string()
         } else {
             def.and_then(|d| d.behavior.clone())
@@ -324,6 +327,7 @@ impl super::GameState {
         brain.ranged_range = def.map_or(0.0, |d| d.ranged_attack_range);
         brain.reaction_ms = def.map_or(0.0, |d| d.reaction_ms);
         brain.staggers = !def.is_some_and(|d| d.stagger_immune);
+        brain.set_ambush(ambush_range, monster.dormant);
         brain
     }
 
@@ -503,6 +507,9 @@ impl super::GameState {
                     brains
                         .entries
                         .insert(m.id.clone(), Entry::new(self.new_brain(m), started));
+                }
+                if m.dormant && !self.ambusher_woken(m, &players) {
+                    continue;
                 }
                 active.push(Active {
                     id: m.id.clone(),
@@ -778,7 +785,45 @@ impl super::GameState {
                 )
                 .await
             }
+            AiCommand::Dormant { dormant } => self.set_monster_dormant(monster_id, dormant).await,
         }
+    }
+
+    /// A dormant monster needs a tick only once someone stands within its reach.
+    fn ambusher_woken(&self, monster: &Monster, players: &[NearbyPlayer]) -> bool {
+        let reach = self
+            .monster_defs
+            .get(&monster.monster_type)
+            .map_or(0.0, |d| d.ambush_range);
+        players
+            .iter()
+            .any(|p| monster.position.dist_xz_sq(&p.position) <= reach * reach)
+    }
+
+    async fn set_monster_dormant(&self, monster_id: &str, dormant: bool) {
+        let Some((position, floor_level)) = self
+            .monsters
+            .write()
+            .await
+            .get_mut(monster_id)
+            .filter(|m| m.state != MonsterState::Dead)
+            .map(|m| {
+                m.dormant = dormant;
+                (m.position, m.floor_level)
+            })
+        else {
+            return;
+        };
+        self.publish_nearby(
+            &position,
+            floor_level,
+            ServerMessage::MonsterDormant {
+                monster_id: monster_id.to_owned(),
+                dormant,
+            },
+            None,
+        )
+        .await;
     }
 
     async fn publish_monster_skill(

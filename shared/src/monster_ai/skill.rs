@@ -42,6 +42,8 @@ pub enum SkillDamage {
     Fixed(u32),
     /// Always lands for this dice roll.
     Roll(&'static str),
+    /// Lands its debuff alone.
+    None,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -64,9 +66,11 @@ pub struct MonsterSkill {
     pub debuff: Option<&'static str>,
     /// A fan cast behind the caster, only while someone stands there.
     pub rear: bool,
-    /// Strikes through the eyes: covered eyes are spared, a mirror turned to
-    /// it throws it back, and its dead stand as stone.
+    /// Strikes through the eyes: covered eyes are spared and a mirror turned
+    /// to it throws it back.
     pub gaze: bool,
+    /// Dice it rolls on a victim turned to stone, whom the blow frees.
+    pub breaks_stone: Option<&'static str>,
 }
 
 /// Where a cast marks the ground, chosen when it starts so the marks are the
@@ -100,6 +104,10 @@ pub struct SkillSet {
     pub last_stand: Option<LastStand>,
     pub shatter: Option<Shatter>,
     pub timed: Option<TimedCast>,
+    /// While a living player stands as stone the monster leaves everyone
+    /// else and holds its other casts, goes to the nearest and casts this at
+    /// it, back turned.
+    pub stone_break: Option<&'static MonsterSkill>,
 }
 
 /// A cast on its own clock, apart from the swing: once every `every_ms`
@@ -156,6 +164,7 @@ pub const RUNE_SLASH: MonsterSkill = MonsterSkill {
     debuff: None,
     rear: false,
     gaze: false,
+    breaks_stone: None,
 };
 
 /// Terraclash's roar (doc/TIER5_FIELD_RAID.md 대지의 포효), as far as its
@@ -175,6 +184,7 @@ pub const EARTH_ROAR: MonsterSkill = MonsterSkill {
     debuff: None,
     rear: false,
     gaze: false,
+    breaks_stone: None,
 };
 
 /// 진형 붕괴: both fists slam the fan in front, and magma wells up under
@@ -208,6 +218,7 @@ pub const FORMATION_BREAK: MonsterSkill = MonsterSkill {
     debuff: None,
     rear: false,
     gaze: false,
+    breaks_stone: None,
 };
 
 /// 지진: the ground splits under most of the raid; the gaps between the marks
@@ -231,6 +242,7 @@ pub const EARTHQUAKE: MonsterSkill = MonsterSkill {
     debuff: None,
     rear: false,
     gaze: false,
+    breaks_stone: None,
 };
 
 /// The foreman's pick strikes the ground and black-violet crystal bursts up
@@ -259,6 +271,7 @@ pub const CRYSTAL_ERUPTION: MonsterSkill = MonsterSkill {
     debuff: Some("petrified"),
     rear: false,
     gaze: false,
+    breaks_stone: None,
 };
 
 /// Medusa's gaze (doc/STONE_GARDEN.md 응시): everyone her sight reaches in the
@@ -273,15 +286,20 @@ pub const STONE_GAZE: MonsterSkill = MonsterSkill {
         range: 24.0,
         half_angle: std::f32::consts::FRAC_PI_4,
     },
-    damage: SkillDamage::Roll("5d40+300"),
+    damage: SkillDamage::None,
     spots: None,
     pools: None,
-    debuff: None,
+    debuff: Some("stone_gaze"),
     rear: false,
     gaze: true,
+    breaks_stone: None,
 };
 
-/// Medusa's tail lashes whoever stands behind her.
+/// What breaking a gazed statue costs it; a mirror throws a third of it back.
+pub const STONE_BREAK_ROLL: &str = "5d40+300";
+
+/// Medusa's tail lashes whoever stands behind her, and breaks the stone her
+/// gaze made.
 pub const TAIL_SWEEP: MonsterSkill = MonsterSkill {
     id: MonsterSkillId::TailSweep,
     cast_ms: 2600.0,
@@ -301,6 +319,7 @@ pub const TAIL_SWEEP: MonsterSkill = MonsterSkill {
     debuff: None,
     rear: true,
     gaze: false,
+    breaks_stone: Some(STONE_BREAK_ROLL),
 };
 
 /// A five-player party sees the gaze at least three times: the health marks
@@ -316,6 +335,7 @@ const MEDUSA_SKILLS: SkillSet = SkillSet {
         health_marks: &[0.75, 0.5, 0.25],
         gap_ms: 45_000.0,
     }),
+    stone_break: Some(&TAIL_SWEEP),
 };
 
 const FOREMAN_SKILLS: SkillSet = SkillSet {
@@ -327,6 +347,7 @@ const FOREMAN_SKILLS: SkillSet = SkillSet {
         multiplier: 4,
     }),
     timed: None,
+    stone_break: None,
 };
 
 const BARKAN_SKILLS: SkillSet = SkillSet {
@@ -335,6 +356,7 @@ const BARKAN_SKILLS: SkillSet = SkillSet {
     last_stand: None,
     shatter: None,
     timed: None,
+    stone_break: None,
 };
 
 /// The roar comes least often; at 5% health it roars five times in a row
@@ -350,6 +372,7 @@ pub const TERRACLASH_SKILLS: SkillSet = SkillSet {
     }),
     shatter: None,
     timed: None,
+    stone_break: None,
 };
 
 /// Eruption radius of a ranged plain swing (`MonsterGroundStrike`).
@@ -377,6 +400,7 @@ const STONEBREAKER_SKILLS: SkillSet = SkillSet {
         multiplier: 3,
     }),
     timed: None,
+    stone_break: None,
 };
 
 pub fn skills_for(monster_type: &str) -> Option<&'static SkillSet> {

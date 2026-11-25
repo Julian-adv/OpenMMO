@@ -110,6 +110,10 @@ const outfitSources = {
     helmet_brilliance:
       "assets/items/helm_of_brilliance/tripo_v2/fitted_v3/male/helmet_brilliance.glb",
   },
+  blindfold: {
+    helmet_blindfold:
+      "assets/items/blindfold/tripo_male_v1/fitted/helmet_blindfold.glb",
+  },
 };
 const outfitPartSources = Object.assign({}, ...Object.values(outfitSources));
 parts.push(...Object.keys(outfitPartSources));
@@ -151,7 +155,7 @@ const hash = (path) =>
     .digest("hex");
 const report = {
   source:
-    "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard, tuxedo and guard equipment, Helm of Brilliance and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
+    "Modular male body, knight, barbarian, rogue, caveman, ranger, priest, bard, tuxedo and guard equipment, Helm of Brilliance, blindfold and user-provided Mixamo rig; source tiers and licenses in doc/assets/characters.md and doc/assets/helm-of-brilliance.md",
   inputs: {},
   outputs: {},
 };

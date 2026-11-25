@@ -2056,7 +2056,7 @@
 
     propBreakTimer = setTimeout(() => {
       propBreakTimer = null
-      playPropSound('break')
+      playPropSound(dungeonManager.breakSound(depth, propId))
       dungeonManager.noteSelfBreak(depth, propId)
       networkManager.sendBreakDungeonProp(entranceId, depth, propId)
     }, PROP_SWING_IMPACT_MS)

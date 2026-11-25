@@ -56,6 +56,55 @@ export function findRoomAtPoint(
   return null
 }
 
+/** World Y of a room's walking surface at (x, z): its floor or stair tread. */
+function roomFloorYAt(
+  house: HouseData,
+  room: RoomData,
+  x: number,
+  z: number
+): number {
+  if (room.roomType === 'stairwell') {
+    return (
+      house.origin.y +
+      getStairwellYOffset(room, house.origin.x, house.origin.z, x, z)
+    )
+  }
+  return (
+    house.origin.y +
+    floorYBase(room.floorLevel, room.wallHeight) +
+    FLOOR_THICKNESS / 2
+  )
+}
+
+/** Feet this close to a floor or stair tread are standing on it. */
+const STANDING_TOLERANCE_M = 0.3
+
+/**
+ * The room whose floor or stair tread is under feet at (x, y, z). A stairwell
+ * wins over the storey above it, which is punched through there.
+ */
+export function findRoomUnderFeet(
+  housesById: ReadonlyMap<string, HouseData>,
+  x: number,
+  y: number,
+  z: number
+): RoomData | null {
+  let flat: RoomData | null = null
+  for (const house of housesById.values()) {
+    for (const room of house.rooms) {
+      if (!roomContainsXZ(house, room, x, z)) continue
+      if (
+        Math.abs(y - roomFloorYAt(house, room, x, z)) > STANDING_TOLERANCE_M
+      ) {
+        continue
+      }
+      if (room.roomType === 'stairwell') return room
+      flat = room
+    }
+  }
+  return flat
+}
+
 /** Check if (x, z) falls inside any house room footprint, ignoring Y / floor. */
 export function isPointUnderHouseXZ(
   housesById: ReadonlyMap<string, HouseData>,
@@ -105,9 +154,7 @@ export function houseFloorHeightAt(
         if (floorLevel < room.floorLevel || floorLevel > room.floorLevel + 1) {
           continue
         }
-        const y =
-          house.origin.y +
-          getStairwellYOffset(room, house.origin.x, house.origin.z, x, z)
+        const y = roomFloorYAt(house, room, x, z)
         // Stacked stairwells share an XZ column; the reported floor is always
         // within one rise of the true Y, so nearest-to-floor-base disambiguates.
         const dist = Math.abs(
@@ -118,10 +165,7 @@ export function houseFloorHeightAt(
           stairY = y
         }
       } else if (room.floorLevel === floorLevel) {
-        flatY =
-          house.origin.y +
-          floorYBase(room.floorLevel, room.wallHeight) +
-          FLOOR_THICKNESS / 2
+        flatY = roomFloorYAt(house, room, x, z)
       }
     }
   }

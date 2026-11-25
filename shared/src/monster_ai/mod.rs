@@ -29,8 +29,8 @@ pub use command::{AiCommand, AiState, ChaseAim, NearbyMonster, NearbyPlayer, Swi
 pub use path::{CachePathProvider, PathProvider};
 pub use skill::{
     skill_by_id, skills_for, MonsterSkill, MonsterSkillId, SkillArea, SkillDamage, EARTHQUAKE,
-    EARTH_ROAR, FORMATION_BREAK, GROUND_STRIKE_RADIUS, REACH_SLACK, RUNE_SLASH, STONE_GAZE,
-    TAIL_SWEEP, TERRACLASH_SKILLS,
+    EARTH_ROAR, FORMATION_BREAK, GROUND_STRIKE_RADIUS, REACH_SLACK, RUNE_SLASH, STONE_BREAK_ROLL,
+    STONE_GAZE, TAIL_SWEEP, TERRACLASH_SKILLS,
 };
 pub use tree::{behavior_tree_for, load_behavior_trees, BehaviorNode, BehaviorTree};
 
@@ -96,6 +96,15 @@ pub const DEFAULT_BEHAVIOR: &str = "brave";
 /// targets on sight. Selected when `Monster::aggressive` is set, overriding the
 /// monster type's configured behavior.
 pub const AGGRESSIVE_BEHAVIOR: &str = "aggressive";
+/// Behavior tree of a monster that never fights.
+pub const PASSIVE_BEHAVIOR: &str = "passive";
+/// Behavior tree of a waking statue.
+pub const AMBUSH_BEHAVIOR: &str = "ambush";
+/// How long a woken ambusher stands shaking off the stone before it acts.
+pub const WAKE_MS: f32 = 800.0;
+/// Time at its spawn with nobody to fight before an ambusher sleeps again.
+const RESETTLE_MS: f32 = 30_000.0;
+const RESETTLE_RADIUS: f32 = 1.5;
 
 /// Slack inside `attack_range` when picking a standing cell, so the cell
 /// center still passes `bt_attack_target`'s range check. Must stay small:

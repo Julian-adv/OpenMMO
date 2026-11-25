@@ -52,7 +52,11 @@ export function loadGLB(url: string): Promise<GLTF> {
   // Only the parse needs KTX2 support; download alongside GPU init.
   const promise = Promise.all([fileLoader.loadAsync(url), textureSupport])
     .then(([data]) => loader.parseAsync(data, LoaderUtils.extractUrlBase(url)))
-    .then((gltf) => {
+    .then(async (gltf) => {
+      // Dynamic: metal-reflection pulls three/webgpu, which stays out of the login bundle.
+      const { applyMetalReflections } =
+        await import('../effects/metal-reflection')
+      applyMetalReflections(gltf.scene)
       cache.set(url, gltf)
       inflight.delete(url)
       return gltf

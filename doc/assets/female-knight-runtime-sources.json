@@ -1,7 +1,7 @@
 {
   "date": "2026-11-03",
   "inputs": {
-    "tools/prepare-female-knight.mjs": "49780a21b8cfc723547832b1e2c9cfd14549ca1d5c087f817765dd0eaff051d5",
+    "tools/prepare-female-knight.mjs": "56fb97a71fac0362f7fc8eef23dbe20a73580035245e68a432f56bcabf073c11",
     "client/src/lib/utils/female-clip-bake.ts": "69c1bd64acd7096cea4ff9c043366846c181b0b3eab39b330bfc4296e675d093",
     "client/src/lib/utils/female-boot-ground.ts": "0cd0b888f399c689ce821ec416660ca2805b12fa3f4c8d780cdc4ad28b61dc80",
     "assets/modular_human_female_01/rig_v1/female-base.glb": "3eb7c0a5f3c6b30aec0fbae0b70c8fd925e4cb91772647420007eee795a1e0a5",
@@ -166,7 +166,9 @@
     "assets/items/female_knight_bottom/reference_v1/fitted_v1/body-occlusion.json": "662cb6d64411c1e7f438b335b139d05d98eb2174577e5fa19f5401cca2a0dd02",
     "assets/items/female_knight_boots/reference_v2/fitted_v1/boots_female_knight.glb": "59cc2fadcb9f681f92d2862dcd39811b26f3aab3e93102d2a32ab66e9bb32109",
     "assets/items/female_knight_boots/reference_v2/fitted_v1/body-occlusion.json": "77cc208567ee4aded2d5134b9bc2d31c9163990066f651f0d34a6605f147957c",
-    "assets/modular_human_female_01/rig_v1/heel-ground-samples.glb": "f6d4bf3885fcdbfcd0ece7462a3de17422d2622fb272cbbe99b55b98e817f98e"
+    "assets/modular_human_female_01/rig_v1/heel-ground-samples.glb": "f6d4bf3885fcdbfcd0ece7462a3de17422d2622fb272cbbe99b55b98e817f98e",
+    "assets/items/blindfold/tripo_female_v1/fitted/helmet_blindfold.glb": "62c279654f16dec716d308aa60afd2e5c23800fc95b0fff76c313928ec73ced1",
+    "assets/items/blindfold/tripo_female_v1/fitted/body-occlusion.json": "380f7eb921924e85146aa71e513a0626e5607144fb0357a7896c326f4de3e914"
   },
   "outputs": {
     "client/public/models/characters/modular_female/base.glb": "21127d9b271f2594f773408d3dd2852fdc98c306e19160f1b25b57cae037615c",
@@ -254,7 +256,8 @@
     "client/public/models/characters/modular_female/animations/dagger_preview.glb": "e178f494bc38a9468f379c6a94712b5a82c1dfaadb35b968b4a31e073d1add03",
     "client/public/models/characters/modular_female/animations/spear.glb": "38956ffeb62b1f85d24f9a99e6e024a64d16fd871b73ca91bf49f0e9c228f26d",
     "client/public/models/characters/modular_female/animations/cart_push.glb": "f4f7c04a738c1b8d6e95f1490f16042043ca326377b8bde50bd1074eef038c00",
-    "client/public/models/characters/modular_female/animations/snow_dig.glb": "1cb33f3ba71827618c4da649db7bef5ee95257478626fa6806a9e0290a3d880e"
+    "client/public/models/characters/modular_female/animations/snow_dig.glb": "1cb33f3ba71827618c4da649db7bef5ee95257478626fa6806a9e0290a3d880e",
+    "client/public/models/characters/modular_female/blindfold_helmet.glb": "a44346576f87658ec26e2d3c03d67fa8740c0314a66ebf68c3459f058f112074"
   },
   "underwear_weight_patch": {
     "date": "2026-10-15",

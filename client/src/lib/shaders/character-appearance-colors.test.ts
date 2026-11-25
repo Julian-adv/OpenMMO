@@ -1,10 +1,11 @@
 import { Color, Group, MeshStandardMaterial, SkinnedMesh, Texture } from 'three'
 import { StandardNodeLibrary, type Node, type NodeMaterial } from 'three/webgpu'
 import { uniform, vec4 } from 'three/tsl'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   applyAppearanceColors,
   disposeAppearanceColors,
+  type Tints,
 } from './character-appearance-colors'
 
 const library = new StandardNodeLibrary()
@@ -18,8 +19,11 @@ function colorsIn(node: Node): string[] {
   return values
 }
 
+/** The colors a mesh's shared tinted material reads for it when drawn. */
+const tints = (mesh: SkinnedMesh) => mesh.userData.appearanceTints as Tints
+
 describe('character appearance colors', () => {
-  it('restores original eyes independently of hair dye and reuses the iris material', () => {
+  it('restores original eyes independently of hair dye and keeps the iris material', () => {
     const source = new MeshStandardMaterial({ map: new Texture() })
     const root = new Group()
     const head = new SkinnedMesh(undefined, source)
@@ -34,41 +38,24 @@ describe('character appearance colors', () => {
     applyAppearanceColors(root, [head], appearance)
     const material = head.material as unknown as NodeMaterial
     const version = material.version
-    const weights: number[] = []
     applyAppearanceColors(root, [head], {
       ...appearance,
       eye_color_original: true,
     })
-    material.colorNode!.traverse((node) => {
-      if (
-        'isUniformNode' in node &&
-        'value' in node &&
-        typeof node.value === 'number'
-      )
-        weights.push(node.value)
-    })
-    expect(weights).toContain(0)
+    expect(tints(head).eyeTint).toBe(0)
     expect(head.material).toBe(material)
     expect(material.version).toBe(version)
     applyAppearanceColors(root, [head], {
       ...appearance,
       eye_color_original: false,
     })
-    const dyed: number[] = []
-    material.colorNode!.traverse((node) => {
-      if (
-        'isUniformNode' in node &&
-        'value' in node &&
-        typeof node.value === 'number'
-      )
-        dyed.push(node.value)
-    })
-    expect(dyed).toContain(1)
+    expect(tints(head).eyeTint).toBe(1)
     disposeAppearanceColors(root)
     expect(head.material).toBe(source)
+    expect(head.userData.appearanceTints).toBeUndefined()
   })
 
-  it('restores original male and female hair without replacing materials or affecting another character', () => {
+  it('restores original male and female hair without affecting another character', () => {
     const source = new MeshStandardMaterial({ map: new Texture() })
     const root = new Group()
     const male = new SkinnedMesh(undefined, source)
@@ -85,34 +72,23 @@ describe('character appearance colors', () => {
     applyAppearanceColors(root, [male, female], appearance)
     const material = male.material as unknown as NodeMaterial
     const version = material.version
-    const tintWeights = () => {
-      const weights: number[] = []
-      material.colorNode!.traverse((node) => {
-        if (
-          'isUniformNode' in node &&
-          'value' in node &&
-          typeof node.value === 'number'
-        )
-          weights.push(node.value)
-      })
-      return weights
-    }
-    expect(tintWeights()).toContain(1)
+    expect(tints(male).hairTint).toBe(1)
     applyAppearanceColors(root, [male, female], {
       ...appearance,
       hair_color_original: true,
     })
     expect(male.material).toBe(material)
     expect(material.version).toBe(version)
-    expect(tintWeights()).toContain(0)
+    expect(tints(male).hairTint).toBe(0)
+    expect(tints(female).hairTint).toBe(0)
     expect(other.material).toBe(source)
     applyAppearanceColors(root, [male, female], {
       ...appearance,
       hair_color: '#00ff00',
       hair_color_original: false,
     })
-    expect(tintWeights()).toContain(1)
-    expect(colorsIn(material.colorNode!)).toContain('00ff00')
+    expect(tints(male).hairTint).toBe(1)
+    expect(tints(male).hair.getHexString()).toBe('00ff00')
     disposeAppearanceColors(root)
     expect(male.material).toBe(source)
   })
@@ -132,10 +108,10 @@ describe('character appearance colors', () => {
       hair_color: '#ff0000',
       eye_color: '#0000ff',
     })
-    const tintedSkin = head.material as unknown as NodeMaterial
-    const tintedHair = rangerHair.material as unknown as NodeMaterial
-    expect(colorsIn(tintedSkin.colorNode!)).toContain('0000ff')
-    expect(colorsIn(tintedHair.colorNode!)).toContain('ff0000')
+    expect(head.material).not.toBe(skin)
+    expect(rangerHair.material).not.toBe(hair)
+    expect(tints(head).eyes.getHexString()).toBe('0000ff')
+    expect(tints(rangerHair).hair.getHexString()).toBe('ff0000')
     disposeAppearanceColors(root)
     expect(head.material).toBe(skin)
     expect(rangerHair.material).toBe(hair)
@@ -159,64 +135,56 @@ describe('character appearance colors', () => {
       eye_color: '#0000ff',
     })
     const tintedSkin = skin.material as unknown as NodeMaterial
-    expect(colorsIn(tintedSkin.colorNode!)).toEqual(
-      expect.arrayContaining(['0000ff', '00ff00'])
-    )
-    expect(
-      colorsIn((ponytail.material as unknown as NodeMaterial).colorNode!)
-    ).toContain('ff0000')
+    expect(colorsIn(tintedSkin.colorNode!)).toContain('00ff00')
+    expect(tints(skin).eyes.getHexString()).toBe('0000ff')
+    expect(tints(ponytail).hair.getHexString()).toBe('ff0000')
     disposeAppearanceColors(root)
     expect(skin.material).toBe(nodeBody)
     expect(ponytail.material).toBe(hair)
   })
 
-  it('isolates per-character colors, reuses uniforms and restores shared materials', () => {
+  it('shares one tinted material between characters and keeps their colors apart', () => {
     const skin = new MeshStandardMaterial({ map: new Texture() })
     const hair = new MeshStandardMaterial({ map: new Texture() })
-    const root = new Group()
-    const head = new SkinnedMesh(undefined, skin)
-    head.userData.region = 'head'
-    const crop = new SkinnedMesh(undefined, hair)
-    crop.userData.part_id = 'hair_crop'
-    const torso = new SkinnedMesh(undefined, skin)
-    root.add(head, crop, torso)
-    const other = new SkinnedMesh(undefined, hair)
+    const character = () => {
+      const root = new Group()
+      const head = new SkinnedMesh(undefined, skin)
+      head.userData.region = 'head'
+      const crop = new SkinnedMesh(undefined, hair)
+      crop.userData.part_id = 'hair_crop'
+      const torso = new SkinnedMesh(undefined, skin)
+      root.add(head, crop, torso)
+      return { root, head, crop, torso }
+    }
+    const a = character()
+    const b = character()
     const bone = hair.clone()
     bone.userData.appearance_color_fixed = true
     const wavy = new SkinnedMesh(undefined, [hair, bone])
     wavy.userData.part_id = 'hair_wavy_bone'
-    root.add(wavy)
-    applyAppearanceColors(root, [head, crop, torso, wavy], {
+    a.root.add(wavy)
+    applyAppearanceColors(a.root, [a.head, a.crop, a.torso, wavy], {
       face: 'default',
       hair: 'crop',
       hair_color: '#ff0000',
       eye_color: '#0000ff',
     })
-    const tintedHair = crop.material as unknown as NodeMaterial
-    const tintedSkin = head.material as unknown as NodeMaterial
-    const version = tintedHair.version
-    expect(tintedHair).not.toBe(hair)
-    expect(tintedSkin).not.toBe(skin)
-    expect(torso.material).toBe(skin)
-    expect(other.material).toBe(hair)
-    expect(wavy.material[1]).toBe(bone)
-    expect(colorsIn(tintedHair.colorNode!)).toContain('ff0000')
-    expect(colorsIn(tintedSkin.colorNode!)).toContain('0000ff')
-    applyAppearanceColors(root, [head, crop, torso, wavy], {
+    applyAppearanceColors(b.root, [b.head, b.crop, b.torso], {
       face: 'default',
       hair: 'crop',
       hair_color: '#00ff00',
       eye_color: '#78518d',
     })
-    expect(crop.material).toBe(tintedHair)
-    expect(head.material).toBe(tintedSkin)
-    expect(tintedHair.version).toBe(version)
-    expect(colorsIn(tintedHair.colorNode!)).toContain('00ff00')
-    const released = vi.fn()
-    tintedHair.addEventListener('dispose', released)
-    disposeAppearanceColors(root)
-    expect(crop.material).toBe(hair)
-    expect(head.material).toBe(skin)
-    expect(released).toHaveBeenCalledOnce()
+    expect(a.crop.material).not.toBe(hair)
+    expect(b.crop.material).toBe(a.crop.material)
+    expect(b.head.material).toBe(a.head.material)
+    expect(a.torso.material).toBe(skin)
+    expect(wavy.material[1]).toBe(bone)
+    expect(tints(a.crop).hair.getHexString()).toBe('ff0000')
+    expect(tints(b.crop).hair.getHexString()).toBe('00ff00')
+    disposeAppearanceColors(a.root)
+    expect(a.crop.material).toBe(hair)
+    expect(a.head.material).toBe(skin)
+    expect(b.crop.material).not.toBe(hair)
   })
 })

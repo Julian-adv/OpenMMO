@@ -85,6 +85,9 @@ pub struct MonsterDefinition {
     /// uncovered (a floating eye's stare).
     #[serde(rename = "stareDebuff", default)]
     pub stare_debuff: Option<String>,
+    /// Spawns as stone and wakes when a player comes this close; 0 never sleeps.
+    #[serde(rename = "ambushRange", default)]
+    pub ambush_range: f32,
     #[serde(default)]
     pub weapon: Option<String>,
     #[serde(rename = "weaponDropChance", default = "default_weapon_drop_chance")]
@@ -242,6 +245,29 @@ mod tests {
         let defs = MonsterDefs::load();
         let kobold = defs.get("kobold").expect("kobold def");
         assert_eq!(kobold.drop_entries(), [("apple".to_string(), 0.01)]);
+    }
+
+    #[test]
+    fn only_thieves_and_miners_drop_blindfolds() {
+        let defs = MonsterDefs::load();
+        let drops = |id: &str| {
+            defs.get(id)
+                .unwrap()
+                .drop_entries()
+                .iter()
+                .any(|(item, _)| item == "blindfold")
+        };
+        for id in [
+            "kobold_cutpurse",
+            "thief_king",
+            "shadow_master",
+            "mine_remnant",
+        ] {
+            assert!(drops(id), "{id}");
+        }
+        for id in ["goblin", "orc", "skeleton", "garden_handmaiden", "medusa"] {
+            assert!(!drops(id), "{id}");
+        }
     }
 
     #[test]

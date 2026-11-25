@@ -50,6 +50,7 @@ import {
   modularSwordTracks,
   parseModularHandProfile,
   showModularOutfit,
+  prepareCharacterPart,
   skinnedParts,
 } from './modularCharacter'
 
@@ -61,7 +62,12 @@ const eagerParts = modularOutfitParts(DEFAULT_MODULAR_OUTFIT)
 const lazyParts = new Set(
   [KNIGHT_MODULAR_OUTFIT, BARBARIAN_MODULAR_OUTFIT, ...PROXIED_OUTFITS]
     .flatMap((outfit) => [...modularOutfitParts(outfit)])
-    .concat(...SELECTABLE_HAIR_PARTS, 'helmet_brilliance', TABARD_PART)
+    .concat(
+      ...SELECTABLE_HAIR_PARTS,
+      'helmet_brilliance',
+      'helmet_blindfold',
+      TABARD_PART
+    )
     .filter((id) => !eagerParts.has(id))
 )
 const outfitParts = new Set([...eagerParts, ...lazyParts])
@@ -108,7 +114,7 @@ export function loadCharacterModel(
           ids.map((id, i) => [id, bindModularPart(scene, sources[i].scene)])
         )
         showModularOutfit(body, parts, DEFAULT_MODULAR_OUTFIT)
-        for (const mesh of skinnedParts(scene)) mesh.frustumCulled = false
+        for (const mesh of skinnedParts(scene)) prepareCharacterPart(mesh)
         const socket = new THREE.Group()
         socket.name = MODULAR_SWORD_ATTACHMENT
         const hand = scene.getObjectByName('RightHand')
@@ -158,7 +164,7 @@ function bindLazyPart(
         if (lazyStates.get(scene) !== state) return
         for (const mesh of bindModularPart(scene, gltf.scene)) {
           mesh.visible = false
-          mesh.frustumCulled = false
+          prepareCharacterPart(mesh)
           if (id === 'hair_wavy_bone') separateWavyHairMaterials(mesh)
         }
         registerBodyMask(scene, state, id, gltf.scene.userData.body_mask)

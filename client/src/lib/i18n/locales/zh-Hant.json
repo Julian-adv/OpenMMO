@@ -392,7 +392,7 @@
   "item.invisibility": "攻擊前保持隱身",
   "item.maxHpPerLevel": "每級最大生命值 +{{value}}",
   "item.nonStackingEffect": "相同物品的效果不疊加",
-  "item.carryCapacity": "負重上限 +{{value}}%",
+  "item.carryCapacity": "負重上限 +{{value}} kg",
   "item.criticalChance": "暴擊率 +{{value}}個百分點",
   "item.sustenance": "減緩飢餓",
   "item.compare": "對比：{{item}}",

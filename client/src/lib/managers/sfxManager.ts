@@ -9,6 +9,8 @@ import {
 import monsterDefs from '../data/monsterDefs'
 import type { Gender } from '../network/networkTypes'
 import type { AbilityId } from '../data/abilities'
+import type { WalkSurface } from '../utils/housing-textures'
+import { FOOTSTEP_HEARING_RANGE_M } from '../effects/footstep-sounds'
 
 const MONSTER_DEATH_VOLUME = 0.5
 const MONSTER_DEATH_POOL_SIZE = 3
@@ -40,6 +42,8 @@ export type FishingSound = keyof typeof FISHING_SOUNDS
 
 const PROP_SOUNDS = {
   break: { url: '/sounds/crate-break.ogg', volume: 0.4, pool: 2 },
+  breakStatue: { url: '/sounds/statue-shatter.ogg', volume: 0.45, pool: 2 },
+  breakPottery: { url: '/sounds/amphora-shatter.ogg', volume: 0.4, pool: 2 },
   chestOpen: { url: '/sounds/chest-open.ogg', volume: 0.5, pool: 2 },
   coinSpill: { url: '/sounds/coin-spill.ogg', volume: 0.5, pool: 2 },
   coinJackpot: { url: '/sounds/coin-jackpot.ogg', volume: 0.5, pool: 1 },
@@ -111,11 +115,26 @@ const LEVEL_UP_SOUND: SoundSpec = {
   pool: 2,
 }
 
+// Pool 3: one cast can turn several players to stone.
+const PETRIFY_SOUND: SoundSpec = {
+  url: '/sounds/petrify.ogg',
+  volume: 0.55,
+  pool: 3,
+}
+
 const MERGER_BELL_SOUNDS: SoundSpec[] = [1, 2, 3].map((n) => ({
   url: `/sounds/merger-bells-${n}.ogg`,
   volume: 0.45,
   pool: 1,
 }))
+
+const FOOTSTEP_SOUNDS: Record<WalkSurface, SoundSpec[]> = {
+  wood: [1, 2, 3, 4].map((n) => ({
+    url: `/sounds/wood-step-${n}.ogg`,
+    volume: 0.35,
+    pool: 2,
+  })),
+}
 
 const STORAGE_KEY_VOLUME = 'onlinerpg_sfxVolume'
 const STORAGE_KEY_MUTED = 'onlinerpg_sfxMuted'
@@ -343,7 +362,8 @@ export function preloadPropSounds() {
   preloadSounds(PROP_SOUNDS)
 }
 
-/** `break`: barrel/crate shatter, timed by the caller to the slash contact
+/** `break`: barrel/crate shatter (`breakStatue`/`breakPottery` where the
+ *  theme draws them as statues and jars), timed by the caller to the slash contact
  *  frame. `chestOpen`: lid swing on the open broadcast. `coinSpill`: the
  *  pile's pour clip starting. `coinJackpot`: the picker's jackpot coin pile.
  *  `keyDrop`: a dungeon key falling as loot. `pickaxe`: each mining swing,
@@ -421,6 +441,28 @@ export function stopDungeonDripSounds() {
   pauseSounds(DUNGEON_DRIP_SOUNDS)
 }
 
+export function preloadFootstepSounds() {
+  for (const takes of Object.values(FOOTSTEP_SOUNDS)) {
+    for (const { url, volume, pool } of takes) {
+      preloadAudioPool(url, volume, pool)
+    }
+  }
+}
+
+let lastFootstepTake = -1
+
+/** One step on `surface`, `distance` metres from the listener. */
+export function playFootstepSound(surface: WalkSurface, distance = 0) {
+  const gain = distanceGain(distance, FOOTSTEP_HEARING_RANGE_M)
+  if (!canUseAudio() || gain <= 0 || getSfxMultiplier() <= 0) return
+  const takes = FOOTSTEP_SOUNDS[surface]
+  let take = Math.floor(Math.random() * (takes.length - 1))
+  if (take >= lastFootstepTake) take++
+  lastFootstepTake = take
+  const { url, volume, pool } = takes[take]
+  playAudioFromPool(url, volume * gain, pool, 0.94 + Math.random() * 0.12)
+}
+
 export function preloadAbilitySounds() {
   preloadSounds(ABILITY_SOUNDS)
 }
@@ -476,7 +518,11 @@ export function playAbilitySound(ability: AbilityId) {
 }
 
 export function preloadLevelUpSound() {
-  preloadSounds({ levelUp: LEVEL_UP_SOUND })
+  preloadSounds({ levelUp: LEVEL_UP_SOUND, petrify: PETRIFY_SOUND })
+}
+
+export function playPetrifySound() {
+  playSound(PETRIFY_SOUND)
 }
 
 export function playLevelUpSound(gain = 1) {

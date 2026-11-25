@@ -81,15 +81,14 @@ class Source:
                 around[index] += [other for other in group if other != index]
         return around
 
-    def align(self, mannequin, target, scale, offset, upright=False, rescale=True):
+    def align(self, mannequin, target, scale, offset, upright=False, rescale=True, rotation=FACING):
         """Similarity ICP of the mannequin's vertices onto the body; the whole model follows.
 
         `upright` only turns the model about the vertical: a head alone cannot tell a lean from a shift.
-        Without `rescale` the given scale stands.
+        Without `rescale` the given scale stands. `rotation` is the starting turn.
         """
         tree = cKDTree(target)
         moving = self.points[mannequin]
-        rotation = FACING
         for step in range(80):
             placed = scale * moving @ rotation.T + offset
             distance, nearest = tree.query(placed)

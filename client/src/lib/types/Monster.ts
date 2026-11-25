@@ -41,6 +41,10 @@ export interface MonsterData {
   maxHealth: number
   /** Wire floor_level: 0 = overworld, 1..3 housing, negative = dungeon depth. */
   floorLevel?: number
+  /** Stands frozen as stone, nameless, until it wakes. */
+  dormant?: boolean
+  /** `Date.now()` of its last waking; it shakes off the stone from here. */
+  wokeAt?: number
   /** A raid boss going back to sleep sinks from this `Date.now()`; the server
    *  has already removed it, so it stays only until the sink ends. */
   sinkAt?: number

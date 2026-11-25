@@ -252,20 +252,20 @@ const STAT_LABELS = {
   hit: 'item.hit',
 } as const
 
-const CARRY_TOKEN = /^carry\+(\d+)%$/
+const CARRY_TOKEN = /^carry\+(\d+)$/
 
-const CARRY_BONUS_PERCENT = new Map<string, number>()
+const CARRY_BONUS_KG = new Map<string, number>()
 for (const def of Object.values(itemDefs)) {
-  let percent = 0
+  let kg = 0
   for (const raw of def.effects?.split(';') ?? []) {
-    percent += Number(raw.trim().match(CARRY_TOKEN)?.[1] ?? 0)
+    kg += Number(raw.trim().match(CARRY_TOKEN)?.[1] ?? 0)
   }
-  if (percent) CARRY_BONUS_PERCENT.set(def.id, percent)
+  if (kg) CARRY_BONUS_KG.set(def.id, kg)
 }
 
-/** Summed `carry+N%` of an item's effects, in percent. */
-export function carryBonusPercent(itemDefId: string): number {
-  return CARRY_BONUS_PERCENT.get(itemDefId) ?? 0
+/** Summed `carry+N` of an item's effects, in kg. */
+export function carryBonusKg(itemDefId: string): number {
+  return CARRY_BONUS_KG.get(itemDefId) ?? 0
 }
 
 /** Tooltip effects, including armor enchantment. */

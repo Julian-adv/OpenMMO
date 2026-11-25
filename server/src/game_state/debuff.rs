@@ -260,8 +260,8 @@ impl super::GameState {
         }
     }
 
-    /// 1s sweep: deal each active debuff's dps, then drop the expired ones
-    /// and expired Battle Hymns.
+    /// 1s sweep: deal each active debuff's dps and each expiring one's
+    /// `end_damage`, then drop the expired ones and expired Battle Hymns.
     /// Read-locked bail-out first: only a due tick or expiry may write-lock
     /// the 5,000 entries — a lingering dps-less debuff (food poisoning)
     /// must not, and an expired hymn touches only its own entry.
@@ -302,19 +302,17 @@ impl super::GameState {
                     // The raw list, not `active()`: a timer already run down (or
                     // pulled into the past by a campfire) is still listed until
                     // the retain below drops it, and that drop is the drying.
-                    if data
-                        .debuffs
-                        .iter()
-                        .any(|d| d.def.id == WET_DEBUFF_ID && d.until <= now)
-                    {
-                        dried.push(*pid);
-                    }
-                    if data
-                        .debuffs
-                        .iter()
-                        .any(|d| d.def.petrifies && d.until <= now)
-                    {
-                        thawed.push(*pid);
+                    for spent in data.debuffs.iter().filter(|d| d.until <= now) {
+                        if spent.def.id == WET_DEBUFF_ID {
+                            dried.push(*pid);
+                        }
+                        if spent.def.petrifies {
+                            thawed.push(*pid);
+                        }
+                        if let Some(dice) = &spent.def.end_damage {
+                            let hurt = crate::game::combat::roll_dice(dice);
+                            damage.push((*pid, hurt, spent.def.id.clone()));
+                        }
                     }
                     let before = data.debuffs.len();
                     data.debuffs.retain(|d| d.until > now);
@@ -518,16 +516,16 @@ impl super::GameState {
             .is_some_and(|p| p.petrified)
     }
 
-    /// Stop whatever the player was doing, then set the stone flag.
+    /// Stop whatever the player was doing, then set the stone flag. No
+    /// `stop_player_attack`: a caller may hold the attack session lock.
     async fn turn_to_stone(&self, player_id: &PlayerId) {
-        self.stop_player_attack(player_id).await;
         self.stop_bed_rest(player_id).await;
         self.clear_player_movement(player_id, "petrified").await;
         self.cancel_concentration_if_active(player_id).await;
         self.set_player_petrified(player_id, true).await;
     }
 
-    /// Killed by the gaze: the body stays standing as stone until it rises.
+    /// Broken to death as stone: the body stays standing as stone until it rises.
     pub(super) async fn leave_stone_corpse(&self, player_id: &PlayerId) {
         self.set_player_petrified(player_id, true).await;
     }

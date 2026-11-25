@@ -53,7 +53,7 @@ impl ItemDef {
         self.consumable
     }
 
-    pub fn carry_bonus_percent(&self) -> u32 {
+    pub fn carry_bonus_kg(&self) -> u32 {
         self.effects
             .iter()
             .flat_map(|effects| effects.split(';'))
@@ -62,13 +62,22 @@ impl ItemDef {
             .sum()
     }
 
-    /// A blindfold: worn, nothing past arm's reach can be struck without
-    /// telepathy.
-    pub fn covers_eyes(&self) -> bool {
+    fn has_effect(&self, name: &str) -> bool {
         self.effects
             .iter()
             .flat_map(|effects| effects.split(';'))
-            .any(|token| token == "blindfold")
+            .any(|token| token == name)
+    }
+
+    /// A blindfold: worn, nothing past arm's reach can be struck without
+    /// telepathy.
+    pub fn covers_eyes(&self) -> bool {
+        self.has_effect("blindfold")
+    }
+
+    /// Worn, lets any teleport scroll go to a bookmark.
+    pub fn controls_teleport(&self) -> bool {
+        self.has_effect("teleportcontrol")
     }
 
     pub fn is_two_handed(&self) -> bool {

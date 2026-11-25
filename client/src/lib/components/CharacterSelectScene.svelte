@@ -3,6 +3,7 @@
   import * as THREE from 'three'
   import { PMREMGenerator, type WebGPURenderer } from 'three/webgpu'
   import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
+  import { fillReflection, stageReflection } from '../effects/metal-reflection'
   import { onMount } from 'svelte'
   import { interactivity, type IntersectionEvent } from '@threlte/extras'
   import type { AccountCharacter } from '../network/socket'
@@ -185,6 +186,7 @@
     scene.background = new THREE.Color('#1a2a40')
 
     renderer.init().then(() => {
+      fillReflection(renderer, stageReflection())
       const pmremGenerator = new PMREMGenerator(renderer)
       const rt = pmremGenerator.fromScene(new RoomEnvironment())
       scene.environment = rt.texture

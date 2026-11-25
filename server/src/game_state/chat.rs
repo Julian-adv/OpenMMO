@@ -1511,7 +1511,11 @@ impl super::GameState {
         };
 
         // A body would land on the admin; stand it in front, facing back.
-        let body = self.monster_defs.get(monster_type).and_then(|d| d.body);
+        let def = self.monster_defs.get(monster_type);
+        let body = def.and_then(|d| d.body);
+        // A monster that never fights keeps its own behaviour.
+        let aggressive = def.and_then(|d| d.behavior.as_deref())
+            != Some(onlinerpg_shared::monster_ai::PASSIVE_BEHAVIOR);
         let mut spawned = 0u32;
         for i in 0..count {
             let angle = i as f32 / count as f32 * std::f32::consts::TAU;
@@ -1538,7 +1542,7 @@ impl super::GameState {
                     floor,
                     crate::types::MonsterLifecycle::Ambient,
                     None,
-                    true,
+                    aggressive,
                 )
                 .await
             else {

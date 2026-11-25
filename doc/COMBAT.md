@@ -261,7 +261,8 @@ guard 40짜리 플레이어를 코볼트가 한 번 맞히려면 평균 400회, 
 표면:  보너스 = min(60, max(0, 마을 거리 − SURFACE_SAFE_METERS(300m)) / SURFACE_METERS_PER_ATTACK_BONUS(20m))
 ```
 
-- 표면 상한 60은 가장 깊은 층(`MAX_FLOORS` 25)의 보너스다. 300m까지 0, 560m에서 +13,
+- 던전은 `dungeons.csv`의 `minPlaceBonus`로 6층부터의 하한을 둘 수 있다. 티어 5인 요새·길드·광산은 35다(2026-11-25). `placeBonus`가 있는 던전(돌의 정원)은 그 식만 쓴다.
+- 표면 상한 60은 티어 5 바닥층(25층)의 보너스다. 300m까지 0, 560m에서 +13,
   800m에서 +25, 1500m부터 +60.
 - 구현: [`place_attack_bonus`](../server/src/game/combat.rs), 적용은
   [game_state/combat.rs](../server/src/game_state/combat.rs)의 몬스터 공격

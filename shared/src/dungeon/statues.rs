@@ -27,7 +27,7 @@ pub fn statue_cells(layout: &FloorLayout) -> Vec<(i32, i32)> {
             let (w, d) = p.size();
             (p.x - 1..p.x + w + 1).contains(&x) && (p.z - 1..p.z + d + 1).contains(&z)
         }) || layout.chest.is_some_and(|c| near(c, x, z, 2))
-            || layout.spawns.iter().any(|s| near((s.x, s.z), x, z, 1))
+            || layout.spawns.iter().any(|s| (s.x, s.z) == (x, z))
     };
     let mut cells = Vec::new();
     for z in 0..GRID {

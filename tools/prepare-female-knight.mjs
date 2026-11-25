@@ -96,6 +96,7 @@ const sources = {
   valkyrie_gloves: 'assets/items/valkyrie_gloves/fitted_v3/bracers_female_valkyrie.glb',
   valkyrie_helmet: 'assets/items/valkyrie_helmet/fitted_v2/helmet_female_valkyrie.glb',
   brilliance_helmet: 'assets/items/helm_of_brilliance/tripo_v2/fitted_v3/female/helmet_brilliance.glb',
+  blindfold_helmet: 'assets/items/blindfold/tripo_female_v1/fitted/helmet_blindfold.glb',
 }
 // Body colour and ORM maps matched to the face's skin (tools/match-female-body-skin.py); female-base.glb keeps its own.
 const bodySkin = { color: 'assets/modular_human_female_01/rig_v1/skin_tone_v1/body-albedo.png', orm: 'assets/modular_human_female_01/rig_v1/skin_tone_v1/body-orm.png' }

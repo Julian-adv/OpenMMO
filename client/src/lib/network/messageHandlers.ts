@@ -95,6 +95,7 @@ import {
   cancelPendingFishingSounds,
   playFishingSound,
   playDungeonSound,
+  playPetrifySound,
   playPlayerDeathSound,
   playPlayerHurtSound,
   playPropSound,
@@ -1803,6 +1804,22 @@ export function handleServerMessage(
       break
     }
 
+    case 'MonsterDormant':
+      monsterManager.handleMonsterDormant(data.monster_id, data.dormant)
+      break
+
+    case 'MonsterStared': {
+      const state = get(gameStore)
+      monsterManager.handleMonsterAttackStarted(
+        data.monster_id,
+        0,
+        state.currentPlayer?.id === data.player_id
+          ? state.currentPlayer?.position
+          : remotePlayerManager.players.get(data.player_id)?.position
+      )
+      break
+    }
+
     case 'MonsterAttackedPlayer': {
       const gameState = get(gameStore)
       const isCurrentPlayer = gameState.currentPlayer?.id === data.player_id
@@ -2035,6 +2052,7 @@ export function handleServerMessage(
 
     case 'PlayerPetrifiedToggled': {
       updatePlayer(data.player_id, { petrified: data.petrified })
+      if (data.petrified) playPetrifySound()
       break
     }
 
@@ -2537,7 +2555,8 @@ export function handleServerMessage(
       )
       // Mined ore is heard through the pickaxe swings, not a crate shattering.
       const mined = dungeonManager.isMinableProp(data.depth, data.prop_id)
-      if (isNew && !selfBreak && !mined) playPropSound('break')
+      if (isNew && !selfBreak && !mined)
+        playPropSound(dungeonManager.breakSound(data.depth, data.prop_id))
       break
     }
 

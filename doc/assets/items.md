@@ -11,6 +11,33 @@
 - 정리(2026-10-25): 미리보기 PNG 3개·상세 검증 보고서 3개·재생성 가능한 중간 4K GLB·Blender 백업을 삭제했다. 최종 모델·아이콘, 원화·Tripo 원본·현재 Blender 파일·원본 텍스처와 간결한 검증·출처 기록은 보존했다.
 - 재현: `blender -b --python-exit-code 1 -P assets/items/rift_ring/tripo_v1/prepare.py`로 4K 원본과 임시 GLB를 생성한다. `tools/blender-scripts/export_item_asset.py`에 `--source assets/items/rift_ring/tripo_v1/rift_ring.glb --name rift_ring --size 0.15 --category accessory --icon-rotation 28 -8 -102`를 주어 바닥 모델·아이콘·Blender 작업 파일을 출력하고, `tools/optimize-modular-part.mjs`에 `--ktx2 --size=512`를 주어 원본 GLB에서 런타임 모델을 압축한다.
 
+## Floating Eye Meat — 떠도는 눈 고기
+
+- 원화: [concept_v1](../../assets/items/floating_eye_meat/concept_v1/concept.png). 돌 눈꺼풀 떠도는 눈(`assets/monsters/floating_eye/concepts/eye_stone.png`)을 참고로 그 눈알을 썰어낸 덩어리: 위엔 초록 홍채와 세로 동공, 잘린 면은 실핏줄 보이는 반투명 살, 뒤엔 돌 껍질. OpenAI Codex ImageGen(`codex exec -i`), ChatGPT Pro 20x, 2026-11-24.
+- 3D: 사용자가 Tripo 웹에서 원화 한 장으로 생성(`tripo_v1/source/model.glb`).
+- `export_item_asset.py --size 0.22 --category objects --icon-rotation -60 0 0 --exposure -0.5`로 바닥 모델(`client/public/models/objects/floating_eye_meat.glb`, 0.22×0.21×0.20m, 바닥에서 잘 보이게 육포보다 크게)과 아이콘을 만들었다.
+
+## Ring of Teleport Control — 순간이동 제어 반지
+
+- 원화: [concept_v1](../../assets/items/ring_of_teleport_control/concept_v1/concept.png). 돌이 된 발굴단원이 끼고 있던 반지. 낡은 은 고리, 네 발로 물린 월장석 속 옅은 보라 소용돌이, 한 바퀴 돌아 제자리로 오는 길 무늬. OpenAI Codex ImageGen, ChatGPT Pro 20x, 2026-11-24(프롬프트·생성 기록은 같은 폴더).
+- 3D: 사용자가 Tripo 웹에서 원화 한 장으로 생성(`tripo_v1/source/model.glb`), 3,068삼각형.
+- 균열의 반지와 같은 절차: `tripo_v1/prepare.py`(고리 면을 바닥으로 눕히고 긴 변 0.15m, 바닥 중심 원점) → `export_item_asset.py --size 0.15 --category accessory --icon-rotation -50 0 160 --exposure -0.6`(아이콘은 월장석이 보이게) → `optimize-modular-part.mjs --ktx2 --size=512`로 런타임 모델 `client/public/models/accessory/ring_of_teleport_control.glb`(848,748바이트).
+
+## Blindfold — 눈가리개
+
+- 원화: `assets/items/blindfold/concept_v1`(남성)·`concept_female_v1`(여성). 우리 몸체를 민머리 파란 마네킹으로 렌더한 앞·왼쪽·뒤 그림 위에 숯색 리넨 띠를 그렸다. OpenAI Codex ImageGen(`codex exec -i`), ChatGPT Pro 20x, 2026-11-24. 프롬프트·해시는 각 폴더의 `generation.json`.
+- 3D: 사용자가 Tripo 웹에서 앞·left·뒤 세 장으로 생성(`tripo_male_v1`, `tripo_female_v1`의 `source/model.glb`).
+- `tools/fit-blindfold.py male|female`이 파란 마네킹을 잘라내고, 마네킹을 몸체에 맞춰(남 평균 9 mm, 여 3.5 mm) 띠를 Head 본 100%로 연결한다. 천에 번진 파란 텍셀은 주변 색으로 메우고 텍스처는 1024²로 줄인다.
+- 런타임: 남성 `helmet_blindfold`(`prepare-modular-character.mjs --blindfold-only`), 여성 `blindfold_helmet`(`prepare-female-knight.mjs --part blindfold_helmet`). 머리카락은 그대로 보인다.
+- 바닥 모델·아이콘: `tools/blender-scripts/build_blindfold.py`가 남성 띠로 `client/public/models/armor/blindfold.glb`(512² WebP)와 128² 아이콘을 만든다.
+
+## Mirror Shield — 거울 방패
+
+- [concept_v1](../../assets/items/mirror_shield/concept_v1/concept.png) — 돌의 정원 메두사의 응시를 되비치는 방패. 둥근 그리스 청동 아스피스, 거울처럼 닦은 가운데와 메안더 무늬·녹청 테두리. OpenAI Codex ImageGen, ChatGPT Pro 20x, 2026-11-23(프롬프트·생성 기록은 같은 폴더).
+  - 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 한 장으로 만들었다(`tripo_v1/source/model.glb`, 2,756 triangles).
+  - `tools/blender-scripts/build_mirror_shield.py`가 대지의 방패와 같은 좌표계(앞 −Z, 원점은 뒤쪽 손잡이)로 돌리고 지름 0.85m로 맞춘 뒤, 게임 모델(`client/public/models/armor/mirror_shield.glb`, 텍스처 1024² WebP)과 128² 아이콘을 만든다.
+  - 게임 세계에는 환경 맵이 없어 금속면이 비출 것이 없으면 검게 보인다. 그래서 재질에 glTF extras `envReflect`(반사 세기 1.4)를 넣고, 클라이언트가 GLB를 불러올 때 그런 재질에만 반사 맵을 붙인다(`effects/metal-reflection.ts`). 반사 맵은 플레이어 주변을 64² 큐브맵으로 찍은 것이다(`effects/ground-reflection.ts`). 3m 움직이거나 3초마다 다시 찍고, 지형·던전 바닥과 벽·조명만 그린다(레이어 7). 지상에선 위쪽에 그린 하늘을 주변광 밝기로, 던전에선 던전 배경을 쓴다. 금속도 0.9, 거칠기 계수 0.25. 손 파지는 `handFits.json`에 대지의 방패 값을 그대로 넣었다.
+
 ## Shield of the Earth — 대지의 방패
 
 - [concept_v1](../../assets/items/earth_shield/concept_v1/concept.png) — 이졸데의 테라클래시 파편 교환 장비 원화. 거친 화강암 돌판을 검게 그을린 철제 테두리와 십자 띠로 고정하고, 중앙 봉인 문양·주황빛 균열·소량의 이끼로 테라클래시와 대지의 아뮬렛의 외형을 잇는다. [설계](../TIER5_FIELD_RAID.md#증표-교환과-장비-공급량).

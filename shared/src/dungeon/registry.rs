@@ -64,6 +64,8 @@ pub struct DungeonEntranceDef {
     pub level_cap: u8,
     /// This dungeon's own to-hit curve in place of the shared per-floor one.
     pub place_bonus: Option<PlaceBonus>,
+    /// Floor under the shared per-floor to-hit where it lends anything.
+    pub min_place_bonus: i32,
 }
 
 /// `base` to-hit on every floor plus one more per `floors_per_point` floors.
@@ -81,8 +83,9 @@ pub enum LayoutStyle {
     /// Long corridors between small chambers; every locked floor but the
     /// last forks into three work rooms, one holding the way down.
     Mine,
-    /// `Rooms`, with the final floor's boss in a wide hall of pillars.
-    Hall,
+    /// Wide pillared chambers set wall to wall; the final floor's boss
+    /// stands in a hall of pillars.
+    Temple,
 }
 
 impl DungeonEntranceDef {
@@ -95,10 +98,15 @@ impl DungeonEntranceDef {
         )
     }
 
-    /// The to-hit this dungeon lends its monsters on a floor, when it sets its own.
-    pub fn place_attack_bonus(&self, depth: u8) -> Option<i32> {
-        self.place_bonus
-            .map(|bonus| bonus.base + i32::from(depth / bonus.floors_per_point))
+    /// The to-hit this dungeon lends its monsters on a floor: its own curve
+    /// where it sets one, else the shared depth rule's `shared`, raised to its
+    /// minimum wherever that rule lends anything.
+    pub fn place_attack_bonus(&self, depth: u8, shared: i32) -> i32 {
+        match self.place_bonus {
+            Some(bonus) => bonus.base + i32::from(depth / bonus.floors_per_point),
+            None if shared > 0 => shared.max(self.min_place_bonus),
+            None => shared,
+        }
     }
 
     pub fn position(&self) -> Position {
@@ -224,7 +232,7 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                 layout_style: match field("layoutStyle") {
                     "" => LayoutStyle::Rooms,
                     "mine" => LayoutStyle::Mine,
-                    "hall" => LayoutStyle::Hall,
+                    "temple" => LayoutStyle::Temple,
                     l => panic!("dungeon '{id}' has an invalid layoutStyle '{l}'"),
                 },
                 nightly_layout: match field("nightlyLayout") {
@@ -237,6 +245,7 @@ fn parse_entrances(csv: &str) -> Vec<DungeonEntranceDef> {
                     "true" => true,
                     s => panic!("dungeon '{id}' has an invalid statues '{s}'"),
                 },
+                min_place_bonus: opt_u8("minPlaceBonus").map_or(0, i32::from),
                 depth_offset: opt_u8("depthOffset").unwrap_or(0),
                 level_cap: opt_u8("levelCap").unwrap_or(super::DEPTH_LEVEL_CAP),
                 place_bonus: match optional("placeBonus") {
@@ -314,9 +323,9 @@ mod tests {
     /// of the wire contract.
     #[test]
     fn a_deep_dungeon_levels_from_an_offset_depth_and_lends_its_own_to_hit() {
-        let csv = "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls,layoutStyle,nightlyLayout,depthOffset,levelCap,placeBonus\n\
-                   deep,Deep,0,0,0,,25,,,,,,,,,20,45,34:4\n\
-                   plain,Plain,100,0,0,,25,,,,,,,,,,,\n";
+        let csv = "id,name,x,y,z,chestDrops,floors,boss,chestTier,entranceDir,keyPrefix,spawnGroup,chestRolls,layoutStyle,nightlyLayout,depthOffset,levelCap,placeBonus,minPlaceBonus\n\
+                   deep,Deep,0,0,0,,25,,,,,,,,,20,45,34:4,\n\
+                   plain,Plain,100,0,0,,25,,,,,,,,,,,,35\n";
         let defs = parse_entrances(csv);
         let (deep, plain) = (&defs[0], &defs[1]);
         assert_eq!(
@@ -325,14 +334,17 @@ mod tests {
         );
         assert_eq!(deep.monster_level(45, 25), 45);
         assert_eq!(
-            [1, 5, 15, 24].map(|depth| deep.place_attack_bonus(depth)),
-            [Some(34), Some(35), Some(37), Some(40)]
+            [1, 5, 15, 24].map(|depth| deep.place_attack_bonus(depth, 99)),
+            [34, 35, 37, 40]
         );
         assert_eq!(
             [1, 10, 24].map(|depth| plain.monster_level(20, depth)),
             [20, 23, 25]
         );
-        assert_eq!(plain.place_attack_bonus(10), None);
+        assert_eq!(
+            [0, 15, 60].map(|shared| plain.place_attack_bonus(10, shared)),
+            [0, 35, 60]
+        );
     }
 
     #[test]

@@ -66,16 +66,68 @@
     검증 스크립트를 아직 통과하지 못한다. 무기 위치는 `modular-character-preview.html?monster=mine_remnant`의 슬라이더로 맞추고
     저장하면 `data-src/monsters.csv`에 기록된다. 재현 절차와 해시는 [리깅 보고서](mine-remnant-rig-v1.json)에 있다.
 
+- garden_serpent — 돌의 정원 6–10층의 돌비늘 뱀. [원화](../../assets/monsters/garden_serpent/concepts/side.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 몸 길이가 드러나도록 옆모습 한 장으로 그렸고,
+  몸통 뒤 2/3는 바닥에 일자로, 앞부분만 들었다. 3D 원본은 같은 날 사용자가 Tripo 웹에서 이 한 장으로 만들었다(면 5천 개, `tripo_v1/`).
+  - 리깅과 동작은 `tools/blender-scripts/rig_garden_serpent.py` 하나로 다시 만든다. 길이 4m, 원점은 주둥이 0.8m 뒤(목)이다. 뿌리 뼈가 목에 있고
+    앞으로 머리까지 3마디, 뒤로 꼬리 끝까지 `Tail1`–`Tail10`이 이어지며, 중심선을 따라 길이 비율로 가중치를 준다.
+  - 게임에서는 몸통이 목이 지나온 길을 따른다(`effects/body-trail.ts`, `monsters.csv`의 `bodyTrail`). 목 위치를 0.25초에 걸쳐 보간하고, 30cm 전진하거나 80cm 후진하면 경로에 점을 추가한다. 몸통과 꼬리 각 마디는 초당 최대 180°로 경로를 따라 돈다. 목과 머리는 몸통 기준 좌우 80°까지 초당 최대 270°로 대상을 향한다. 제자리에서 대상이 그 범위를 벗어나면 몸 전체가 초당 90°로 돌아선다.
+  - 2026-11-23 기존 리그에 이동과 공격을 새로 제작했다. `walk`(1.2초)와 `run`(0.7초)은 머리의 좌우 흔들림을 작게 유지하고 몸통에서 꼬리로 굴곡을 보낸다. 추격할 때는 굴곡의 폭과 파장이 커진다.
+  - `bite`는 `combat_idle`의 첫 자세에서 시작한다. 0.34초 동안 목을 세우고 몸 앞쪽을 접어, 0.5초 타격 판정에 맞춰 앞으로 뻗는다. 1.2초에 준비 자세로 돌아온다. Blender 원본에는 이 세 동작과 `idle1`, `combat_idle`, `hit`, `dying`을 액션으로 저장한다.
+    원본은 객체 회전(`rotation_mode='XYZ'`)으로 돌린 뒤 적용한다. 정점을 직접 돌리면 glTF에서 들어온 노멀이 그대로 남고, 회전 모드를 바꾸지 않으면 쿼터니언 모드라 각도가 무시되어 머리가 옆을 본다.
+
+- garden_breaker — 돌의 정원 16–24층의 돌깎이. [원화](../../assets/monsters/garden_breaker/concepts/front.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개, `tripo_v1/`).
+  - 같은 인간형 리그(`rig_spec.json`, 높이 2.4m, 11,304 triangles). 외눈 거인 대역의 전용 클립 대신 공용 팩 동작을 쓰고, 공격은 오우거와 같은 `slash1`, 무기는 그대로 `greatclub`(`weaponOffset` 0.1, 손바닥 가운데)다.
+    이동 속도는 대역 때 값을 그대로 두었다.
+
+- garden_handmaiden — 돌의 정원 16–24층의 뱀머리 시녀. [원화](../../assets/monsters/garden_handmaiden/concepts/front.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개, `tripo_v1/`).
+  - 같은 인간형 리그(`rig_spec.json`, 높이 1.8m, 10,230 triangles). 다리를 덮는 긴 치마는 다리 본에 따라 늘어난다. 뱀 머리카락은 머리에 붙어 따로 움직이지 않는다.
+  - 오크 여성 대역의 전용 클립 대신 공용 팩 동작을 쓰고, 공격은 `slash1`, 무기는 그대로 `goblin_sword`다.
+
+- garden_excavator — 돌의 정원 11–15층의 반쯤 굳은 발굴꾼. [원화](../../assets/monsters/garden_excavator/concepts/front.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(프롬프트는 같은 폴더의 `generation.json`). 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개, `tripo_v1/`).
+  - 깨어나는 석상과 같은 인간형 리그(`rig_spec.json`, 높이 1.8m, 10,645 triangles). 무기와 동작은 광부 잔존자 대역 때와 같다(곡괭이, `great_sword_slash`).
+    손가락 파지는 도적 왕 값을 그대로 써서 `validate-humanoid-monster.mjs`의 엄지 맞섬 검사를 통과하지 못한다(광부 잔존자와 같음).
+
+- garden_statue — 돌의 정원 1–5층의 깨어나는 석상. [원화](../../assets/monsters/garden_statue/concepts/front.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-23 제작했다(OpenAI 생성 출력물 이용 조건, 프롬프트는 같은 폴더의 `generation.json`). 투구를 쓴 그리스 전사 석상의 T자 정면이다.
+  - 3D 원본은 같은 날 사용자가 Tripo 웹에서 원화 정면 한 장으로 만들었다(면 1만 개). 웹 결과라 +Z 정면·발바닥 원점이어서 방향 보정 없이
+    `tripo_v1/garden_statue.glb`를 그대로 원본으로 썼다. 10,881 triangles, 높이 2.0m(투구 깃 포함, 머리 꼭대기 1.88m).
+  - 도적 왕과 같은 도구로 리깅했다(`rig_spec.json`, `tools/rig-humanoid-monster.py`, `tools/bake-humanoid-monster.mjs`). 무기가 없어
+    공격은 맨손 `claw1|claw2`이고, 손가락 파지는 도적 왕 값(`grip_v1/fit.json`)을 그대로 썼다. 무기 전제인 `validate-humanoid-monster.mjs`는 돌리지 않았다.
+  - 잠든 동안은 `idle1` 첫 자세로 멈춰 서 있다. 사람 크기라 플레이어 석상 사이에 섞인다(2.5m 돌 골렘 대역을 대체).
+
+- floating_eye — 돌의 정원 입구 주변을 떠다니는 눈. [원화](../images/monsters/floating-eye-concept.png)는 OpenAI Codex ImageGen,
+  ChatGPT Pro 20x로 2026-11-22 제작했다(OpenAI 생성 출력물 이용 조건). 맨 눈알 시안과 돌 껍질 시안 중 사용자가 맨 눈알을 골랐고,
+  두 시안과 프롬프트는 `assets/monsters/floating_eye/concepts/`에 있다.
+  - 3D 원본은 같은 날 Tripo API(`tools/outfits/tripo.py`, P2 모델, PBR, 면 4천 개 목표)로 원화 정면 한 장에서 만들었다.
+    120크레딧, Tripo 이용 약관 적용. 요청과 결과 기록은 `assets/monsters/floating_eye/tripo_v1/`.
+  - 눈꺼풀도 Tripo로 만들었다(사용자 지시, 2026-11-22). 눈알을 파란 마네킹으로 렌더하고
+    (`tools/blender-scripts/render_floating_eye_mannequin.py`) 그 위에 감은 눈꺼풀을 ImageGen으로 그려 정면·왼쪽·뒤 세 장을
+    Tripo multiview에 넣었다(120크레딧, `assets/monsters/floating_eye/eyelids/`). `tools/split-floating-eye-lids.py`가
+    파란 삼각형을 버리고 눈꺼풀만 남긴다. 눈알과 같은 좌표계로 나와 따로 맞출 필요가 없었다.
+  - 리깅과 동작은 `tools/blender-scripts/rig_floating_eye.py` 하나로 다시 만든다. 눈알 지름을 0.8m로 맞춰 중심을 지면 위 1.3m에
+    띄운다. 눈알이 완전한 구가 아니고 각막이 튀어나와 있어, 눈꺼풀은 눈알을 다 비켜 가는 구면 위로 펴고 안쪽으로 5cm 두께를 줬다.
+    눈알 뒤쪽은 생성된 마네킹의 뒷면을 눈꺼풀 색으로 칠해 고정 덮개로 쓰고, 눈꺼풀은 그 밑으로 드나든다(사용자 요청).
+    뼈는 7개다: 뿌리, 몸, 위·아래 눈꺼풀, 촉수 3마디. 9,010 triangles, 텍스처 512² WebP.
+    덮개를 더 앞으로 내린 판과 눈꺼풀을 네 조각으로 가른 판도 만들어 봤으나 사용자가 이 모양을 골랐다(2026-11-22).
+  - 동작: `idle`(떠 있기, 4초에 한 번 깜빡임), `drift`(이동), `stare`(맞았을 때 0.7초 동안 한 번 천천히 껌벅임. 뜨는 순간에 때린 쪽이 굳는다), `dying`(눈을 감고 떨어져 옆으로 구름).
+    작업 파일은 `assets/monsters/floating_eye/rig_v1/floating_eye.blend`, 게임 모델은 `client/public/models/monsters/floating_eye.glb`.
+
 - medusa — 돌의 정원 보스. [원화](../images/monsters/medusa-concept.png)는 OpenAI Codex ImageGen, ChatGPT Pro 20x로
   2026-11-22 제작했다(OpenAI 생성 출력물 이용 조건). 두 다리 시안과 뱀 하반신 시안 중 사용자가 뱀 하반신을 골랐고,
   두 시안과 프롬프트는 `assets/monsters/medusa/concepts/`에 있다.
   - 3D 원본은 같은 날 Tripo API(`tools/outfits/tripo.py`, P2 모델, PBR, 면 1만 개 목표)로 원화 정면 한 장에서 만들었다.
     120크레딧, Tripo 이용 약관 적용. 요청과 결과 기록은 `assets/monsters/medusa/tripo_v1/`의 `build.json`·`generation.json`.
   - 리깅과 동작은 `tools/blender-scripts/rig_medusa.py` 하나로 다시 만든다(Blender 5.2.0 LTS). 이마 앞의 실 같은 조각 252점을
-    지우고 높이 2.4m로 맞춘 뒤 뼈 26개를 넣는다. 몸통을 세우는 기둥 4마디, 상체, 팔, 바닥에 누운 꼬리 8마디다. 가중치는
-    높이·팔 길이·꼬리 중심선을 따라 직접 계산한다. 10,548 triangles, 텍스처 1024² WebP.
-  - 동작은 모두 스크립트로 쓴 것이다: `idle1`, `combat_idle`, `walk`, `run`, `claw`(평타, 0.36초에 닿음), `gaze`(응시, 3.0초에 내지름),
-    `tail_sweep`(꼬리 휘두르기, 왼쪽에서 감았다가 1.6초에 등 뒤를 쓸고 지남), `dying`. 꼬리는 원본에서 왼쪽 뒤로 누워 있고 동작에서는 몸 뒤로 편다.
+    지우고 높이 2.4m로 맞췄다. 뼈는 29개다. 뱀 하반신은 몸통 4마디와 꼬리 8마디로 나뉘고, 머리뱀은 양옆과 정수리 세 곳에서 움직인다.
+    꼬리 정점은 굽은 중심선에서 가장 가까운 마디에 연결한다. 10,548 triangles, 텍스처 1024² WebP.
+  - 2026-11-23 기존 모델에 이동과 전투 동작을 새로 제작했다. `walk`(1.4초)와 `run`(0.8초)은 몸 아래에서 꼬리 끝으로 굴곡이 흐르고 어깨와 골반이 반대 방향으로 돌아간다.
+    이동 중에는 몸통과 꼬리가 지나온 경로를 따라 돈다. 멈추면 경로에 맞춘 꼬리 회전이 풀리고, 응시와 꼬리치기는 시전 시 정해진 방향을 향한다.
+    평타 `claw`는 머리뱀이 0.36초 타격에 맞춰 앞으로 물고 빠진다. `tail_sweep`은 한쪽에 꼬리를 감아 잠시 멈췄다가 상체를 먼저 틀고, 1.6초에 꼬리 끝이 등 뒤를 가로지른다. 반대편에서 꼬리 끝이 살짝 되튄다.
+    `gaze`는 얼굴 앞으로 모은 팔을 벌리고 머리뱀을 세운 뒤 3초에 정면을 응시한다. 일반 대기(`idle1`)와 전투 대기(`combat_idle`)에서는 상체를 살짝 뒤로 젖히고 정면을 본다. 세 공격은 전투 대기의 첫 자세로 시작하고 끝난다. 사망은 `dying`이다.
     작업 파일은 `assets/monsters/medusa/rig_v1/medusa.blend`, 게임 모델은 `client/public/models/monsters/medusa.glb`.
 
 - shadow_master — 그림자 길드 보스. [원화](../images/monsters/shadow-master-concept.png)는 OpenAI Codex ImageGen,

@@ -23,6 +23,8 @@ export function deferShaderBuilds(
   )
     return
   r.__deferredShaderBuilds = true
+  spreadShaderBuildStages()
+  retainUnusedShaders(r)
   // An object disposed before its deferred first draw never took its bind groups,
   // so releasing them would undercount the shared ones and free buffers still in use.
   const bindings = r._bindings
@@ -86,6 +88,84 @@ export function deferShaderBuilds(
       if (refresh !== RenderObjectRefreshType.NONE)
         this._nodes.updateAfter(renderObject)
     }
+  }
+}
+
+/** Shaders and pipelines kept after their last object goes. */
+const RETAINED_SHADERS = 400
+
+/** three drops a shader with its last object; keep recent ones so a
+ *  character coming back into view skips the rebuild. */
+function retainUnusedShaders(r: any) {
+  const lru = <T>(limit: number, drop: (key: any, value: T) => void) => {
+    const idle = new Map<any, T>()
+    return (key: any, value: T) => {
+      idle.delete(key)
+      idle.set(key, value)
+      if (idle.size <= limit) return
+      const [oldKey, oldValue] = idle.entries().next().value!
+      idle.delete(oldKey)
+      drop(oldKey, oldValue)
+    }
+  }
+  const nodes = r._nodes
+  const keepState = lru<any>(RETAINED_SHADERS, (key, state) => {
+    if (state.usedTimes === 0 && nodes.nodeBuilderCache.get(key) === state)
+      nodes.nodeBuilderCache.delete(key)
+  })
+  const deleteNodes = nodes.delete
+  nodes.delete = function (this: any, object: any) {
+    const data = object?.isRenderObject ? this.data.get(object) : undefined
+    const state = data?.nodeBuilderState
+    if (state !== undefined) {
+      data.nodeBuilderState = undefined
+      if (--state.usedTimes === 0)
+        keepState(this.getForRenderCacheKey(object), state)
+    }
+    return deleteNodes.call(this, object)
+  }
+  const pipelines = r._pipelines
+  const releasePipeline = pipelines._releasePipeline
+  const releaseProgram = pipelines._releaseProgram
+  const keepPipeline = lru<any>(RETAINED_SHADERS, (_, pipeline) => {
+    if (pipeline.usedTimes === 0) releasePipeline.call(pipelines, pipeline)
+  })
+  const keepProgram = lru<any>(RETAINED_SHADERS * 2, (_, program) => {
+    if (program.usedTimes === 0) releaseProgram.call(pipelines, program)
+  })
+  pipelines._releasePipeline = (pipeline: any) =>
+    keepPipeline(pipeline.cacheKey, pipeline)
+  pipelines._releaseProgram = (program: any) => keepProgram(program, program)
+}
+
+/** Build time a frame may spend on shader stages before the rest waits. */
+const BUILD_BUDGET_MS = 3
+
+/** `scheduler.yield` resumes before the next paint, so 6 ms build stages
+ *  piled into one frame; cap them per frame and push the rest to later ones. */
+function spreadShaderBuildStages() {
+  const scheduler = (globalThis as any).scheduler
+  if (!scheduler?.yield || scheduler.__spread) return
+  scheduler.__spread = true
+  const yieldNow = scheduler.yield.bind(scheduler)
+  let used = 0
+  let resumedAt: number | null = null
+  const tick = () => {
+    used = 0
+    requestAnimationFrame(tick)
+  }
+  requestAnimationFrame(tick)
+  const resumed = () => {
+    resumedAt = performance.now()
+  }
+  const nextFrame = () =>
+    new Promise<void>((resolve) =>
+      requestAnimationFrame(() => setTimeout(resolve, 0))
+    )
+  scheduler.yield = () => {
+    if (resumedAt !== null) used += performance.now() - resumedAt
+    resumedAt = null
+    return (used < BUILD_BUDGET_MS ? yieldNow() : nextFrame()).then(resumed)
   }
 }
 

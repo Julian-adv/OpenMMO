@@ -75,12 +75,14 @@
   import { dungeonManager } from '../managers/dungeonManager'
   import { billboardScale } from '../utils/billboardScale'
   import { hoveredMonsterId } from '../stores/gameStore'
+  import { currentDungeonId } from '../stores/dungeonStore'
   import { HOVER_SCALE_IDLE, stickyHoverScale } from '../utils/stickyHover'
   import type { TerrainHeightManager } from '../managers/terrainHeightManager'
   import TargetRing from './TargetRing.svelte'
   import { warmupPipelines } from '../utils/pipelineWarmup'
-  import { shake, sleepSink } from '../effects/dormant-sleep'
+  import { shake, sleepSink, STATUE_WAKE_MS } from '../effects/dormant-sleep'
   import { DeathCrumble } from '../effects/death-crumble'
+  import { BodyTrail } from '../effects/body-trail'
   import {
     disposeMeshMaterials,
     disposeObjectTree,
@@ -102,6 +104,8 @@
     lastDamageInfo?: MonsterData['lastDamageInfo']
     droppedWeaponItemDefId?: string
     sinkAt?: number
+    dormant?: boolean
+    wokeAt?: number
     health: number
     maxHealth: number
     showHealth?: boolean
@@ -124,6 +128,8 @@
     lastDamageInfo,
     droppedWeaponItemDefId,
     sinkAt,
+    dormant = false,
+    wokeAt,
     health,
     maxHealth,
     showHealth = false,
@@ -131,6 +137,7 @@
   }: Props = $props()
 
   const def = $derived(getMonsterDef(type))
+  const labelled = $derived(monsterState !== 'dead' && !dormant)
   const attackClips = $derived(attackClipNames(def))
   // Re-rolled at the start of every swing, so this is only a seed — `untrack`
   // says that out loud, the way the model resolution below does, instead of
@@ -184,11 +191,21 @@
 
   let mixer = $state<THREE.AnimationMixer | undefined>(undefined)
   let currentAction = $state<THREE.AnimationAction | undefined>(undefined)
+  let bodyTrail: BodyTrail | undefined
+  let displayedYaw = untrack(() => rotation)
+  function initFacing(ref: THREE.Group) {
+    ref.rotation.y = displayedYaw
+  }
+  /** The clip a dormant statue has fully posed in; its mixer then rests. */
+  let posedAction: THREE.AnimationAction | undefined
   let model: THREE.Group | undefined = $state(undefined)
   let modelReady = $state(false)
   const threlte = useThrelte()
   let group = $state<THREE.Group>()
   let nametagGroup = $state<THREE.Group | undefined>(undefined)
+  const ON_TOP_RENDER_ORDER = 4
+  const inDungeon = $derived($currentDungeonId !== null)
+  const nameOnTop = $derived(!isBoss || inDungeon)
   let nametagHeight = $state(2.5)
   let stunned = $state(false)
   let stunGroup = $state<THREE.Group | undefined>(undefined)
@@ -543,6 +560,28 @@
     }
   }
 
+  function visualYaw() {
+    if (!bodyTrail) return rotation
+    const now = performance.now()
+    if (initialDef?.bodyTrail !== 'locomotion')
+      return bodyTrail.track(position.x, position.z, rotation, now)
+    if (monsterState === 'dead') return displayedYaw
+    const cast = skill && MONSTER_SKILLS[skill.id]
+    const casting = skill && cast && now - skill.startedAt < cast.durationMs
+    const moving =
+      !casting && (monsterState === 'walk' || monsterState === 'run')
+    const facing = casting
+      ? skill.rotation + (cast.rear ? Math.PI : 0)
+      : rotation
+    return bodyTrail.track(
+      position.x,
+      position.z,
+      facing,
+      now,
+      moving ? 'travel' : 'face'
+    )
+  }
+
   export function update(deltaTime: number, camera?: THREE.Camera) {
     if (speech && (speechLeft -= deltaTime) <= 0) speech = null
     // 0. Sync Three.js group position imperatively so the refraction render
@@ -552,10 +591,14 @@
     const slept = sinkAt === undefined ? 0 : Date.now() - sinkAt
     const sink = sleepSink(slept)
     const sunk = sink * nametagHeight
+    displayedYaw = visualYaw()
     if (group) {
       group.position.set(position.x, position.y - sunk, position.z)
-      group.rotation.y = rotation
+      group.rotation.y = displayedYaw
       if (sink > 0) shake(group, slept / 1000, 0.12 * (1 - sink))
+      const woke = wokeAt === undefined ? STATUE_WAKE_MS : Date.now() - wokeAt
+      if (woke < STATUE_WAKE_MS)
+        shake(group, woke / 1000, 0.06 * (1 - woke / STATUE_WAKE_MS))
     }
     advanceCorpseShift(deltaTime)
     // Nothing left of a crumbled body to animate.
@@ -565,7 +608,7 @@
     }
     if (hoverProxyGroup) {
       hoverProxyGroup.position.set(position.x, position.y - sunk, position.z)
-      hoverProxyGroup.rotation.y = rotation
+      hoverProxyGroup.rotation.y = displayedYaw
     }
 
     // 1. Sync animation with state
@@ -640,9 +683,17 @@
       corpseTimer = 0
     }
 
-    // 4. Update mixer
-    if (mixer) {
+    // 4. Update mixer; a dormant statue runs it only until its clip's
+    //    first pose has fully faded in, then holds that pose.
+    const posed = dormant && !!currentAction && currentAction === posedAction
+    if (mixer && !posed) {
+      if (dormant && currentAction) currentAction.time = 0
       mixer.update(deltaTime)
+      posedAction =
+        dormant && currentAction && currentAction.getEffectiveWeight() >= 1
+          ? currentAction
+          : undefined
+      if (monsterState !== 'dead') bodyTrail?.pose(displayedYaw, rotation)
 
       // Update debug info for slow mode
       const currentTS = get(timeScale)
@@ -738,6 +789,7 @@
         })
         // Setup mixer on the cloned scene
         mixer = new THREE.AnimationMixer(clonedScene)
+        if (initialDef?.bodyTrail) bodyTrail = new BodyTrail(clonedScene)
 
         mixer.addEventListener('finished', (e) => {
           const finishedClipName = e.action.getClip().name
@@ -863,8 +915,8 @@
 {#if model && modelReady}
   <T.Group
     bind:ref={group}
+    oncreate={initFacing}
     position={[position.x, position.y, position.z]}
-    rotation={[0, rotation, 0]}
     scale={[initialScale, initialScale, initialScale]}
   >
     <T is={model} castShadow receiveShadow />
@@ -877,8 +929,8 @@
        out of the model group so clicks still hit the actual silhouette. -->
   <T.Group
     bind:ref={hoverProxyGroup}
+    oncreate={initFacing}
     position={[position.x, position.y, position.z]}
-    rotation={[0, rotation, 0]}
     scale={[initialScale, initialScale, initialScale]}
     userData={{ monsterId: id }}
   >
@@ -903,7 +955,7 @@
   </T.Group>
 {/if}
 
-{#if monsterState !== 'dead' && $hoveredMonsterId === id && ringRadius > 0}
+{#if labelled && $hoveredMonsterId === id && ringRadius > 0}
   <TargetRing
     {heightManager}
     x={position.x}
@@ -937,7 +989,7 @@
 
 <!-- Name tag / Debug info -->
 <T.Group bind:ref={nametagGroup}>
-  {#if monsterState !== 'dead' && (isBoss || $hoveredMonsterId === id)}
+  {#if labelled && (isBoss || $hoveredMonsterId === id)}
     <!-- Boss: permanent gold nameplate. Others: hover-only name, sized to
          match the ground-item hover label. -->
     <TextLabel
@@ -948,20 +1000,18 @@
       anchorY="bottom"
       {...isBoss
         ? { fontSize: 0.3, color: '#ffd166', outlineColor: '#422d00' }
-        : {
-            fontSize: 0.22,
-            color: '#ffffff',
-            outlineColor: '#000000',
-            depthTest: false,
-            renderOrder: 4,
-          }}
+        : { fontSize: 0.22, color: '#ffffff', outlineColor: '#000000' }}
+      depthTest={!nameOnTop}
+      renderOrder={nameOnTop ? ON_TOP_RENDER_ORDER : undefined}
     />
   {/if}
-  {#if showHealth && monsterState !== 'dead' && maxHealth > 0}
+  {#if showHealth && labelled && maxHealth > 0}
     <ResourceBar
       y={-RESOURCE_BAR_HEIGHT}
       ratio={Math.max(0.001, health / maxHealth)}
       color="#ff0000"
+      onTop={inDungeon}
+      renderOrder={inDungeon ? ON_TOP_RENDER_ORDER : 0}
     />
   {/if}
   {#if animDebugInfo}

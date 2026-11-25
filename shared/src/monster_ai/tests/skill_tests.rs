@@ -701,3 +701,41 @@ fn the_tail_sweep_waits_for_someone_behind_and_strikes_there() {
     assert!(TAIL_SWEEP.fan_contains(&brain.position, rotation, &flanked[1].position));
     assert!(!TAIL_SWEEP.fan_contains(&brain.position, rotation, &flanked[0].position));
 }
+
+/// With a living statue about she leaves the one in her face, and once the
+/// statue is in the tail's reach turns her back to it and sweeps.
+#[test]
+fn medusa_leaves_the_fight_to_break_a_statue_with_her_tail() {
+    let stone = |x, z| NearbyPlayer {
+        petrified: true,
+        ..raider(2, x, z)
+    };
+    let mut brain = medusa();
+    let far = [raider(1, 0.0, 1.5), stone(0.0, 20.0)];
+    let mut rng = SmallRng::seed_from_u64(11);
+    for _ in 0..30 {
+        let commands =
+            brain.tick_with_behavior_tree(100.0, &far, &[], &attack_tree(), &DirectPath, &mut rng);
+        assert!(cast_of(&commands).is_none());
+        assert!(!commands
+            .iter()
+            .any(|c| matches!(c, AiCommand::Attack { .. })));
+    }
+    assert_eq!(brain.target_player_id, Some(2.into()));
+
+    let near = [raider(1, 0.0, 1.5), stone(2.0, 0.0)];
+    let seen = casts_over(&mut brain, &near, 300.0);
+    let (_, skill, commands) = seen.first().expect("a sweep at the statue");
+    assert_eq!(*skill, MonsterSkillId::TailSweep);
+    let (_, rotation, _) = cast_of(commands).unwrap();
+    assert!(TAIL_SWEEP.fan_contains(&brain.position, rotation, &near[1].position));
+    let turned = crate::mount_movement::angle_delta(brain.rotation, rotation).abs();
+    assert!(
+        (turned - std::f32::consts::PI).abs() < 1e-3,
+        "her back is to it"
+    );
+
+    let mut brain = medusa();
+    let underfoot = [stone(0.0, 0.0)];
+    assert!(!casts_over(&mut brain, &underfoot, 300.0).is_empty());
+}

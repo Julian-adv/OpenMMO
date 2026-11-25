@@ -534,6 +534,12 @@ Use the readiness status above. Wait for server success or failure feedback."#,
             let names: Vec<&str> = self.bookmarks.iter().map(|b| b.name.as_str()).collect();
             lines.push(format!("Your teleport bookmarks: {}", names.join("; ")));
         }
+        if let Some(def) = self.worn_teleport_control() {
+            lines.push(format!(
+                "Your worn {} lets a plain Scroll of Teleportation go to a bookmark",
+                def.name
+            ));
+        }
         // Data only — what to do with the list is the role template's call
         // (bard.txt: prefer something fresh, unless a listener asks again).
         if self.plays_music && !self.recent_songs.is_empty() {

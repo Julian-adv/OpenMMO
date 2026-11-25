@@ -64,7 +64,8 @@ pub(super) fn try_generate_floor(
         down_along_z,
         extra_spawns: if fork { FORK_EXTRA_SPAWNS } else { 0 },
         max_mouths: Some(max_mouths),
-        pillars: false,
+        pillars: Vec::new(),
+        doorways: Vec::new(),
     };
     let mut layout = finish_floor(rng, depth, is_last, up_shaft, table, plan)?;
     let decor = [timber_posts(&layout), rails(&layout)].concat();
@@ -276,7 +277,7 @@ fn place_one(
     if turn > 0 {
         spec.rotation += turn * rng.gen_range(0..u32::from(360 / turn)) as u16;
     }
-    placer.place(spec);
+    let _ = placer.place(spec);
 }
 
 fn room_cells(room: &Room) -> impl Iterator<Item = (i32, i32)> + '_ {

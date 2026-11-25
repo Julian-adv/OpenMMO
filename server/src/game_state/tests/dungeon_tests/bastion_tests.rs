@@ -41,3 +41,22 @@ async fn sundered_bastion_spawns_barkan_and_rewards_every_floor_key() {
     assert_eq!(chances["ring_of_protection"], 0.2);
     assert!(!chances.contains_key("shadowfang"));
 }
+
+#[tokio::test]
+async fn tier_five_floors_below_the_fifth_lend_at_least_their_minimum_to_hit() {
+    let game_state = make_test_game_state("tier_five_min_place_bonus");
+    for id in ["sundered_bastion", "shadow_guild", "blackvein_mine"] {
+        let at = game_state.dungeon_defs.get(id).unwrap().position();
+        assert_eq!(
+            [-5, -6, -15, -16, -20, -25].map(|floor| game_state.place_attack_bonus(&at, floor)),
+            [0, 35, 35, 35, 45, 60],
+            "{id}"
+        );
+    }
+    let crypt = game_state
+        .dungeon_defs
+        .get("skeleton_crypt")
+        .unwrap()
+        .position();
+    assert_eq!(game_state.place_attack_bonus(&crypt, -6), 3);
+}

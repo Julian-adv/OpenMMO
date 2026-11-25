@@ -13,7 +13,11 @@ import {
   MODULAR_VALKYRIE_MODEL_PATH,
   MODULAR_FEMALE_RANGER_MODEL_PATH,
 } from './modelPaths'
-import { bindModularPart, skinnedParts } from './modularCharacter'
+import {
+  bindModularPart,
+  prepareCharacterPart,
+  skinnedParts,
+} from './modularCharacter'
 import { trimModularClothing } from './modularClothing'
 import { femaleUnderwearColor } from './femaleUnderwearColor'
 import { femaleOutfitMask } from './female-outfit-mask'
@@ -57,8 +61,15 @@ const prefixes: Record<Style, string> = {
 const styles = Object.keys(prefixes) as Style[]
 type Helmet =
   | Exclude<Style, 'rogue' | 'caveman' | 'ranger' | 'shopkeeper' | 'pink_maid'>
-  | 'brilliance'
-const LAZY_HELMET = 'brilliance_helmet'
+  | ItemHelmet
+// Single-item helmets, loaded on first equip.
+const ITEM_HELMETS = {
+  brilliance: 'brilliance_helmet',
+  blindfold: 'blindfold_helmet',
+} as const
+type ItemHelmet = keyof typeof ITEM_HELMETS
+const isItemHelmet = (style: unknown): style is ItemHelmet =>
+  typeof style === 'string' && style in ITEM_HELMETS
 export type FemaleHair = Extract<
   CharacterAppearance['hair'],
   'bob' | 'long' | 'ponytail' | 'long_bangs' | 'long_wavy' | 'twintail'
@@ -108,10 +119,10 @@ const LAZY_STYLES: Partial<Record<Style, readonly Slot[]>> = {
 }
 const partName = (style: Style, slot: Slot | 'hair') =>
   `${prefixes[style]}${slot}`
-const slotPart = (style: Style | 'brilliance' | null, slot: Slot) =>
-  style === 'brilliance' ? LAZY_HELMET : style && partName(style, slot)
-const lazyParts = new Set([
-  LAZY_HELMET,
+const slotPart = (style: Style | ItemHelmet | null, slot: Slot) =>
+  isItemHelmet(style) ? ITEM_HELMETS[style] : style && partName(style, slot)
+const lazyParts = new Set<string>([
+  ...Object.values(ITEM_HELMETS),
   ...Object.entries(LAZY_STYLES).flatMap(([style, styleSlots]) =>
     styleSlots.map((slot) => partName(style as Style, slot))
   ),
@@ -186,7 +197,7 @@ export function assembleFemaleCharacter(
     if (name === 'valkyrie_wings') attachValkyrieWings(scene, meshes)
   }
   if (facePart) bindFemaleFacePart(scene, facePart)
-  for (const mesh of skinnedParts(scene)) mesh.frustumCulled = false
+  for (const mesh of skinnedParts(scene)) prepareCharacterPart(mesh)
   return scene
 }
 
@@ -415,6 +426,7 @@ const latest = new WeakMap<
 const HELMET_HAIR: Record<Helmet, string | null> = {
   plate: null,
   brilliance: null,
+  blindfold: 'hair',
   barbarian: 'barbarian_hair',
   valkyrie: 'hair',
   priest: 'hair',
@@ -505,8 +517,8 @@ const femaleStyle = (itemId: string | null | undefined): Style | null => {
 }
 
 const femaleHelmet = (itemId: string | null | undefined): Helmet | null => {
-  if (modularOutfitForArmor({ head: itemId }).helmet === 'brilliance')
-    return 'brilliance'
+  const modular = modularOutfitForArmor({ head: itemId }).helmet
+  if (isItemHelmet(modular)) return modular
   const style = femaleStyle(itemId)
   return style === 'rogue' ||
     style === 'caveman' ||
@@ -534,7 +546,7 @@ function bindLazyFemalePart(
           mesh.userData.female_part = name
           fitFemaleHair(mesh, scene.userData.modular_face, name)
           mesh.visible = false
-          mesh.frustumCulled = false
+          prepareCharacterPart(mesh)
         }
         const state = states.get(scene)
         if (state && !HAIR_PART_NAMES.has(name))
@@ -732,7 +744,8 @@ export function applyFemaleArmor(
       refreshBoots: () => {},
       hairMasks: new Set(),
     }
-    if (female_parts[LAZY_HELMET]) registerLazyPart(scene, state, LAZY_HELMET)
+    for (const name of Object.values(ITEM_HELMETS))
+      if (female_parts[name]) registerLazyPart(scene, state, name)
     state.refreshBoots = installBootsSwitch(scene, state)
     states.set(scene, state)
   }
@@ -774,9 +787,10 @@ export function applyFemaleArmor(
       shown[name] = equipped[slot] === style
       for (const mesh of part(name)) mesh.visible = shown[name]
     }
-  if (scene.userData.female_parts[LAZY_HELMET]) {
-    shown[LAZY_HELMET] = helmet === 'brilliance'
-    for (const mesh of part(LAZY_HELMET)) mesh.visible = shown[LAZY_HELMET]
+  for (const [style, name] of Object.entries(ITEM_HELMETS)) {
+    if (!scene.userData.female_parts[name]) continue
+    shown[name] = helmet === style
+    for (const mesh of part(name)) mesh.visible = shown[name]
   }
   for (const mesh of part('rogue_garters'))
     mesh.visible = equipped.bottom === 'rogue' && equipped.boots === 'rogue'

@@ -11,7 +11,7 @@
  * player-physics can consult it without prop drilling.
  */
 import { get } from 'svelte/store'
-import { preloadDungeonSounds } from './sfxManager'
+import { preloadDungeonSounds, type PropSound } from './sfxManager'
 import {
   dungeon_layout,
   dungeon_set_layout_variants,
@@ -80,6 +80,8 @@ export interface DungeonProp {
     | 'mine_ore_heap'
     | 'mine_rubble'
     | 'mine_crystal_cluster'
+    | 'temple_column'
+    | 'temple_fallen_column'
   /** Vertical stack count (1 or 2); chests are always 1. */
   stack: number
   /** Yaw in whole degrees (0..360). */
@@ -145,6 +147,11 @@ export interface DungeonFloorLayout {
   chest?: [number, number] | null
   spawns: DungeonSpawn[]
   props: DungeonProp[]
+  /** Openings in the walls rooms share; set only where rooms stand edge to
+   *  edge, and every other edge between two rooms is then a wall. */
+  doorways?: InteriorDoorSpec[]
+  /** South-west cells of a boss hall's 2×2 rock pillars. */
+  pillars?: [number, number][]
 }
 
 export interface DungeonConstants {
@@ -418,6 +425,9 @@ function segmentBlocksMovement(
 class DungeonManager {
   private id: string | null = null
   private entrance: DungeonEntrance | null = null
+  /** Loaded on first entry: the themes pull three/webgpu, kept out of the login bundle. */
+  private caveThemes: typeof import('../utils/dungeon-cave-themes') | null =
+    null
   private layouts: DungeonFloorLayout[] = []
   /** Cached surface-opening rects per entrance id (see allEntranceHoleRects). */
   private entranceRectCache = new Map<string, DungeonRect>()
@@ -653,6 +663,10 @@ class DungeonManager {
   }
 
   private load(id: string, entrance: DungeonEntrance) {
+    if (!this.caveThemes)
+      void import('../utils/dungeon-cave-themes').then(
+        (themes) => (this.caveThemes = themes)
+      )
     this.layouts = dungeon_layout(id) as DungeonFloorLayout[]
     dungeon_add_passability(id, entrance.x, entrance.y, entrance.z)
     this.brokenProps.clear()
@@ -725,9 +739,23 @@ class DungeonManager {
     return this.openedProps.get(depth) ?? EMPTY_BROKEN
   }
 
+  private propKind(depth: number, propId: number): string | undefined {
+    return this.layouts[depth - 1]?.props[propId]?.kind
+  }
+
   isMinableProp(depth: number, propId: number): boolean {
-    const kind = this.layouts[depth - 1]?.props[propId]?.kind
+    const kind = this.propKind(depth, propId)
     return kind !== undefined && MINABLE_PROP_KINDS.has(kind)
+  }
+
+  /** The sound of prop `propId` shattering, in this floor's theme. */
+  breakSound(depth: number, propId: number): PropSound {
+    const kind = this.propKind(depth, propId)
+    const sounds = this.caveThemes?.dungeonCaveTheme(
+      this.dungeonId ?? '',
+      depth
+    ).breakSounds
+    return (kind && sounds?.[kind]) || 'break'
   }
 
   /** Cells rail cart `propId` stands pushed along its rail. */

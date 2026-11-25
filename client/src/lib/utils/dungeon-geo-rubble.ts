@@ -14,7 +14,7 @@ export function buildDungeonFloorRubble(
   dungeonId: string
 ): THREE.Group {
   const theme = dungeonCaveTheme(dungeonId, layout.depth)
-  const masonry = theme.id === 'masonry'
+  const masonry = theme.masonry
   const entries: GeoEntry[] = generateDungeonFloorStones(
     layout,
     ctx,

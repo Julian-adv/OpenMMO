@@ -1758,22 +1758,81 @@ fn variants_redraw_the_floors_behind_the_same_entrance() {
     );
 }
 
+const GARDEN_FLOORS: u8 = 30;
+
+fn temple(seed: u64) -> Vec<FloorLayout> {
+    super::gen::generate_dungeon_with(
+        seed,
+        seed,
+        Some(GARDEN_FLOORS),
+        "medusa",
+        None,
+        "garden",
+        super::LayoutStyle::Temple,
+    )
+}
+
+/// A temple floor is three to six wide chambers. Chambers of a suite stand
+/// edge to edge with one wall between, open only at the two-cell doorway from
+/// each to the next; some floors hold two or three suites, with one long
+/// passage from each to the next.
+#[test]
+fn temple_floors_are_suites_of_chambers_joined_by_doorways() {
+    let mut floors = [0; 3];
+    for seed in 0..100u64 {
+        for layout in temple(seed) {
+            let at = format!("seed {seed} depth {}", layout.depth);
+            let rooms = &layout.rooms;
+            assert!((3..=6).contains(&rooms.len()), "{at}");
+            assert!(rooms.iter().all(|r| r.w >= 15 && r.d >= 15), "{at}");
+            let cells = (0..GRID).flat_map(|x| (0..GRID).map(move |z| (x, z)));
+            let passage = cells
+                .clone()
+                .filter(|&(x, z)| super::gen::cell_is_corridor(&layout, x, z))
+                .count();
+            let suites = rooms.len() - layout.doorways.len();
+            assert!((1..=3).contains(&suites), "{at}");
+            floors[suites - 1] += 1;
+            // Passages may run together, so the floor shows one's worth at least.
+            let least = if suites > 1 { 2 * 10 } else { 0 };
+            assert!(passage >= least, "{at}: {passage} cells of passage");
+            if suites == 1 {
+                assert_eq!(passage, 0, "{at}");
+            }
+            let room_of = |x, z| rooms.iter().position(|r| r.contains(x, z));
+            let grid = floor_passability_cells(&layout);
+            let open = |x: i32, z: i32, bit| grid[(x + z * GRID) as usize] & bit == 0;
+            let between = |a: Option<usize>, b: Option<usize>| a.is_some() && b.is_some() && a != b;
+            let ways = cells
+                .filter(|&(x, z)| {
+                    (between(room_of(x, z), room_of(x + 1, z)) && open(x, z, EDGE_E))
+                        || (between(room_of(x, z), room_of(x, z + 1)) && open(x, z, EDGE_S))
+                })
+                .count();
+            assert_eq!(ways, layout.doorways.len() * 2, "{at}");
+            // Two passages out of one chamber may share a mouth.
+            let mouths = super::doors::wall_openings(&layout).len() - layout.doorways.len();
+            assert!(
+                (2 * (suites - 1)).saturating_sub(1) <= mouths && mouths <= 2 * (suites - 1),
+                "{at}: {mouths} passage mouths"
+            );
+        }
+    }
+    // Roughly half the floors are one suite, a quarter each two and three.
+    assert!(
+        floors[0] >= 1000 && floors[1] >= 400 && floors[2] >= 400,
+        "floors by suites: {floors:?}"
+    );
+}
+
 /// The Garden's last floor always fits its hall: twelve 2×2 pillars of rock
-/// ring an open middle where the chest and the boss stand, and every floor
-/// above is laid out exactly as a plain `Rooms` dungeon's.
+/// ring an open middle where the chest and the boss stand.
 #[test]
 fn the_hall_stands_twelve_pillars_around_the_boss_over_many_seeds() {
-    let build = |seed, style| {
-        super::gen::generate_dungeon_with(seed, seed, Some(25), "medusa", None, "garden", style)
-    };
     for seed in 0..300u64 {
-        let floors = build(seed, super::LayoutStyle::Hall);
-        let plain = build(seed, super::LayoutStyle::Rooms);
-        assert_eq!(floors.len(), 25, "seed {seed}");
-        for (f, p) in floors.iter().zip(&plain).take(24) {
-            assert_eq!(f.carved, p.carved, "seed {seed} depth {}", f.depth);
-        }
-        let last = &floors[24];
+        let floors = temple(seed);
+        assert_eq!(floors.len(), GARDEN_FLOORS as usize, "seed {seed}");
+        let last = floors.last().unwrap();
         let hall = last.rooms.last().unwrap();
         let size = super::gen::HALL_SIZE;
         assert_eq!((hall.w, hall.d), (size, size), "seed {seed}");
@@ -1818,15 +1877,19 @@ fn every_garden_floor_has_room_for_its_statues() {
         let floors = super::gen::generate_dungeon_with(
             seed,
             seed,
-            Some(25),
+            Some(GARDEN_FLOORS),
             "medusa",
             None,
             "garden",
-            super::LayoutStyle::Hall,
+            super::LayoutStyle::Temple,
         );
         for layout in &floors {
             let cells = statue_cells(layout);
-            let want = if layout.depth == 25 { 12 } else { 4 };
+            let want = if usize::from(layout.depth) == floors.len() {
+                12
+            } else {
+                4
+            };
             assert_eq!(cells.len(), want, "seed {seed} depth {}", layout.depth);
             assert_eq!(statue_capacity(layout), want);
             let distinct: std::collections::HashSet<_> = cells.iter().collect();

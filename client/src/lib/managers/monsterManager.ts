@@ -22,6 +22,7 @@ import type { Position } from '../utils/movementUtils'
 import type { TerrainHeightManager } from './terrainHeightManager'
 import {
   playMonsterDeathSound,
+  playMonsterSound,
   playBowSound,
   playSwordHitSound,
   playSwordMissSound,
@@ -232,6 +233,7 @@ class MonsterManager {
       health: monster.health ?? 10,
       maxHealth: monster.max_health ?? 10,
       floorLevel: monster.floor_level ?? 0,
+      dormant: !spawnDead && !!monster.dormant,
     }
     this.monsters.set(monster.id, record)
     const { x, y, z } = monster.position
@@ -485,9 +487,12 @@ class MonsterManager {
     halfAngle: number
   ) {
     const monster = this.monsters.get(monsterId)
-    if (!monster || monster.state === 'dead' || !MONSTER_SKILL_DEFS[skill])
-      return
-    this.applyMonsterPose(monster, { rotation, state: 'attack' })
+    const def = MONSTER_SKILL_DEFS[skill]
+    if (!monster || monster.state === 'dead' || !def) return
+    this.applyMonsterPose(monster, {
+      rotation: def.rear ? rotation + Math.PI : rotation,
+      state: 'attack',
+    })
     monster.skill = {
       id: skill,
       counter: (monster.skill?.counter ?? 0) + 1,
@@ -607,6 +612,21 @@ class MonsterManager {
     this.bodyGround.clear()
     this.monsters.clear()
     clearXpArrival()
+  }
+
+  /** A waking statue comes to life or settles back into stone. */
+  handleMonsterDormant(id: string, dormant: boolean) {
+    const monster = this.monsters.get(id)
+    if (!monster || monster.state === 'dead') return
+    if (!dormant) {
+      const wakeSound = getMonsterDef(monster.type)?.wakeSound
+      if (wakeSound) playMonsterSound(wakeSound)
+    }
+    this.monsters.set(id, {
+      ...monster,
+      dormant,
+      wokeAt: dormant ? undefined : Date.now(),
+    })
   }
 
   /** A raid boss goes back to sleep: it drops its fight and stands idle,

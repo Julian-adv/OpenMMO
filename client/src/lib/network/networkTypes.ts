@@ -108,6 +108,8 @@ export type ServerMonster = {
   floor_level: number
   /** Attacks on sight. */
   aggressive?: boolean
+  /** Stands as stone until a player comes close or strikes it. */
+  dormant?: boolean
 }
 
 export type AccountCharacter = {

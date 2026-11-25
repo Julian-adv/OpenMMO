@@ -843,7 +843,7 @@ async fn terraclash_ground_strike_is_bounded_by_its_swing_reach() {
     }
 }
 
-/// Medusa's gaze rolls 5d40+300 on everyone her sight reaches in the quarter
+/// Medusa's gaze turns to stone everyone her sight reaches in the quarter
 /// she faces; a wall between, the fan's sides and its range all spare.
 #[tokio::test(start_paused = true)]
 async fn medusas_gaze_strikes_those_in_sight_in_the_fan() {
@@ -864,6 +864,10 @@ async fn medusas_gaze_strikes_those_in_sight_in_the_fan() {
         let player = players.get_mut(&pid(name)).unwrap();
         player.health = 600;
         player.max_health = 600;
+        drop(players);
+        game_state
+            .register_player_character(&pid(name), 1, 0, attrs_with_cha(10), 0, Some(100))
+            .await;
     }
     let medusa = game_state
         .spawn_monster(
@@ -911,22 +915,12 @@ async fn medusas_gaze_strikes_those_in_sight_in_the_fan() {
         },
     );
 
-    let mut rx = game_state.register_direct_channel(&pid("open")).await;
     let gaze = &onlinerpg_shared::monster_ai::STONE_GAZE;
     game_state
         .monster_skill_strike(&medusa.id, gaze, spot(0.0, 0.0), 0.0, vec![])
         .await;
-    let victims = drain(&mut rx)
-        .into_iter()
-        .find_map(|m| match m {
-            ServerMessage::MonsterSkillStruck { victims, .. } => Some(victims),
-            _ => None,
-        })
-        .expect("the gaze lands");
-    assert_eq!(victims.len(), 1);
-    assert_eq!(victims[0].player_id, pid("open"));
-    assert!((305..=500).contains(&victims[0].damage));
+    assert!(game_state.is_petrified(&pid("open")).await);
     for spared in ["hidden", "side", "far"] {
-        assert_eq!(health_of(&game_state, &pid(spared)).await, 600, "{spared}");
+        assert!(!game_state.is_petrified(&pid(spared)).await, "{spared}");
     }
 }

@@ -319,9 +319,11 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v170: `JoinDance` and `PlayerDanceSync`: join a nearby dance in step.
 /// v172: the `stone_gaze` and `tail_sweep` monster skills, `MonsterSkillReflected` and
 /// `DungeonStatues`.
-/// v173: operator schedules for seasonal events: `QuerySeasonalEvents`/`SetSeasonalEvent`,
+/// v173: `MonsterStared`.
+/// v174: `Monster::dormant` and `MonsterDormant`.
+/// v175: operator schedules for seasonal events: `QuerySeasonalEvents`/`SetSeasonalEvent`,
 /// `SeasonalEvents` and `ObjectRegionsChanged`.
-pub const PROTOCOL_VERSION: u32 = 173;
+pub const PROTOCOL_VERSION: u32 = 175;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -696,6 +698,7 @@ mod tests {
                 floor_level: 0,
                 level_override: None,
                 aggressive: true,
+                dormant: true,
                 lifecycle: MonsterLifecycle::Ambient,
                 last_attack_at: 0,
             },

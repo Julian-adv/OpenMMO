@@ -603,6 +603,7 @@ fn make_monster(id: &str, position: Position, floor_level: i8) -> crate::types::
         floor_level,
         level_override: None,
         aggressive: false,
+        dormant: false,
         lifecycle: MonsterLifecycle::Ambient,
         last_attack_at: 0,
     }

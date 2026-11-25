@@ -80,7 +80,7 @@ pub const DUNGEON_FLOOR_INDEX_BASE: u8 = crate::housing::MAX_FLOOR_LEVEL + 1;
 pub const MIN_DRAWN_FLOORS: u8 = 5;
 pub const MAX_DRAWN_FLOORS: u8 = 20;
 /// Deepest floor a registry `floors` override may ask for.
-pub const MAX_FLOORS: u8 = 25;
+pub const MAX_FLOORS: u8 = 30;
 
 /// Stair shaft footprint: `SHAFT_W` cells wide, `SHAFT_LEN` along the run.
 /// The run must stay ≤ 16 cells — stairwell intermediate floor keys get
@@ -287,6 +287,12 @@ pub enum PropKind {
     /// Black-violet crystal cluster over 2×2 mine room cells; the client
     /// grows it with depth.
     MineCrystalCluster,
+    /// Fluted column standing free in a temple chamber. It bars the way but
+    /// not the view.
+    TempleColumn,
+    /// A temple column lying where it fell, three cells long: along Z at
+    /// yaw 0, along X at 90.
+    TempleFallenColumn,
 }
 
 impl PropKind {
@@ -321,6 +327,7 @@ impl PropKind {
         match self {
             PropKind::MineCart | PropKind::MineRail | PropKind::MineRailCart => (1, 2),
             PropKind::MineToolRack => (2, 1),
+            PropKind::TempleFallenColumn => (1, 3),
             PropKind::MineOreHeap | PropKind::MineRubble | PropKind::MineCrystalCluster => (2, 2),
             _ => (1, 1),
         }
@@ -340,8 +347,8 @@ pub struct PropSpec {
     /// for `TorchWall` it's the room-facing direction the client mounts it by
     /// (north wall → 0, east wall → 270); for `MineTimberPost` it's the
     /// corridor-facing direction (wall on −Z → 0, +X → 270, +Z → 180, −X → 90);
-    /// for `MineRail` it's 0 along Z and 90 along X; mine fixtures see their
-    /// [`PropKind`] variants.
+    /// for `MineRail` and `TempleFallenColumn` it's 0 along Z and 90 along X;
+    /// mine fixtures see their [`PropKind`] variants.
     pub rotation: u16,
 }
 
@@ -549,7 +556,7 @@ impl Serialize for PropSpec {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct FloorLayout {
     /// 1-based depth below the surface.
@@ -567,6 +574,28 @@ pub struct FloorLayout {
     pub spawns: Vec<SpawnSpec>,
     /// Barrels/crates/chests clustered in room corners — see [`PropSpec`].
     pub props: Vec<PropSpec>,
+    /// Openings in the walls rooms share. Where this is set, rooms stand
+    /// edge to edge: every edge between two of them is a wall but these.
+    pub doorways: Vec<InteriorDoorSpec>,
+    /// South-west cells of a boss hall's 2×2 rock pillars, drawn as columns.
+    pub pillars: Vec<(i32, i32)>,
+}
+
+/// As derived, less `doorways` and `pillars`: [`layout_hash`] reads this
+/// form, and they follow from the rooms and the carving.
+impl std::fmt::Debug for FloorLayout {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FloorLayout")
+            .field("depth", &self.depth)
+            .field("rooms", &self.rooms)
+            .field("carved", &self.carved)
+            .field("up_shaft", &self.up_shaft)
+            .field("down_shaft", &self.down_shaft)
+            .field("chest", &self.chest)
+            .field("spawns", &self.spawns)
+            .field("props", &self.props)
+            .finish()
+    }
 }
 
 impl FloorLayout {
@@ -1022,6 +1051,34 @@ fn floor_passability_cells_inner(
             }
             if !layout.is_carved(x - 1, z) {
                 cells[idx] |= EDGE_W;
+            }
+        }
+    }
+
+    // Rooms set edge to edge are walled apart except at their doorways.
+    if !layout.doorways.is_empty() {
+        let room_of = |x: i32, z: i32| layout.rooms.iter().position(|r| r.contains(x, z));
+        let doorway = |x: i32, z: i32, spans_x: bool| {
+            layout.doorways.iter().any(|d| {
+                let (lat, line) = if spans_x { (x, z) } else { (z, x) };
+                d.spans_x() == spans_x
+                    && d.wall_line == line
+                    && (d.lat0..d.lat0 + d.len).contains(&lat)
+            })
+        };
+        for z in 0..GRID {
+            for x in 0..GRID {
+                let Some(room) = room_of(x, z) else {
+                    continue;
+                };
+                if room_of(x, z + 1).is_some_and(|r| r != room) && !doorway(x, z + 1, true) {
+                    or_edge_bit(&mut cells, x, z, EDGE_S);
+                    or_edge_bit(&mut cells, x, z + 1, EDGE_N);
+                }
+                if room_of(x + 1, z).is_some_and(|r| r != room) && !doorway(x + 1, z, false) {
+                    or_edge_bit(&mut cells, x, z, EDGE_E);
+                    or_edge_bit(&mut cells, x + 1, z, EDGE_W);
+                }
             }
         }
     }
