@@ -860,6 +860,8 @@
   "command.help.unmute": "플레이어 채팅 금지 해제: /unmute <이름>",
   "command.help.summon": "플레이어를 내 옆으로 소환: /summon <이름>",
   "command.help.goto": "플레이어 옆으로 순간이동: /goto <이름>",
+  "command.help.follow": "플레이어를 계속 따라다님(순간이동·던전 포함): /follow <이름>",
+  "command.help.unfollow": "따라다니기 중지: /unfollow",
   "command.help.pos": "현재 위치 확인",
   "command.help.tp": "순간이동: /tp <x> <z> [y], /tp <이름|번호> 또는 /tp <던전> <층>; /tp로 목적지 목록 확인",
   "command.help.bell": "합병식 꽃잎과 종소리를 내 자리에서 미리 보기",

@@ -1,5 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Mesh, Raycaster, Vector3, type Group } from 'three'
+import {
+  Mesh,
+  PerspectiveCamera,
+  PointLight,
+  Raycaster,
+  Vector3,
+  type Group,
+} from 'three'
 import type { DungeonRoom } from '../managers/dungeonManager'
 import { buildDungeonFloorGroup, type WallRun } from './dungeon-geo-floor'
 import { isoCameraOccludesPlayer } from './iso-occlusion'
@@ -9,6 +16,8 @@ import {
   DUNGEON_WALL_TEXTURE_IDX,
 } from './dungeon-geo-constants'
 import { carveDungeon, dungeonCtx } from './dungeon-layout.fixture'
+import { WALL_SHADOW_CASTER_NAME } from './dungeon-geo-shadow'
+import { setupPointShadow } from './pointShadow'
 
 vi.mock('./dungeon-geo-doors', () => ({ buildInteriorDoor: vi.fn() }))
 
@@ -115,5 +124,27 @@ describe('dungeon wall fade groups', () => {
     expect(wallAt(runs, 1.95, 4).fadeGroup).toBe(roomSouth.fadeGroup)
     expect(corridorSouth.fadeGroup).not.toBe(roomSouth.fadeGroup)
     expect(wallAt(runs, 3.95, 8).fadeGroup).toBe(corridorSouth.fadeGroup)
+  })
+})
+
+describe('dungeon wall shadow caster', () => {
+  it('casts every wall run from one mesh only shadow cameras see', () => {
+    const runs = buildWalls(
+      [{ x: 4, z: 6, w: 2, d: 4 }],
+      [{ x: 2, z: 2, w: 6, d: 4 }]
+    )
+    const caster = group.getObjectByName(WALL_SHADOW_CASTER_NAME) as Mesh
+    const light = new PointLight()
+    setupPointShadow(light)
+    expect(caster.castShadow).toBe(true)
+    expect(caster.layers.test(new PerspectiveCamera().layers)).toBe(false)
+    expect(caster.layers.test(light.shadow.camera.layers)).toBe(true)
+    expect(light.shadow.camera.layers.isEnabled(0)).toBe(true)
+    expect(caster.geometry.index!.count).toBe(runs.length * 36)
+    caster.geometry.computeBoundingBox()
+    for (const run of runs) {
+      expect(run.mesh.castShadow).toBe(false)
+      expect(caster.geometry.boundingBox!.containsBox(run.localAABB)).toBe(true)
+    }
   })
 })

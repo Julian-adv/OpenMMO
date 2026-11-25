@@ -2073,3 +2073,125 @@ async fn mounted_route_build_timing() {
         );
     }
 }
+
+async fn stand(game: &GameState, name: &str, x: f32, z: f32, y: f32) -> PlayerId {
+    let mut player = make_player(name, x, z);
+    player.position.y = y;
+    let id = player.id;
+    game.add_player(player).await;
+    id
+}
+
+fn xz_gap(a: Position, b: Position) -> f32 {
+    shortest_world_delta_x(a.x, b.x).hypot(b.z - a.z)
+}
+
+async fn last_status(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
+) -> (usize, Option<MoveStatus>) {
+    let (mut paths, mut status) = (0, None);
+    while let Ok(bytes) = rx.try_recv() {
+        match onlinerpg_shared::deserialize_server_msg(&bytes).unwrap() {
+            ServerMessage::PlayerMovePath { .. } => paths += 1,
+            ServerMessage::PlayerMoveProgress { status: s, .. } => status = Some(s),
+            _ => {}
+        }
+    }
+    (paths, status)
+}
+
+#[tokio::test]
+async fn arriving_on_a_standing_player_walks_one_step_aside() {
+    let game = make_flat_world_game_state("sidestep_open");
+    let standing = stand(&game, "sidestep_open_stander", 6.5, 1.5, 5.0).await;
+    let walker = stand(&game, "sidestep_open_walker", 1.5, 1.5, 5.0).await;
+    let mut rx = game.register_connection_channel(&walker).await;
+    game.request_move_goal(walker, 1, 6.5, 1.5, false).await;
+    next_path(&mut rx).await;
+    advance(&game, walker, 10.0).await;
+    let arrived = game.players.read().await[&walker].position;
+    assert_eq!((arrived.x, arrived.z), (6.5, 1.5));
+    assert_eq!(last_status(&mut rx).await, (1, None));
+    advance(&game, walker, 1.0).await;
+    let players = game.players.read().await;
+    let gap = xz_gap(players[&walker].position, players[&standing].position);
+    assert!((gap - 0.8).abs() < 0.01, "gap {gap}");
+    drop(players);
+    assert_eq!(last_status(&mut rx).await, (0, Some(MoveStatus::Arrived)));
+}
+
+#[tokio::test]
+async fn a_walled_side_step_takes_the_open_direction() {
+    let (game, walker, mut rx) = walker("sidestep_corridor", false).await;
+    stand(&game, "sidestep_corridor_stander", 5.5, 1.5, 0.0).await;
+    game.request_move_goal(walker, 1, 5.5, 1.5, false).await;
+    next_path(&mut rx).await;
+    advance(&game, walker, 10.0).await;
+    advance(&game, walker, 1.0).await;
+    let end = game.players.read().await[&walker].position;
+    assert!(
+        (end.x - 6.3).abs() < 0.01 && (end.z - 1.5).abs() < 0.01,
+        "{end:?}"
+    );
+}
+
+#[tokio::test]
+async fn with_every_spot_taken_the_walker_stays_put() {
+    let (game, walker, mut rx) = walker("sidestep_crowded", false).await;
+    for (i, x) in [3.9, 4.7, 5.5, 6.3].into_iter().enumerate() {
+        stand(&game, &format!("sidestep_crowded_{i}"), x, 1.5, 0.0).await;
+    }
+    game.request_move_goal(walker, 1, 5.5, 1.5, false).await;
+    next_path(&mut rx).await;
+    rx.try_recv().ok();
+    advance(&game, walker, 10.0).await;
+    let end = game.players.read().await[&walker].position;
+    assert_eq!((end.x, end.z), (5.5, 1.5));
+    assert_eq!(last_status(&mut rx).await, (0, Some(MoveStatus::Arrived)));
+    assert!(!game.has_test_movement(&walker).await);
+}
+
+#[tokio::test]
+async fn an_invisible_player_is_not_stepped_around() {
+    let game = make_flat_world_game_state("sidestep_cloak");
+    let cloaked = stand(&game, "sidestep_cloak_stander", 6.5, 1.5, 5.0).await;
+    game.players
+        .write()
+        .await
+        .get_mut(&cloaked)
+        .unwrap()
+        .invisible = true;
+    let walker = stand(&game, "sidestep_cloak_walker", 1.5, 1.5, 5.0).await;
+    let mut rx = game.register_connection_channel(&walker).await;
+    game.request_move_goal(walker, 1, 6.5, 1.5, false).await;
+    next_path(&mut rx).await;
+    advance(&game, walker, 10.0).await;
+    let end = game.players.read().await[&walker].position;
+    assert_eq!((end.x, end.z), (6.5, 1.5));
+    assert_eq!(last_status(&mut rx).await, (0, Some(MoveStatus::Arrived)));
+}
+
+#[tokio::test]
+async fn walkers_converging_on_one_spot_all_end_apart() {
+    let game = make_flat_world_game_state("sidestep_crowd");
+    let mut ids = vec![stand(&game, "sidestep_crowd_stander", 6.5, 6.5, 5.0).await];
+    for (i, (x, z)) in [(1.5, 6.5), (11.5, 6.5), (6.5, 1.5), (6.5, 11.5)]
+        .into_iter()
+        .enumerate()
+    {
+        let id = stand(&game, &format!("sidestep_crowd_{i}"), x, z, 5.0).await;
+        game.request_move_goal(id, 1, 6.5, 6.5, false).await;
+        search_finished(&game, id).await;
+        ids.push(id);
+    }
+    for _ in 0..8 {
+        game.advance_test_movement(1.0).await;
+    }
+    let players = game.players.read().await;
+    for (i, a) in ids.iter().enumerate() {
+        for b in &ids[i + 1..] {
+            let gap = xz_gap(players[a].position, players[b].position);
+            assert!(gap >= 0.62, "{a:?} and {b:?} overlap at {gap}");
+        }
+    }
+}

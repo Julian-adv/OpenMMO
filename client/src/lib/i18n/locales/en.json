@@ -860,6 +860,8 @@
   "command.help.unmute": "Unmute a player: /unmute <name>",
   "command.help.summon": "Teleport a player to your side: /summon <name>",
   "command.help.goto": "Teleport to a player's side: /goto <name>",
+  "command.help.follow": "Keep walking after a player, through teleports and dungeons: /follow <name>",
+  "command.help.unfollow": "Stop /follow: /unfollow",
   "command.help.pos": "Show your current position",
   "command.help.tp": "Teleport: /tp <x> <z> [y], /tp <name|number>, or /tp <dungeon> <floor>; bare /tp lists destinations",
   "command.help.bell": "Preview the merger petals and bells where you stand",

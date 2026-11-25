@@ -1260,7 +1260,9 @@
       id!
     )
     currentGroup = built.group
-    currentGroup.traverse((o) => o.layers.enable(REFLECTION_LAYER))
+    currentGroup.traverse((o) => {
+      if (o.layers.isEnabled(0)) o.layers.enable(REFLECTION_LAYER)
+    })
     currentGroup.position.set(
       dungeonManager.originX,
       dungeonManager.floorY(depth),

@@ -28,6 +28,7 @@ import {
   collectShaftStairs,
 } from './dungeon-geo-shaft'
 import { buildInteriorDoor, type InteriorDoor } from './dungeon-geo-doors'
+import { buildWallShadowCaster } from './dungeon-geo-shadow'
 import {
   DUNGEON_FLOOR_TEXTURE_IDX,
   DUNGEON_MASONRY_BACK_TEXTURE_IDX,
@@ -230,7 +231,7 @@ export function buildDungeonFloorGroup(
   addMergedMeshes(upGroup, upEntries)
   group.add(upGroup)
 
-  // Wall runs fade independently or by group, without shadows or click blocking.
+  // Wall runs fade independently or by group; one shadow caster stands in for them.
   const wallRunGroup = new THREE.Group()
   wallRunGroup.name = WALL_RUN_GROUP_NAME
   const wallRuns: WallRun[] = []
@@ -558,6 +559,8 @@ export function buildDungeonFloorGroup(
   }
   for (const run of wallRuns) run.fadeGroup = resolveFadeGroup(run.fadeGroup)
   group.add(wallRunGroup)
+  const wallShadow = buildWallShadowCaster(wallRuns.map((r) => r.localAABB))
+  if (wallShadow) group.add(wallShadow)
 
   // Door arches are static; the layer animates the leaves.
   const archEntries: GeoEntry[] = []

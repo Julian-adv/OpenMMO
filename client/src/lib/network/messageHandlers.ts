@@ -230,6 +230,7 @@ import {
 } from '../stores/friendStore'
 import { applyImpoundState, openImpound } from '../stores/impoundStore'
 import { watchDuty, watchOffer, watchRack } from '../stores/watchDutyStore'
+import { setAdminFollow } from '../stores/followStore'
 import { applySalonResult, openSalonFromChair } from '../stores/salonStore'
 import {
   applyBlessResult,
@@ -1476,6 +1477,7 @@ export function handleServerMessage(
       // Friendships persist, but this session's roster arrives as its own
       // FriendList; anything held from the old one is stale.
       resetFriendStores()
+      setAdminFollow(null)
       gameStore.update((state) => {
         state.otherPlayers.clear()
         remoteObjectInteractions.clear()
@@ -2190,6 +2192,11 @@ export function handleServerMessage(
     case 'WatchDuty':
       watchDuty.set(data.duty ?? null)
       if (!data.duty) watchRack.set(null)
+      break
+    case 'AdminFollowChanged':
+      setAdminFollow(
+        data.target == null ? null : { id: data.target, name: data.name }
+      )
       break
     case 'OutfitOffered':
       pendingOutfitOffer.set({

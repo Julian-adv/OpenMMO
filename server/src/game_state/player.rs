@@ -857,6 +857,7 @@ impl super::GameState {
     }
 
     pub async fn remove_player(&self, player_id: &PlayerId) {
+        self.end_admin_follows_of(player_id).await;
         self.stop_player_attack(player_id).await;
         self.auto_attacks.write().await.remove(player_id);
         self.bed_rest_started.write().await.remove(player_id);

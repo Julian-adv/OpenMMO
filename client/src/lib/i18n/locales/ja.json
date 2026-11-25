@@ -860,6 +860,8 @@
   "command.help.unmute": "ミュートを解除：/unmute <名前>",
   "command.help.summon": "プレイヤーを自分のそばに召喚：/summon <名前>",
   "command.help.goto": "プレイヤーのそばに瞬間移動：/goto <名前>",
+  "command.help.follow": "プレイヤーにずっとついていく（瞬間移動・ダンジョンも）：/follow <名前>",
+  "command.help.unfollow": "/follow をやめる：/unfollow",
   "command.help.pos": "現在の位置を表示",
   "command.help.tp": "瞬間移動：/tp <x> <z> [y]、/tp <名前|番号>、または /tp <ダンジョン> <階>。/tpで移動先一覧",
   "command.help.bell": "合併の儀の花びらと鐘をその場で試す",

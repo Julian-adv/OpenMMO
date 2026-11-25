@@ -2654,6 +2654,12 @@ pub enum ServerMessage {
     WatchDuty {
         duty: Option<WatchDuty>,
     },
+    /// Direct to an admin: who `/follow` now shadows, `None` once it ends.
+    /// `name` is the target's either way.
+    AdminFollowChanged {
+        target: Option<PlayerId>,
+        name: String,
+    },
     /// Answer to `InspectFamilyEmblem`.
     FamilyEmblemShown {
         player_name: String,
@@ -3236,6 +3242,7 @@ impl ServerMessage {
             | Self::WatchVerdict { .. }
             | Self::WatchRackState { .. }
             | Self::WatchDuty { .. }
+            | Self::AdminFollowChanged { .. }
             | Self::FamilyEmblemShown { .. }
             | Self::TradeDeclined { .. }
             | Self::OutfitOffered { .. }

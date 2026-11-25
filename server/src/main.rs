@@ -737,6 +737,19 @@ async fn main() -> ExitCode {
         },
     ));
 
+    let game_state_for_admin_follows = Arc::clone(&game_state);
+    background.spawn(run_ticks(
+        "admin_follows",
+        game_state::ADMIN_FOLLOW_TICK,
+        drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
+        move || {
+            let game_state = Arc::clone(&game_state_for_admin_follows);
+            async move { game_state.tick_admin_follows().await }
+        },
+    ));
+
     // Faster than positions: a party HP bar lagging mid-fight reads as wrong.
     let game_state_for_party_vitals = Arc::clone(&game_state);
     background.spawn(run_ticks(

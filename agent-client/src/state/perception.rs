@@ -51,10 +51,17 @@ impl SharedState {
         self.nearest_recent_combat(player, reach)
     }
 
-    /// Whether we join the fights of those around us and stow our weapon.
+    /// Whether we join the fights of those around us.
     pub(crate) fn protects(&self) -> bool {
         self.live_official_npc()
             .is_some_and(|p| crate::shop_info::protects(&p.name))
+    }
+
+    /// Whether we walk with the weapon put away and draw it only to fight.
+    pub(crate) fn stows_weapon(&self) -> bool {
+        self.live_official_npc().is_some_and(|p| {
+            crate::shop_info::protects(&p.name) || crate::shop_info::self_defense(&p.name)
+        })
     }
 
     /// The nearest monster in a recent fight a protector should run to.

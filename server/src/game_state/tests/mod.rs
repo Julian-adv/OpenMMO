@@ -16,6 +16,7 @@ use tokio::sync::mpsc::error::TryRecvError as MpscTryRecvError;
 
 mod ability_request_tests;
 mod ability_tests;
+mod admin_follow_tests;
 mod ambient_spawn_tests;
 mod auto_attack_tests;
 mod bed_rest_tests;

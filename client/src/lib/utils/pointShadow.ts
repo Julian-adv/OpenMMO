@@ -54,6 +54,9 @@ Object.defineProperty(Material.prototype, 'alphaTest', {
   },
 })
 
+/** Objects only point-light shadows see, never the view cameras. */
+export const SHADOW_CASTER_LAYER = 8
+
 type ShadowTarget = { shadowMap: RenderTarget; depthTexture: DepthTexture }
 type TargetFactory = (shadow: LightShadow, builder: NodeBuilder) => ShadowTarget
 type FilterInputs = {
@@ -162,6 +165,7 @@ function stablePointShadowFilter(shadow: LightShadow) {
 }
 
 export function setupPointShadow(light: PointLight): void {
+  light.shadow.camera.layers.enable(SHADOW_CASTER_LAYER)
   if (light.shadow.shadowNode) return
   const node = new PointShadowNode(light, light.shadow) as PointShadowNode & {
     setupRenderTarget: TargetFactory

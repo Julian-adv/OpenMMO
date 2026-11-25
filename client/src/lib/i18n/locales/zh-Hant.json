@@ -860,6 +860,8 @@
   "command.help.unmute": "解除禁言：/unmute <名字>",
   "command.help.summon": "將玩家傳送到身邊：/summon <名字>",
   "command.help.goto": "傳送到玩家身邊：/goto <名字>",
+  "command.help.follow": "持續跟隨玩家（包括傳送和地下城）：/follow <名字>",
+  "command.help.unfollow": "停止跟隨：/unfollow",
   "command.help.pos": "顯示目前位置",
   "command.help.tp": "傳送：/tp <x> <z> [y]、/tp <名稱|編號> 或 /tp <地下城> <層>；輸入 /tp 檢視目的地",
   "command.help.bell": "在原地預覽合併儀式的花瓣和鐘聲",

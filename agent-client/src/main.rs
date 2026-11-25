@@ -505,6 +505,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::MonsterSkillReflected { .. } => "MonsterSkillReflected",
         ServerMessage::MonsterStared { .. } => "MonsterStared",
         ServerMessage::MonsterDormant { .. } => "MonsterDormant",
+        ServerMessage::AdminFollowChanged { .. } => "AdminFollowChanged",
         ServerMessage::MonsterGroundStrike { .. } => "MonsterGroundStrike",
         ServerMessage::MonsterAttackedPlayer { .. } => "MonsterAttackedPlayer",
         ServerMessage::PlayerDead { .. } => "PlayerDead",

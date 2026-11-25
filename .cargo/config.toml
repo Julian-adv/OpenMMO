@@ -2,5 +2,6 @@
 # Public OAuth client id (also shipped to browsers via VITE_GOOGLE_CLIENT_ID).
 # A var already exported in the shell takes precedence over this.
 GOOGLE_CLIENT_ID = "73507098079-arddepo6a7grt8rsmovcemaboinhi4mi.apps.googleusercontent.com"
+GOOGLE_CLI_CLIENT_ID = "73507098079-cssj1h0eir5aj11d5hs81o9k7e466i55.apps.googleusercontent.com"
 # Private values (ADMIN_EMAILS, ...) go in ~/.cargo/config.toml, not here —
 # this file is tracked in a public repo.

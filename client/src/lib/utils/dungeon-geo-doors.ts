@@ -434,6 +434,7 @@ export function buildInteriorDoor(
   // spansX ≙ the entrance's along-Z case (door spans X at z=wallPlane).
   const leafSpecs = doorLeafSpecs(spansX, lat0, lat0 + len, wallPlane)
   const leaves = leafSpecs.map((s) => makeDoorLeaf(s, halfW, outX, outZ, mat))
+  for (const leaf of leaves) leaf.mesh.castShadow = true
   tagDoorLeaves(leaves, depth, doorId)
   addInteriorDoorArch(archEntries, spansX, lat0, len, wallPlane, wallTop, arch)
   return {

@@ -45,6 +45,7 @@ struct Plan {
     termination: PathTermination,
     advanced_at: Instant,
     height_revision: u64,
+    sidesteps: u8,
 }
 
 impl GoalMovement {
@@ -400,6 +401,7 @@ impl GameState {
                         termination,
                         advanced_at: Instant::now(),
                         height_revision,
+                        sidesteps: 0,
                     });
                 }
                 result => {
@@ -718,7 +720,22 @@ impl GameState {
             }
             drop(dungeons);
             drop(regions);
-            let update = if player.mount.is_some() && status == MoveStatus::Moving {
+            let mut retargeted = false;
+            if matches!(
+                status,
+                MoveStatus::Arrived | MoveStatus::Partial | MoveStatus::NodeLimit
+            ) && plan.sidesteps < sidestep::MAX_SIDESTEPS
+                && player.mount.is_none()
+            {
+                if let Some(waypoints) = self.sidestep_waypoints(&player).await {
+                    plan.waypoints = waypoints;
+                    plan.next = 0;
+                    plan.sidesteps += 1;
+                    status = MoveStatus::Moving;
+                    retargeted = true;
+                }
+            }
+            let update = if retargeted || (player.mount.is_some() && status == MoveStatus::Moving) {
                 ServerMessage::PlayerMovePath {
                     request_id: plan.goal.request_id,
                     server_time_ms: Self::now_ms(),
@@ -971,6 +988,7 @@ pub(super) fn swept_blocked(
 mod direction;
 pub(super) mod doors;
 mod route;
+mod sidestep;
 pub(super) mod synchronization;
 
 #[cfg(test)]

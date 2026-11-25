@@ -607,6 +607,19 @@ fn self_defense_targets_the_nearest_monster_that_struck_within_reach() {
 }
 
 #[test]
+fn self_defenders_and_protectors_stow_their_weapon() {
+    let (mut s, _rx) = test_state();
+    let mut me = test_player(0.0, 0.0);
+    me.is_official_npc = true;
+    s.self_player_id = Some(me.id);
+    for (name, stows) in [("Maelis", true), ("Garrick", true), ("Rica", false)] {
+        me.name = name.into();
+        s.self_player = Some(me.clone());
+        assert_eq!(s.stows_weapon(), stows, "{name}");
+    }
+}
+
+#[test]
 fn a_protector_takes_up_nearby_fights_and_draws_only_to_fight() {
     use onlinerpg_shared::inventory::{EquipSlot, ItemInstance};
     use onlinerpg_shared::ClientMessage;

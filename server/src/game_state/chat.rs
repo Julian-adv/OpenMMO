@@ -258,6 +258,9 @@ pub(crate) enum AdminCommand<'a> {
     Unmute(&'a str),
     Summon(&'a str),
     Goto(&'a str),
+    /// Empty name stops, like `/unfollow`.
+    Follow(&'a str),
+    Unfollow,
     Weather(&'a str),
     FullMoon,
     God,
@@ -296,6 +299,12 @@ pub(crate) fn parse_admin_command(message: &str) -> Option<AdminCommand<'_>> {
     if let Some(rest) = strip_command(message, "/mute") {
         let (name, minutes) = split_name_and_arg(rest);
         return Some(AdminCommand::Mute { name, minutes });
+    }
+    if strip_command(message, "/unfollow").is_some() {
+        return Some(AdminCommand::Unfollow);
+    }
+    if let Some(rest) = strip_command(message, "/follow") {
+        return Some(AdminCommand::Follow(rest));
     }
     if let Some(rest) = strip_command(message, "/summon") {
         return Some(AdminCommand::Summon(rest));
@@ -1109,6 +1118,8 @@ impl super::GameState {
             AdminCommand::Unban(name) => self.unban_command(name, auth).await,
             AdminCommand::Summon(name) => self.summon_command(admin_id, name).await,
             AdminCommand::Goto(name) => self.goto_command(admin_id, name).await,
+            AdminCommand::Follow(name) => self.follow_command(admin_id, name).await,
+            AdminCommand::Unfollow => self.unfollow_command(admin_id).await,
             AdminCommand::Weather(args) => self.weather_command(admin_id, args),
             AdminCommand::God => self.god_command(admin_id).await,
             AdminCommand::FullMoon => self.full_moon_command(),
@@ -1187,7 +1198,7 @@ impl super::GameState {
 
     /// Shared preamble for admin commands aimed at an online player: usage on
     /// a bare command, name resolution, self-target refusal.
-    async fn admin_target(
+    pub(super) async fn admin_target(
         &self,
         admin_id: &PlayerId,
         name: &str,

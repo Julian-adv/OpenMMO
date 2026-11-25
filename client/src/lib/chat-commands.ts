@@ -239,6 +239,8 @@ const COMMANDS: Record<string, Command> = {
     admin: true,
   },
   '/goto': { desc: 'command.help.goto', admin: true },
+  '/follow': { desc: 'command.help.follow', admin: true },
+  '/unfollow': { desc: 'command.help.unfollow', admin: true },
 
   '/pos': {
     desc: 'command.help.pos',

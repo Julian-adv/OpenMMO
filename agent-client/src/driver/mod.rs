@@ -899,7 +899,7 @@ pub async fn llm_driver(
                 patrol_walk = None;
             }
         }
-        // Protectors walk with the weapon put away and draw it for a fight.
+        // Protectors and self-defenders walk unarmed and draw for a fight.
         if weapon_checked_at.elapsed() >= Duration::from_secs(2) {
             weapon_checked_at = Instant::now();
             let mut s = state.lock().await;
@@ -907,7 +907,7 @@ pub async fn llm_driver(
                 .patrol_strike_until
                 .is_some_and(|until| until > tokio::time::Instant::now());
             let armed = attack_target.is_some() || s.schedule_combat_active() || striking;
-            if let Some(cmd) = s.protects().then(|| s.weapon_command(armed)).flatten() {
+            if let Some(cmd) = s.stows_weapon().then(|| s.weapon_command(armed)).flatten() {
                 if let Err(e) = s.send_background_command(cmd).await {
                     error!("[{label}] Failed to change weapon: {e}");
                 }

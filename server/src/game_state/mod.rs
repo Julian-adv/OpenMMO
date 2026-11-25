@@ -192,6 +192,8 @@ pub(crate) fn encode_server_msg(msg: &ServerMessage) -> Option<Bytes> {
     }
 }
 
+mod admin_follow;
+pub(crate) use admin_follow::ADMIN_FOLLOW_TICK;
 pub(crate) mod ambient_spawn;
 mod chat;
 mod cooldowns;
@@ -545,6 +547,8 @@ pub struct GameState {
     guard_notices_checked: Arc<std::sync::atomic::AtomicI64>,
     road_snow: Arc<std::sync::Mutex<Vec<road_patrol::ShovelledStretch>>>,
     watch_roll: Arc<tokio::sync::OnceCell<watch_shift::WatchRoll>>,
+    /// Admin → the player they `/follow`. Leaf lock, never held across an await.
+    admin_follows: Arc<admin_follow::AdminFollows>,
     /// Price index + meeting bookkeeping (doc/PRICING.md), mirrored in DB.
     pricing: Arc<RwLock<crate::auth::PricingState>>,
     dungeon_reset: Arc<RwLock<dungeon::DungeonResetState>>,
@@ -906,6 +910,7 @@ impl GameState {
             guard_notices_checked: Arc::default(),
             road_snow: Arc::default(),
             watch_roll: Arc::default(),
+            admin_follows: Arc::default(),
             pricing: Arc::new(RwLock::new(Default::default())),
             dungeon_reset: Arc::new(RwLock::new(Default::default())),
             dungeon_defs,
