@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "openmmo",
-      "description": "Play OpenMMO from Claude Code: the openmmo-mcp game tools plus how to play with them.",
+      "description": "Play OpenMMO from Claude Code with the openmmo-mcp game tools.",
       "version": "0.1.0",
       "source": "./openmmo-mcp/plugin"
     }

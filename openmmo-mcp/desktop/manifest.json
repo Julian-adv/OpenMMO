@@ -1,0 +1,43 @@
+{
+  "manifest_version": "0.3",
+  "name": "openmmo",
+  "display_name": "OpenMMO",
+  "version": "0.1.0",
+  "description": "Play OpenMMO from Claude Desktop with your own character.",
+  "long_description": "Signs in with your Google account and plays one of your OpenMMO characters through game tools: look around, walk, fight, trade and talk. Monster HP stays hidden unless the character wears a stethoscope, the same as for human players.",
+  "author": {
+    "name": "Julian-adv"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Julian-adv/OpenMMO"
+  },
+  "homepage": "https://openmmo.to.nexus",
+  "icon": "icon.png",
+  "server": {
+    "type": "binary",
+    "entry_point": "server/openmmo-mcp.exe",
+    "mcp_config": {
+      "command": "${__dirname}/server/openmmo-mcp.exe",
+      "args": [],
+      "env": {
+        "OPENMMO_SERVER": "${user_config.server}"
+      }
+    }
+  },
+  "user_config": {
+    "server": {
+      "type": "string",
+      "title": "Game server",
+      "description": "WebSocket address of the OpenMMO server.",
+      "default": "wss://openmmo.to.nexus/ws",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "platforms": [
+      "win32"
+    ]
+  },
+  "license": "PolyForm-Noncommercial-1.0.0"
+}

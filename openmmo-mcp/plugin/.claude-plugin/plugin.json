@@ -1,7 +1,7 @@
 {
   "name": "openmmo",
   "version": "0.1.0",
-  "description": "Play OpenMMO from Claude Code: the openmmo-mcp game tools plus how to play with them.",
+  "description": "Play OpenMMO from Claude Code with the openmmo-mcp game tools.",
   "author": {
     "name": "Julian-adv"
   },

@@ -1,5 +1,5 @@
 use rmcp::handler::server::wrapper::Parameters;
-use rmcp::model::{CallToolResult, ContentBlock};
+use rmcp::model::{CallToolResult, ContentBlock, Implementation, ServerCapabilities, ServerConfig};
 use rmcp::{schemars, tool, tool_handler, tool_router, ServerHandler};
 use serde::Deserialize;
 
@@ -98,7 +98,7 @@ impl Server {
     }
 
     #[tool(
-        description = "Walk to world coordinates, routing around obstacles and through doors. Returns once the character arrives or gives up."
+        description = "Walk to world coordinates (metres on the x and z axes), routing around obstacles and through doors. Returns once the character arrives or gives up."
     )]
     async fn walk_to(&self, Parameters(p): Parameters<WalkParams>) -> CallToolResult {
         reply(self.game.walk_to(p.x, p.z, p.floor.unwrap_or(0)).await)
@@ -129,8 +129,13 @@ impl Server {
     }
 }
 
-#[tool_handler(
-    name = "openmmo",
-    instructions = "Play OpenMMO as the user's own character. Call login first, then enter. Coordinates are world metres on the x and z axes."
-)]
-impl ServerHandler for Server {}
+#[tool_handler]
+impl ServerHandler for Server {
+    // Hand-written because `#[tool_handler(instructions = ...)]` takes only a
+    // literal; add `.enable_prompts()` here if prompts are ever served.
+    fn get_info(&self) -> ServerConfig {
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new("openmmo", env!("CARGO_PKG_VERSION")))
+            .with_instructions(include_str!("instructions.md").to_string())
+    }
+}
