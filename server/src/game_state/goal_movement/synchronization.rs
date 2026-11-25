@@ -33,12 +33,15 @@ impl MovementStates {
     }
 
     pub(super) fn entry(&self, id: PlayerId) -> Arc<StateLock> {
+        self.get(id).unwrap_or_else(|| self.new_entry())
+    }
+
+    pub(super) fn get(&self, id: PlayerId) -> Option<Arc<StateLock>> {
         self.entries
             .read()
             .expect("movement state registry poisoned")
             .get(&id)
             .cloned()
-            .unwrap_or_else(|| self.new_entry())
     }
 
     pub(in crate::game_state) async fn lock(&self, id: PlayerId) -> MovementStateGuard {

@@ -1,5 +1,6 @@
 use super::super::tests::{
-    make_flat_world_game_state, make_game_state_with, make_player, make_test_game_state,
+    make_flat_world_game_state, make_game_state_with, make_monster, make_player,
+    make_test_game_state,
 };
 use super::*;
 use onlinerpg_shared::pathfinding::{RuntimeFloorGrid, RuntimePassability};
@@ -2086,7 +2087,28 @@ fn xz_gap(a: Position, b: Position) -> f32 {
     a.dist_xz_sq(&b).sqrt()
 }
 
-/// A walker on flat ground that has just reached a stander at (6.5, 1.5).
+const SPOT: Position = Position {
+    x: 6.5,
+    y: 5.0,
+    z: 1.5,
+};
+
+/// A walker on flat ground that has just reached `SPOT`.
+async fn walk_onto_spot(
+    game: &GameState,
+    name: &str,
+) -> (PlayerId, tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>) {
+    let walker = stand(game, &format!("{name}_walker"), 1.5, 1.5, SPOT.y).await;
+    let mut rx = game.register_connection_channel(&walker).await;
+    game.request_move_goal(walker, 1, SPOT.x, SPOT.z, false)
+        .await;
+    next_path(&mut rx).await;
+    advance(game, walker, 10.0).await;
+    let arrived = game.players.read().await[&walker].position;
+    assert_eq!((arrived.x, arrived.z), (SPOT.x, SPOT.z));
+    (walker, rx)
+}
+
 async fn arrive_on_stander(
     name: &str,
     invisible: bool,
@@ -2097,20 +2119,14 @@ async fn arrive_on_stander(
     tokio::sync::mpsc::UnboundedReceiver<bytes::Bytes>,
 ) {
     let game = make_flat_world_game_state(name);
-    let standing = stand(&game, &format!("{name}_stander"), 6.5, 1.5, 5.0).await;
+    let standing = stand(&game, &format!("{name}_stander"), SPOT.x, SPOT.z, SPOT.y).await;
     game.players
         .write()
         .await
         .get_mut(&standing)
         .unwrap()
         .invisible = invisible;
-    let walker = stand(&game, &format!("{name}_walker"), 1.5, 1.5, 5.0).await;
-    let mut rx = game.register_connection_channel(&walker).await;
-    game.request_move_goal(walker, 1, 6.5, 1.5, false).await;
-    next_path(&mut rx).await;
-    advance(&game, walker, 10.0).await;
-    let arrived = game.players.read().await[&walker].position;
-    assert_eq!((arrived.x, arrived.z), (6.5, 1.5));
+    let (walker, rx) = walk_onto_spot(&game, name).await;
     (game, walker, standing, rx)
 }
 
@@ -2199,7 +2215,9 @@ async fn walkers_converging_on_one_spot_all_end_apart() {
             let gap = xz_gap(players[a].position, players[b].position);
             assert!(
                 gap >= sidestep::OVERLAP_M,
-                "{a:?} and {b:?} overlap at {gap}"
+                "{} and {} overlap at {gap}",
+                players[a].name,
+                players[b].name
             );
         }
     }
@@ -2223,4 +2241,20 @@ async fn a_partial_route_still_reports_partial_after_stepping_aside() {
         "{at:?} still on {end:?}"
     );
     assert_eq!(last_status(&mut rx).await, (0, Some(MoveStatus::Partial)));
+}
+
+#[tokio::test]
+async fn arriving_on_a_monster_steps_aside_but_a_corpse_is_ignored() {
+    use crate::types::MonsterState;
+    for (state, steps) in [(MonsterState::Idle, true), (MonsterState::Dead, false)] {
+        let name = format!("sidestep_monster_{state:?}");
+        let game = make_flat_world_game_state(&name);
+        let mut monster = make_monster(&name, SPOT, 0);
+        monster.state = state;
+        game.monsters.write().await.insert(name.clone(), monster);
+        let (walker, _rx) = walk_onto_spot(&game, &name).await;
+        advance(&game, walker, 1.0).await;
+        let gap = xz_gap(game.players.read().await[&walker].position, SPOT);
+        assert_eq!(gap > 0.7, steps, "{state:?}: gap {gap}");
+    }
 }

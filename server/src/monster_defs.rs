@@ -181,6 +181,7 @@ impl MonsterDefinition {
 #[derive(Debug, Clone)]
 pub struct MonsterDefs {
     defs: Arc<HashMap<String, MonsterDefinition>>,
+    max_body_radius: f32,
 }
 
 impl MonsterDefs {
@@ -220,9 +221,15 @@ impl MonsterDefs {
             );
         }
 
+        let max_body_radius = defs.values().map(|def| def.body_radius).fold(0.0, f32::max);
         Self {
             defs: Arc::new(defs),
+            max_body_radius,
         }
+    }
+
+    pub fn max_body_radius(&self) -> f32 {
+        self.max_body_radius
     }
 
     pub fn get(&self, monster_type: &str) -> Option<&MonsterDefinition> {

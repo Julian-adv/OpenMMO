@@ -590,7 +590,7 @@ fn first_dungeon(game_state: &GameState) -> crate::dungeon_defs::DungeonEntrance
         .clone()
 }
 
-fn make_monster(id: &str, position: Position, floor_level: i8) -> crate::types::Monster {
+pub(super) fn make_monster(id: &str, position: Position, floor_level: i8) -> crate::types::Monster {
     crate::types::Monster {
         id: id.to_string(),
         monster_type: "test_monster".to_string(),

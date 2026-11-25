@@ -22,8 +22,17 @@ impl MonsterRegistry {
         &'a self,
         position: &'a Position,
     ) -> impl Iterator<Item = &'a crate::types::Monster> {
+        self.near_within(position, super::EVENT_DELIVERY_RADIUS)
+    }
+
+    /// As `near`, for a smaller `radius`.
+    pub(crate) fn near_within<'a>(
+        &'a self,
+        position: &'a Position,
+        radius: f32,
+    ) -> impl Iterator<Item = &'a crate::types::Monster> {
         self.cells
-            .keys_near(position, super::EVENT_DELIVERY_RADIUS)
+            .keys_near(position, radius)
             .filter_map(|id| self.monsters.get(id.as_str()))
     }
 
@@ -75,13 +84,21 @@ impl MonsterRegistry {
     }
 
     pub(crate) fn alive_near(&self, position: &Position, floor: i8) -> usize {
-        self.near(position)
-            .filter(|monster| {
-                monster.floor_level == floor
-                    && monster.state != MonsterState::Dead
-                    && monster.position.dist_xz_sq(position) <= super::EVENT_DELIVERY_RADIUS.powi(2)
-            })
+        self.alive_within(position, floor, super::EVENT_DELIVERY_RADIUS)
             .count()
+    }
+
+    pub(crate) fn alive_within<'a>(
+        &'a self,
+        position: &'a Position,
+        floor: i8,
+        radius: f32,
+    ) -> impl Iterator<Item = &'a crate::types::Monster> {
+        self.near_within(position, radius).filter(move |monster| {
+            monster.floor_level == floor
+                && monster.state != MonsterState::Dead
+                && monster.position.dist_xz_sq(position) <= radius * radius
+        })
     }
 
     pub(crate) fn mark_dead(&mut self, id: &str) {

@@ -1359,12 +1359,23 @@ fn view_of(brains: &[&MonsterBrain]) -> Vec<NearbyMonster> {
         .collect()
 }
 
-#[test]
-fn chase_goal_avoids_a_cell_occupied_by_a_stander() {
+/// A brain chased in from (14, 10.5) until it swings.
+fn chase_until_attack(players: &[NearbyPlayer], monsters: &[NearbyMonster]) -> MonsterBrain {
     let mut brain = brain_at("m1", 14.0, 10.5);
     let tree = chase_attack_tree();
     let mut rng = SmallRng::seed_from_u64(42);
-    let players = attacker_at(10.0, 10.5);
+    for _ in 0..400 {
+        brain.tick_with_behavior_tree(16.0, players, monsters, &tree, &DirectPath, &mut rng);
+        if brain.state() == AiState::Attack {
+            break;
+        }
+    }
+    assert_eq!(brain.state(), AiState::Attack);
+    brain
+}
+
+#[test]
+fn chase_goal_avoids_a_cell_occupied_by_a_stander() {
     let stander = vec![NearbyMonster {
         id: "m2".into(),
         position: Position {
@@ -1375,19 +1386,32 @@ fn chase_goal_avoids_a_cell_occupied_by_a_stander() {
         state: MonsterState::Idle,
         path_floor: 0,
     }];
-
-    for _ in 0..400 {
-        brain.tick_with_behavior_tree(16.0, &players, &stander, &tree, &DirectPath, &mut rng);
-        if brain.state() == AiState::Attack {
-            break;
-        }
-    }
-
-    assert_eq!(brain.state(), AiState::Attack);
+    let brain = chase_until_attack(&attacker_at(10.0, 10.5), &stander);
     assert_ne!(
         cell_of(brain.position.x, brain.position.z),
         (11, 10),
         "must stand beside the occupied cell, not in it"
+    );
+}
+
+#[test]
+fn chase_goal_avoids_a_cell_a_bystander_stands_in() {
+    let mut players = attacker_at(10.0, 10.5);
+    players.push(NearbyPlayer {
+        id: 2.into(),
+        position: Position {
+            x: 10.05,
+            y: 0.0,
+            z: 9.05,
+        },
+        ..players[0].clone()
+    });
+    let brain = chase_until_attack(&players, &[]);
+    assert_eq!(brain.target_player_id(), Some(1.into()));
+    assert_ne!(
+        cell_of(brain.position.x, brain.position.z),
+        (10, 9),
+        "must not stand in a player's cell"
     );
 }
 
