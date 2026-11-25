@@ -21,6 +21,9 @@ use crate::state::SharedState;
 const APPROACH_RANGE: f32 = 1.0;
 
 const PICKUP_ARRIVE_RANGE: f32 = 2.0;
+/// The server stands bodies on a 1 m grid, so a walk to an exact point can
+/// end up to half a cell diagonal away from it.
+const PLACE_ARRIVE_RANGE: f32 = 0.75;
 
 const SCHEDULE_ARRIVAL_RADIUS: f32 = 2.0;
 
@@ -149,7 +152,7 @@ impl WalkTo<'_> {
                 max_doors: MAX_CHASE_DOORS,
             },
             Self::Place { .. } | Self::Schedule { .. } => Tuning {
-                arrive_range: 0.1,
+                arrive_range: PLACE_ARRIVE_RANGE,
                 max_distance: f32::INFINITY,
                 max_secs: f32::INFINITY,
                 needs_clear_line: false,

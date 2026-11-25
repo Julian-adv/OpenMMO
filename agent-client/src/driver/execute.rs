@@ -205,6 +205,23 @@ async fn walk_to_sighting(
     state.lock().await.push_agent_event(outcome);
 }
 
+/// Where a walk to a place ended, and why: it may have changed floors on
+/// the way, so "this floor" would mislead.
+fn stopped_short_note(
+    goal: (f32, f32),
+    at: Option<onlinerpg_shared::Position>,
+    reason: &LostReason,
+) -> String {
+    let (gx, gz) = goal;
+    let stopped = at.map_or(String::new(), |p| {
+        format!(" You stopped at ({:.1}, {:.1}).", p.x, p.z)
+    });
+    format!(
+        "[MoveFailed] You did not reach ({gx:.1}, {gz:.1}): {}.{stopped} Pick another goal.",
+        reason.clause()
+    )
+}
+
 /// Feedback for an attack whose chase never reached the monster, so the agent
 /// stops re-issuing it. The reason comes from the chase itself, not a guess.
 fn unreachable_note(monster_id: &str, loss: &LostReason) -> String {
@@ -2149,13 +2166,11 @@ pub(super) async fn run_turn(
                                      decide your next move."
                                 ));
                                 }
-                                MoveResult::Blocked => {
+                                MoveResult::Blocked(reason) => {
                                     warn!("Path blocked to ({gx:.1}, {gz:.1})");
                                     let mut s = state.lock().await;
-                                    s.push_agent_event(format!(
-                                    "[MoveFailed] No route to ({gx:.1}, {gz:.1}) on this floor. \
-                                     Pick another goal."
-                                ));
+                                    let at = s.self_player.as_ref().map(|p| p.position);
+                                    s.push_agent_event(stopped_short_note((gx, gz), at, &reason));
                                 }
                                 MoveResult::Died => warn!("Died on the way to ({gx:.1}, {gz:.1})"),
                                 MoveResult::Error => {
@@ -2415,7 +2430,7 @@ async fn move_to_dungeon_floor(
     if outside || depth.is_none_or(|d| d == 0) {
         let entrance = dungeon.entrance;
         match execute_move(state, entrance.x, entrance.z, 0, sprint).await {
-            MoveResult::Blocked => {
+            MoveResult::Blocked(_) => {
                 warn!("Could not reach the {} entrance", dungeon.name);
                 let mut s = state.lock().await;
                 s.push_agent_event(format!(
@@ -2468,7 +2483,7 @@ async fn move_to_dungeon_floor(
                 dungeon.name
             ));
         }
-        MoveResult::Blocked => {
+        MoveResult::Blocked(_) => {
             warn!("Descent to {} floor {depth} blocked", dungeon.name);
             let mut s = state.lock().await;
             s.push_agent_event(format!(
@@ -2823,6 +2838,22 @@ mod tests {
     /// A too-far monster, a walled-off one, and a vanished one produce
     /// different guidance: walk up to the first, retarget off the other two
     /// instead of re-attacking.
+    #[test]
+    fn a_walk_that_stops_short_names_the_reason_not_the_floor() {
+        let note = stopped_short_note(
+            (-1451.5, 4750.0),
+            Some(onlinerpg_shared::Position {
+                x: -1450.0,
+                y: 1.0,
+                z: 4751.0,
+            }),
+            &LostReason::NoPath,
+        );
+        assert!(note.contains("no route leads there"), "{note}");
+        assert!(note.contains("(-1450.0, 4751.0)"), "{note}");
+        assert!(!note.contains("this floor"), "{note}");
+    }
+
     #[test]
     fn an_unreachable_attack_tells_the_agent_why() {
         let far = unreachable_note("m19_21", &LostReason::TooFar(22.8));

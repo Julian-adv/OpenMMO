@@ -26,7 +26,7 @@ use onlinerpg_shared::schedule::resolve_active_schedule;
 
 pub(super) enum MoveResult {
     Arrived,
-    Blocked,
+    Blocked(walk::LostReason),
     Died,
     Error,
 }
@@ -551,8 +551,8 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
                         break;
                     }
                     MoveResult::Died => break 'lap,
-                    MoveResult::Blocked | MoveResult::Error if attempt == 0 => {}
-                    MoveResult::Blocked | MoveResult::Error if attempt == 1 => {
+                    MoveResult::Blocked(_) | MoveResult::Error if attempt == 0 => {}
+                    MoveResult::Blocked(_) | MoveResult::Error if attempt == 1 => {
                         let recall = {
                             let mut s = state.lock().await;
                             s.patrol_blocked += 1;
@@ -563,7 +563,7 @@ pub(super) async fn run_patrol_lap(state: Arc<Mutex<SharedState>>, entry: Schedu
                         }
                         state.lock().await.patrol_blocked = 0;
                     }
-                    MoveResult::Blocked | MoveResult::Error => {}
+                    MoveResult::Blocked(_) | MoveResult::Error => {}
                 }
             }
             if !go_on {
@@ -667,7 +667,7 @@ pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry
                     perform_waypoint_activity(state, entry, activity).await;
                 }
             }
-            MoveResult::Blocked => {
+            MoveResult::Blocked(_) => {
                 warn!("Patrol waypoint {i} blocked — skipping ({wx:.1}, {wz:.1})");
             }
             MoveResult::Died => return,
@@ -684,7 +684,7 @@ pub(super) async fn execute_schedule_move(state: &Arc<Mutex<SharedState>>, entry
     };
     match execute_walk(state, &to, Some(false)).await {
         MoveResult::Arrived => {}
-        MoveResult::Blocked => {
+        MoveResult::Blocked(_) => {
             warn!(
                 "Schedule walk to {} blocked at ({:.1}, {:.1})",
                 entry.display_label(),
@@ -852,7 +852,7 @@ async fn execute_walk(
                 floor = s.self_floor_level,
                 "Move did not complete"
             );
-            MoveResult::Blocked
+            MoveResult::Blocked(reason)
         }
     }
 }
