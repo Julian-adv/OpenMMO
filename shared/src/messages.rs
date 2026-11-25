@@ -628,6 +628,11 @@ pub enum ClientMessage {
     Authenticate {
         google_id_token: String,
     },
+    /// Watch the account's in-game character without taking over the
+    /// session: the reply is that character's `JoinSuccess`, or `WatchWaiting`.
+    WatchAccount {
+        google_id_token: String,
+    },
     /// Headless bot login, gated by the server's shared NPC token. The
     /// account is auto-created on first use.
     AuthenticateNpc {
@@ -1559,6 +1564,14 @@ pub enum ServerMessage {
         player: Player,
         /// Unlocks debug/cheat UI; resolved per character at EnterGame.
         is_admin: bool,
+    },
+    /// A watcher's account has no character in the world; the next one to
+    /// enter arrives as `JoinSuccess`.
+    WatchWaiting,
+    /// The character a watcher is about to see, sent just before its
+    /// `JoinSuccess`.
+    WatchTarget {
+        character: Character,
     },
     AuthError {
         message: String,
@@ -3136,6 +3149,8 @@ impl ServerMessage {
             | Self::GrassTilesInvalidated { .. } => DeliveryClass::Terrain,
             Self::AuthSuccess { .. }
             | Self::JoinSuccess { .. }
+            | Self::WatchWaiting
+            | Self::WatchTarget { .. }
             | Self::AuthError { .. }
             | Self::CharacterCreated { .. }
             | Self::CharacterStatsRolled { .. }

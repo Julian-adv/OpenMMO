@@ -50,6 +50,17 @@ async fn bind_entered_player(
     name: &str,
 ) {
     state.player_id = Some(id);
+    let watch = game_state.account_watch(account);
+    watch.entered(id);
+    game_state.watch_player(id, &watch);
+    if watch.is_watched() {
+        if let Some(target) = super::account::watch_target(auth_service, account, name).await {
+            watch.tee_message(&target);
+        }
+    }
+    if let Some(previous) = state.owner_watch.replace(watch) {
+        game_state.release_account_watch(account, previous);
+    }
     state.last_furniture_tip.clear();
     state.character_name = Some(name.to_owned());
     if !state.is_official_npc {

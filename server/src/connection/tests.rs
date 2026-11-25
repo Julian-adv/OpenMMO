@@ -9,6 +9,7 @@ mod account;
 mod dispatch;
 mod entry;
 mod protocol;
+mod watching;
 
 fn test_auth_ctx() -> Arc<AuthContext> {
     Arc::new(AuthContext {

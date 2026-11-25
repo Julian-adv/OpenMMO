@@ -8,6 +8,7 @@ import {
 import { resetGroundEruptions } from './groundEruptionStore'
 import { playerHealthDisplay } from './playerHealthDisplay'
 import { derived, get, writable } from 'svelte/store'
+import { WATCHER_SELF_ID, watchedPlayerId } from './watchStore'
 import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
 import type {
@@ -287,6 +288,19 @@ export const updatePlayer = (
       const existingPlayer = state.otherPlayers.get(playerId)
       if (existingPlayer) {
         state.otherPlayers.set(playerId, { ...existingPlayer, ...playerData })
+      }
+      const { health, maxHealth, level } = playerData
+      if (
+        state.currentPlayer?.id === WATCHER_SELF_ID &&
+        (health ?? maxHealth ?? level) !== undefined &&
+        playerId === get(watchedPlayerId)
+      ) {
+        state.currentPlayer = {
+          ...state.currentPlayer,
+          ...(health !== undefined && { health }),
+          ...(maxHealth !== undefined && { maxHealth }),
+          ...(level !== undefined && { level }),
+        }
       }
     }
     return state

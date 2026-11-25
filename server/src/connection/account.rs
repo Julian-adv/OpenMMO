@@ -1,7 +1,7 @@
 #[cfg(debug_assertions)]
 use super::auth_context::parse_dev_login;
 use super::auth_context::{token_matches, AuthContext};
-use super::state::ConnectionState;
+use super::state::{ConnectionState, Watcher};
 use crate::auth::AuthService;
 use crate::game::character_attributes::roll_character_attributes;
 use crate::game::character_hp::{level_one_max_hp, DEFAULT_CHARACTER_RACE};
@@ -31,26 +31,8 @@ pub(super) async fn finish_auth(
     // in between cannot admit a session it can no longer see to evict.
     let account_session_id = {
         let _sessions = game_state.lock_character_sessions().await;
-        let ban = {
-            let auth = auth_service.clone();
-            let account = account_name.clone();
-            crate::game_state::auth_db(move || auth.active_ban(&account)).await
-        };
-        match ban {
-            Ok(Some(ban)) => {
-                info!("Rejected banned account '{}'", account_name);
-                return vec![ServerMessage::AuthError {
-                    message: ban.message(),
-                }];
-            }
-            Ok(None) => {}
-            Err(err) => {
-                // Fail closed: an unreadable ban table must not become a way in.
-                error!("Ban check failed for '{}': {}", account_name, err);
-                return vec![ServerMessage::AuthError {
-                    message: "Could not verify the account. Try again shortly.".to_string(),
-                }];
-            }
+        if let Some(refusal) = ban_refusal(auth_service, &account_name).await {
+            return refusal;
         }
         game_state
             .register_account_session_locked(&account_name, kick_tx, auth_service)
@@ -106,6 +88,29 @@ pub(super) async fn finish_auth(
     }]
 }
 
+/// Checked under `lock_character_sessions`, which `/ban` also takes, so a
+/// ban cannot land between the check and the session it would have evicted.
+async fn ban_refusal(auth_service: &AuthService, account_name: &str) -> Option<Vec<ServerMessage>> {
+    let ban = {
+        let auth = auth_service.clone();
+        let account = account_name.to_owned();
+        crate::game_state::auth_db(move || auth.active_ban(&account)).await
+    };
+    let message = match ban {
+        Ok(None) => return None,
+        Ok(Some(ban)) => {
+            info!("Rejected banned account '{}'", account_name);
+            ban.message()
+        }
+        Err(err) => {
+            // Fail closed: an unreadable ban table must not become a way in.
+            error!("Ban check failed for '{}': {}", account_name, err);
+            "Could not verify the account. Try again shortly.".to_string()
+        }
+    };
+    Some(vec![ServerMessage::AuthError { message }])
+}
+
 pub(super) async fn authenticate(
     game_state: &GameState,
     auth_service: &AuthService,
@@ -113,37 +118,50 @@ pub(super) async fn authenticate(
     state: &mut ConnectionState,
     google_id_token: String,
 ) -> Vec<ServerMessage> {
+    match account_from_token(auth_service, auth_ctx, state, &google_id_token).await {
+        Ok((account_name, admin_eligible)) => {
+            state.admin_eligible = admin_eligible;
+            finish_auth(game_state, auth_service, state, account_name, false).await
+        }
+        Err(responses) => responses,
+    }
+}
+
+/// Verifies a browser token (or a debug build's dev login): the account and
+/// whether its email is on the admin allowlist.
+async fn account_from_token(
+    auth_service: &AuthService,
+    auth_ctx: &AuthContext,
+    state: &ConnectionState,
+    google_id_token: &str,
+) -> Result<(String, bool), Vec<ServerMessage>> {
     #[cfg(debug_assertions)]
-    if let Some(account) = parse_dev_login(&google_id_token, &auth_ctx.npc_token)
+    if let Some(account) = parse_dev_login(google_id_token, &auth_ctx.npc_token)
         .filter(|_| state.client_ip.is_loopback())
     {
-        let account_name = match auth_service.dev_login(account) {
-            Ok(name) => name,
-            Err(err) => {
-                return vec![ServerMessage::AuthError {
-                    message: err.client_message().to_string(),
-                }];
-            }
-        };
+        let account_name = auth_service.dev_login(account).map_err(|err| {
+            vec![ServerMessage::AuthError {
+                message: err.client_message().to_string(),
+            }]
+        })?;
         warn!(account = account_name, "Dev login (debug build)");
-        state.admin_eligible = true;
-        return finish_auth(game_state, auth_service, state, account_name, false).await;
+        return Ok((account_name, true));
     }
 
     let Some(verifier) = &auth_ctx.google else {
         warn!(ip = %state.client_ip, "Google login attempted but no --google-client-id is configured");
-        return vec![ServerMessage::AuthError {
+        return Err(vec![ServerMessage::AuthError {
             message: "Google sign-in is not configured on this server".to_string(),
-        }];
+        }]);
     };
 
-    let claims = match verifier.verify(&google_id_token).await {
+    let claims = match verifier.verify(google_id_token).await {
         Ok(claims) => claims,
         Err(err) => {
             warn!(ip = %state.client_ip, error = %err, "Google token verification failed");
-            return vec![ServerMessage::AuthError {
+            return Err(vec![ServerMessage::AuthError {
                 message: "Google sign-in verification failed".to_string(),
-            }];
+            }]);
         }
     };
 
@@ -151,15 +169,88 @@ pub(super) async fn authenticate(
         Ok(name) => name,
         Err(err) => {
             warn!("Google login failed for sub '{}': {}", claims.sub, err);
-            return vec![ServerMessage::AuthError {
+            return Err(vec![ServerMessage::AuthError {
                 message: err.client_message().to_string(),
-            }];
+            }]);
         }
     };
     info!("Google sub '{}' -> account '{}'", claims.sub, account_name);
 
-    state.admin_eligible = auth_ctx.is_admin(&claims);
-    finish_auth(game_state, auth_service, state, account_name, false).await
+    Ok((account_name, auth_ctx.is_admin(&claims)))
+}
+
+/// Joins the account's watchers without touching its session, so the
+/// playing connection stays. Shows the character in the world now, if any.
+pub(super) async fn watch_account(
+    game_state: &GameState,
+    auth_service: &AuthService,
+    auth_ctx: &AuthContext,
+    state: &mut ConnectionState,
+    google_id_token: String,
+) -> Vec<ServerMessage> {
+    let account_name =
+        match account_from_token(auth_service, auth_ctx, state, &google_id_token).await {
+            Ok((name, _)) => name,
+            Err(responses) => return responses,
+        };
+    let watch = game_state.account_watch(&account_name);
+    let rx = {
+        let _sessions = game_state.lock_character_sessions().await;
+        if let Some(refusal) = ban_refusal(auth_service, &account_name).await {
+            drop(_sessions);
+            game_state.release_account_watch(&account_name, watch);
+            return refusal;
+        }
+        watch.attach()
+    };
+    let Some(rx) = rx else {
+        game_state.release_account_watch(&account_name, watch);
+        return vec![ServerMessage::AuthError {
+            message: "This account already has the most watchers allowed".to_string(),
+        }];
+    };
+    info!(ip = %state.client_ip, account = account_name, "Watcher attached");
+    state.account_name = Some(account_name.clone());
+    let player = game_state.watched_player(&watch).await;
+    state.watcher = Some(Watcher { watch, rx });
+    let Some(player) = player else {
+        return vec![ServerMessage::WatchWaiting];
+    };
+    let id = player.id;
+    let mut responses: Vec<ServerMessage> = watch_target(auth_service, &account_name, &player.name)
+        .await
+        .into_iter()
+        .collect();
+    responses.push(ServerMessage::JoinSuccess {
+        player,
+        is_admin: false,
+    });
+    responses.extend(game_state.owner_state_messages(&id).await);
+    // The snapshot reaches the watcher through the player's own stream.
+    game_state.reset_world_view(&id).await;
+    responses
+}
+
+/// The select-screen card of the character being watched, for its HUD.
+pub(super) async fn watch_target(
+    auth_service: &AuthService,
+    account_name: &str,
+    character_name: &str,
+) -> Option<ServerMessage> {
+    let listed = {
+        let auth = auth_service.clone();
+        let account = account_name.to_owned();
+        crate::game_state::auth_db(move || auth.list_characters_with_equipment(&account)).await
+    };
+    let character = listed
+        .inspect_err(|err| {
+            warn!("Failed to list characters for watcher of '{account_name}': {err}")
+        })
+        .ok()?
+        .into_iter()
+        .map(character_listing_to_shared)
+        .find(|character| character.name == character_name)?;
+    Some(ServerMessage::WatchTarget { character })
 }
 
 pub(super) async fn authenticate_npc(

@@ -1,15 +1,22 @@
+use crate::game_state::watch::AccountWatch;
 use crate::game_state::KickNotice;
 use crate::rate_limit::RateLimiter;
 use crate::types::{CharacterAttributes, CharacterClass, ClientKind, PlayerId, ServerMessage};
 use bytes::Bytes;
 use onlinerpg_shared::furniture_shop::FurnitureTip;
 use std::net::IpAddr;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tracing::warn;
 
 const INSTRUMENT_BATCHES_PER_SEC: f32 = 4.0;
 const INSTRUMENT_BATCH_BURST: f32 = 4.0;
+
+pub(super) struct Watcher {
+    pub(super) watch: Arc<AccountWatch>,
+    pub(super) rx: mpsc::Receiver<Bytes>,
+}
 
 pub(super) struct ConnectionState {
     /// Address the client is held accountable for; see `resolve_client_ip`.
@@ -32,6 +39,10 @@ pub(super) struct ConnectionState {
     /// player after `GameState` has already dropped the record.
     pub(super) character_name: Option<String>,
     pub(super) direct_rx: Option<mpsc::UnboundedReceiver<Bytes>>,
+    /// Set on the playing connection: its private stream is copied here.
+    pub(super) owner_watch: Option<Arc<AccountWatch>>,
+    /// Set on a watcher, which never gets a player id or account session.
+    pub(super) watcher: Option<Watcher>,
     pub(super) pending_character_attributes: Option<CharacterAttributes>,
     pub(super) connected_at: std::time::Instant,
     pub(super) last_heartbeat: std::time::Instant,
@@ -92,6 +103,8 @@ impl ConnectionState {
             awaiting_world_ready: false,
             character_name: None,
             direct_rx: None,
+            owner_watch: None,
+            watcher: None,
             pending_character_attributes: None,
             connected_at: std::time::Instant::now(),
             last_heartbeat: std::time::Instant::now(),
@@ -116,6 +129,13 @@ impl ConnectionState {
             &mut self.last_party_positions_poll,
             PARTY_POSITIONS_MIN_INTERVAL,
         )
+    }
+
+    /// Copies a message the playing connection sends to its watchers.
+    pub(super) fn tee_owner(&self, bytes: &Bytes) {
+        if let Some(watch) = &self.owner_watch {
+            watch.tee(bytes);
+        }
     }
 
     pub(super) fn furniture_tip_due(&self, tip: FurnitureTip) -> bool {

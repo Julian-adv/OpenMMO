@@ -44,6 +44,12 @@ import {
   type InspectionResult,
 } from '../stores/inspectionStore'
 import { get } from 'svelte/store'
+import {
+  WATCHER_SELF_ID,
+  watchMode,
+  watchWaiting,
+  watchedPlayerId,
+} from '../stores/watchStore'
 import { attackLog, daggerSkippedLog } from './combatLog'
 import {
   acknowledgeDaggerSkill,
@@ -531,6 +537,33 @@ function logSpokenLine(playerId: number, text: string) {
   })
 }
 
+/** Drop everything the world view delivered, before a new view replaces it. */
+function clearWorldEntities() {
+  housingManager.resetView()
+  resetTerrainDownloads()
+  resetFences()
+  resetEstateStorage()
+  dungeonManager.resetDynamicView()
+  gameStore.update((state) => {
+    for (const id of state.otherPlayers.keys()) {
+      stopMusicPerformance(id)
+      stopPlayerInstrument(id)
+      removeBobber(id)
+      clearDanceBeat(id)
+    }
+    state.otherPlayers.clear()
+    return state
+  })
+  remoteObjectInteractions.clear()
+  remotePlayerManager.reset()
+  monsterManager.reset()
+  groundItemManager.reset()
+  campfireManager.reset()
+  stallManager.reset()
+  tipHatManager.reset()
+  mealManager.reset()
+}
+
 /** Spawn a remote player's visual, apply any object interaction, and store it in game state. */
 function addRemotePlayerToState(state: GameState, sp: ServerPlayer) {
   // A fresh appearance starts beatless; a dancer's PlayerDanceSync follows.
@@ -564,6 +597,8 @@ export type MessageEvents = {
   authSuccess: NetworkEvent<(payload: AuthSuccessPayload) => void>
   authError: NetworkEvent<(message: string) => void>
   joinSuccess: NetworkEvent<() => void>
+  watchWaiting: NetworkEvent<() => void>
+  watchTarget: NetworkEvent<(character: AccountCharacter) => void>
   characterCreated: NetworkEvent<(character: AccountCharacter) => void>
   characterStatsRolled: NetworkEvent<(result: CharacterRollResult) => void>
   characterDeleted: NetworkEvent<(characterId: number) => void>
@@ -828,29 +863,7 @@ export function handleServerMessage(
           worldView.staticReady = false
           objectManager.resetWorld()
         }
-        housingManager.resetView()
-        resetTerrainDownloads()
-        resetFences()
-        resetEstateStorage()
-        dungeonManager.resetDynamicView()
-        gameStore.update((state) => {
-          for (const id of state.otherPlayers.keys()) {
-            stopMusicPerformance(id)
-            stopPlayerInstrument(id)
-            removeBobber(id)
-            clearDanceBeat(id)
-          }
-          state.otherPlayers.clear()
-          return state
-        })
-        remoteObjectInteractions.clear()
-        remotePlayerManager.reset()
-        monsterManager.reset()
-        groundItemManager.reset()
-        campfireManager.reset()
-        stallManager.reset()
-        tipHatManager.reset()
-        mealManager.reset()
+        clearWorldEntities()
       }
       for (const event of update.events) {
         if (
@@ -920,7 +933,26 @@ export function handleServerMessage(
       break
     }
 
+    case 'WatchWaiting': {
+      watchWaiting.set(true)
+      resetTeleportEffects()
+      worldView.synchronized = false
+      clearWorldEntities()
+      events.watchWaiting.emit()
+      break
+    }
+
+    case 'WatchTarget': {
+      events.watchTarget.emit(data.character as AccountCharacter)
+      break
+    }
+
     case 'JoinSuccess': {
+      if (watchMode) {
+        clearWorldEntities()
+        watchedPlayerId.set(data.player.id)
+      }
+      watchWaiting.set(false)
       resetTeleportEffects()
       remoteObjectInteractions.clear()
       worldView.synchronized = false
@@ -936,11 +968,13 @@ export function handleServerMessage(
       console.log('Join successful, received player data:', serverPlayer)
       isAdminUser.set(data.is_admin === true)
       localInvisible.set(false)
-      const player = toLocalPlayer(serverPlayer)
-      gameStore.update((state) => ({
-        ...state,
-        currentPlayer: player,
-      }))
+      const player = toLocalPlayer(
+        watchMode ? { ...serverPlayer, id: WATCHER_SELF_ID } : serverPlayer
+      )
+      gameStore.update((state) => {
+        if (watchMode) addRemotePlayerToState(state, serverPlayer)
+        return { ...state, currentPlayer: player }
+      })
       // Players who logged out inside a dungeon reconnect there.
       syncOwnFloor(
         serverPlayer.floor_level,

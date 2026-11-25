@@ -198,6 +198,7 @@ pub(crate) mod ambient_spawn;
 mod chat;
 mod cooldowns;
 mod dance;
+pub(crate) mod watch;
 pub(crate) use chat::{parse_admin_command, parse_notice_command, GOD_ON_MESSAGE};
 mod auto_attack;
 mod combat;
@@ -429,6 +430,8 @@ pub struct GameState {
     statues: Arc<std::sync::Mutex<statues::StatueBook>>,
     next_account_session: Arc<std::sync::atomic::AtomicU64>,
     direct_channels: Arc<RwLock<HashMap<PlayerId, mpsc::UnboundedSender<Bytes>>>>,
+    account_watches: Arc<std::sync::Mutex<HashMap<String, Arc<watch::AccountWatch>>>>,
+    player_watches: Arc<std::sync::Mutex<HashMap<PlayerId, Arc<watch::AccountWatch>>>>,
     // player_id → (character_id, current_xp, attributes)
     #[allow(clippy::type_complexity)]
     player_characters: Arc<RwLock<HashMap<PlayerId, (i64, u64, CharacterAttributes)>>>,
@@ -850,6 +853,8 @@ impl GameState {
             statues: Arc::default(),
             next_account_session: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             direct_channels: Arc::new(RwLock::new(HashMap::new())),
+            account_watches: Arc::default(),
+            player_watches: Arc::default(),
             player_characters: Arc::new(RwLock::new(HashMap::new())),
             player_gold: Arc::new(RwLock::new(HashMap::new())),
             player_skills: Arc::new(RwLock::new(HashMap::new())),

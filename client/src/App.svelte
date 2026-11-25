@@ -25,6 +25,8 @@
     applyAutoQuality,
   } from './lib/stores/graphicsSettings'
   import { instrumentPanelVisible } from './lib/stores/instrumentStore'
+  import WatchOverlay from './lib/components/WatchOverlay.svelte'
+  import { watchMode } from './lib/stores/watchStore'
 
   let showSettings = $state(false)
   let SceneCanvas = $state<typeof SceneCanvasComponent>()
@@ -132,6 +134,49 @@
     }
   })
 
+  let loginNotice = $state(watchMode ? $t('login.watchMode') : '')
+
+  networkManager.watchTarget.on((character) => {
+    accountCharacters = [character]
+    selectedCharacterId = character.id
+  })
+
+  /** Loads the game screen's code; false when it cannot be fetched. */
+  async function loadGameScreen(): Promise<boolean> {
+    try {
+      gameScreen ??= await import('./lib/components/game-screen')
+      return true
+    } catch (error) {
+      console.error('Unable to load game screen', error)
+      return false
+    }
+  }
+
+  function enterGameScreen() {
+    // Reset death tracking for each game session.
+    deathUiState = 'alive'
+    isPlayerDead = false
+    wasPlayerDead = false
+    hasObservedCurrentPlayerAlive = false
+    isSceneCompiling = true
+    screen = 'game'
+  }
+
+  async function handleWatch(
+    url: string,
+    googleIdToken: string
+  ): Promise<{ ok: boolean; message?: string }> {
+    if (!(await loadGameScreen()))
+      return { ok: false, message: $t('loading.failed') }
+    const result = await networkManager.requestWatch(url, googleIdToken, () => {
+      loginNotice = $t('login.watchWaiting')
+    })
+    if (!result.ok) return result
+    serverUrl = url
+    enterGameScreen()
+    return result
+  }
+
   async function handleLogin(
     url: string,
     googleIdToken: string
@@ -144,6 +189,7 @@
       console.error('Unable to load character screen', error)
       return { ok: false, message: $t('loading.failed') }
     }
+    if (watchMode) return handleWatch(url, googleIdToken)
     const result = await networkManager.requestAuthentication(
       url,
       googleIdToken
@@ -228,23 +274,13 @@
     characterId: number
   ): Promise<{ ok: boolean; message?: string; renameRequired?: boolean }> {
     const startingAccount = accountName
-    try {
-      gameScreen ??= await import('./lib/components/game-screen')
-    } catch (error) {
-      console.error('Unable to load game screen', error)
+    if (!(await loadGameScreen()))
       return { ok: false, message: $t('loading.failed') }
-    }
     if (screen !== 'character-select' || accountName !== startingAccount)
       return { ok: false, message: $t('characterSelect.enterFailed') }
     const result = await networkManager.requestEnterGame(characterId)
     if (result.ok) {
-      // Reset death tracking for each game session.
-      deathUiState = 'alive'
-      isPlayerDead = false
-      wasPlayerDead = false
-      hasObservedCurrentPlayerAlive = false
-      isSceneCompiling = true
-      screen = 'game'
+      enterGameScreen()
       return result
     }
     if (result.renameRequired) {
@@ -425,6 +461,9 @@
       onCloseRespawnDialog={closeRespawnDialog}
       onOpenSettings={() => (showSettings = true)}
     />
+    {#if watchMode}
+      <WatchOverlay />
+    {/if}
   {:else if screen === 'character-select'}
     <CharacterSelectScreen
       {accountName}
@@ -466,7 +505,7 @@
       onCancel={handleCancelCreateCharacter}
     />
   {:else}
-    <LoginScreen onLogin={handleLogin} {kickedMessage} />
+    <LoginScreen onLogin={handleLogin} {kickedMessage} notice={loginNotice} />
   {/if}
 
   {#if screen !== 'game'}

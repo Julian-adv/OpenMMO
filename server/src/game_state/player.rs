@@ -172,13 +172,21 @@ impl super::GameState {
         msg: ServerMessage,
         skip_player_id: Option<&PlayerId>,
     ) {
-        let mut interest = self.interest_lock();
-        if !interest.publish_state(&msg) {
+        {
+            let mut interest = self.interest_lock();
+            if interest.publish_state(&msg) {
+                return;
+            }
             interest.publish_effect(
                 onlinerpg_shared::interest::SubjectArea::point(*position, floor_level),
                 &msg,
                 skip_player_id,
             );
+        }
+        // The actor's own client skips what it already shows; its watchers
+        // see it as a bystander would.
+        if let Some(actor) = skip_player_id {
+            self.tee_to_watchers(actor, &msg);
         }
     }
 
@@ -632,6 +640,7 @@ impl super::GameState {
             .write()
             .await
             .remove(&account_name.to_ascii_lowercase());
+        self.close_account_watch(account_name);
         if let Some(body) = self.lingering_body_of_account(account_name).await {
             self.cleanup_player_session(&body.id, auth).await;
         }

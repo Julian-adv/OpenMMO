@@ -74,6 +74,7 @@ import initWasm, {
 import { createEvent } from './networkEvents'
 import { handleServerMessage, resetTerrainDownloads } from './messageHandlers'
 import { worldView } from './worldView'
+import { watchMode } from '../stores/watchStore'
 import type {
   AccountCharacter,
   CharacterClass,
@@ -165,6 +166,8 @@ class NetworkManager {
     >()
   readonly authError = createEvent<(message: string) => void>()
   readonly joinSuccess = createEvent<() => void>()
+  readonly watchWaiting = createEvent<() => void>()
+  readonly watchTarget = createEvent<(character: AccountCharacter) => void>()
   readonly characterCreated =
     createEvent<(character: AccountCharacter) => void>()
   readonly characterStatsRolled =
@@ -220,6 +223,8 @@ class NetworkManager {
       authSuccess: this.authSuccess,
       authError: this.authError,
       joinSuccess: this.joinSuccess,
+      watchWaiting: this.watchWaiting,
+      watchTarget: this.watchTarget,
       characterCreated: this.characterCreated,
       characterStatsRolled: this.characterStatsRolled,
       characterDeleted: this.characterDeleted,
@@ -395,6 +400,10 @@ class NetworkManager {
       resetBookmarks()
       // Disconnect cancels any open trade.
       resetPlayerTrade()
+      if (watchMode) {
+        this.rewatch()
+        return
+      }
       this.connect()
       const googleIdToken = getApiAuthToken()
       if (!googleIdToken) return
@@ -429,6 +438,7 @@ class NetworkManager {
   }
 
   private sendMessage(msg: ClientMessage) {
+    if (watchMode && !allowedWhileWatching(msg)) return
     if (this.socket?.readyState === WebSocket.OPEN && this.wasmReady) {
       this.ensureHandshake()
       const bytes = serializeClientMessage(msg)
@@ -441,6 +451,7 @@ class NetworkManager {
   }
 
   private sendAndSerialize(msg: ClientMessage): boolean {
+    if (watchMode && !allowedWhileWatching(msg)) return false
     if (!this.isConnected()) return false
     this.ensureHandshake()
     const bytes = serializeClientMessage(msg)
@@ -1524,6 +1535,60 @@ class NetworkManager {
     })
   }
 
+  private sendWatchAccount(googleIdToken: string): boolean {
+    setApiAuthToken(googleIdToken)
+    return this.sendAndSerialize({
+      WatchAccount: { google_id_token: googleIdToken },
+    })
+  }
+
+  /// Resolves once the account's character is in view; `onWaiting` fires
+  /// while the account has none in the world.
+  async requestWatch(
+    serverUrl: string,
+    googleIdToken: string,
+    onWaiting: () => void
+  ): Promise<{ ok: boolean; message?: string; refused?: boolean }> {
+    await this.ensureWasm()
+    this.connect(serverUrl)
+    if (!(await this.waitForSocketOpen(5000)))
+      return { ok: false, message: 'Failed to connect to server' }
+    return new Promise((resolve) => {
+      const unsubs = [
+        this.joinSuccess.on(() => settle({ ok: true })),
+        this.authError.on((message) =>
+          settle({ ok: false, message, refused: true })
+        ),
+        this.watchWaiting.on(() => onWaiting()),
+      ]
+      const settle = (result: {
+        ok: boolean
+        message?: string
+        refused?: boolean
+      }) => {
+        for (const unsub of unsubs) unsub()
+        resolve(result)
+      }
+      if (!this.sendWatchAccount(googleIdToken))
+        settle({ ok: false, message: 'Socket is not connected' })
+    })
+  }
+
+  /// Watching again after the socket dropped; a refused token sends the page
+  /// back to sign-in.
+  private rewatch() {
+    const googleIdToken = getApiAuthToken()
+    if (!googleIdToken) return
+    void this.requestWatch(this.lastServerUrl, googleIdToken, () => {}).then(
+      (result) => {
+        // A socket that failed to open retries through its own close.
+        if (!result.refused) return
+        this.disconnect()
+        this.kicked.emit(result.message ?? 'Watching ended.')
+      }
+    )
+  }
+
   /// Drop cached credentials so a later reconnect can't re-auth as this user.
   /// Call on logout/kick, not on transient disconnects (which must reconnect).
   clearSession() {
@@ -1834,6 +1899,10 @@ class NetworkManager {
     const serverUrl = this.lastServerUrl
     const googleIdToken = getApiAuthToken()
     const characterId = this.lastCharacterId
+    if (watchMode) {
+      this.rewatch()
+      return
+    }
     if (!serverUrl || !googleIdToken || !characterId) {
       console.warn('Reconnect skipped: missing account or character context')
       return
@@ -1939,3 +2008,11 @@ shopSession.subscribe((session) => {
   }
   lastOpenMerchantId = merchantId
 })
+
+function allowedWhileWatching(msg: ClientMessage): boolean {
+  return (
+    msg === 'Heartbeat' ||
+    msg === 'ResyncWorld' ||
+    (typeof msg === 'object' && 'WatchAccount' in msg)
+  )
+}

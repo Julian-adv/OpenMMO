@@ -88,6 +88,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::AuthSuccess { .. } => "AuthSuccess",
         ServerMessage::AuthError { .. } => "AuthError",
         ServerMessage::JoinSuccess { .. } => "JoinSuccess",
+        ServerMessage::WatchWaiting => "WatchWaiting",
+        ServerMessage::WatchTarget { .. } => "WatchTarget",
         ServerMessage::CharacterCreated { .. } => "CharacterCreated",
         ServerMessage::CharacterStatsRolled { .. } => "CharacterStatsRolled",
         ServerMessage::CharacterDeleted { .. } => "CharacterDeleted",

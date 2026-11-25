@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { watchMode } from '../../stores/watchStore'
   import { setupPointShadow } from '../../utils/pointShadow'
   import {
     CRYSTAL_GLOW_SPEED,
@@ -803,7 +804,7 @@
   />
 {/if}
 
-{#if currentPlayer && cameraInitialized && camera}
+{#if currentPlayer && cameraInitialized && camera && !watchMode}
   <!-- The face is part of the loaded body, so a new one needs a new model. -->
   {#key currentPlayer.appearance?.face}
     <PlayerModel

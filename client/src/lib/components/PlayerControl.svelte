@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { PlayerCharge, PlayerInteraction } from '../network/networkTypes'
   import { ServerMovement } from './player-control/server-movement'
+  import { watchMode, watchedPlayerId } from '../stores/watchStore'
   import { syncOwnFloor, ownPlayerFloor } from '../network/ownFloor'
   import { translate } from '../i18n'
   import { onDestroy, onMount } from 'svelte'
@@ -2510,10 +2511,49 @@
     },
   })
 
+  let watchedId: number | null = null
+  let watchedFloor: number | undefined
+  let syncedFloor: number | undefined
+  if (watchMode) {
+    onDestroy(watchedPlayerId.subscribe((id) => (watchedId = id)))
+    onDestroy(
+      gameStore.subscribe((state) => {
+        watchedFloor =
+          watchedId === null
+            ? undefined
+            : state.otherPlayers.get(watchedId)?.floorLevel
+      })
+    )
+  }
+
+  /** Watching: the camera, terrain and floor follow the watched character as
+   *  it is drawn among the other players; nothing here acts. */
+  function followWatchedPlayer() {
+    if (watchedId === null || !currentPlayer) return
+    const pose = remotePlayerManager.players.get(watchedId)
+    if (!pose) return
+    const { x, y, z } = pose.position
+    const here = currentPlayer.position
+    if (
+      here.x !== x ||
+      here.y !== y ||
+      here.z !== z ||
+      currentPlayer.rotation !== pose.rotation
+    )
+      writePlayerPosition(pose.position, pose.rotation)
+    if (watchedFloor === undefined || watchedFloor === syncedFloor) return
+    syncedFloor = watchedFloor
+    syncOwnFloor(watchedFloor, x, z)
+  }
+
   export function updatePlayerControl(
     deltaTime: number,
     options: PlayerControlUpdateOptions
   ) {
+    if (watchMode) {
+      followWatchedPlayer()
+      return
+    }
     if ($localHeldInPlace) return
     if (chargeDash) {
       advanceChargeDash(chargeDash)

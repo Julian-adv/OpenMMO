@@ -194,6 +194,11 @@ export type ClientMessage =
       }
     }
   | {
+      WatchAccount: {
+        google_id_token: string
+      }
+    }
+  | {
       CreateCharacter: {
         character_name: string
         character_class: CharacterClass

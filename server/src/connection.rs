@@ -173,6 +173,9 @@ pub async fn handle_connection(
             } => {
                 if let Some(notice) = account_msg {
                     if let Some(bytes) = encode_server_msg(&notice.message) {
+                        if notice.keep_open {
+                            state.tee_owner(&bytes);
+                        }
                         let _ = ws_sender.send(Message::Binary(bytes)).await;
                     }
                     if notice.keep_open {
@@ -207,7 +210,7 @@ pub async fn handle_connection(
                     // unauthenticated for at most UNAUTH_TIMEOUT_SECS.
                     let _ = ws_sender.send(Message::Ping(Bytes::new())).await;
                 }
-                if state.player_id.is_some()
+                if (state.player_id.is_some() || state.watcher.is_some())
                     && state.last_heartbeat.elapsed().as_secs() > HEARTBEAT_TIMEOUT_SECS
                 {
                     warn!(ip = %state.client_ip, account = state.account_name.as_deref(),
@@ -259,6 +262,7 @@ pub async fn handle_connection(
                                     let Some(bytes) = encode_server_msg(&response) else {
                                         continue;
                                     };
+                                    state.tee_owner(&bytes);
                                     if let Err(e) = ws_sender.send(Message::Binary(bytes)).await {
                                         error!(ip = %state.client_ip, account = state.account_name.as_deref(),
                                             error = %e, "Failed to send direct response to client");
@@ -345,9 +349,39 @@ pub async fn handle_connection(
                 }
             } => {
                 if let Some(bytes) = direct_msg {
+                    state.tee_owner(&bytes);
                     let _ = ws_sender.send(Message::Binary(bytes)).await;
                 }
             }
+
+            watch_msg = async {
+                match state.watcher.as_mut() {
+                    Some(watcher) => watcher.rx.recv().await,
+                    None => std::future::pending().await,
+                }
+            } => {
+                let Some(bytes) = watch_msg else {
+                    info!(ip = %state.client_ip, account = state.account_name.as_deref(),
+                        "Watch closed by the server");
+                    break;
+                };
+                if ws_sender.send(Message::Binary(bytes)).await.is_err() {
+                    break;
+                }
+            }
+        }
+    }
+
+    if let Some(account_name) = state.account_name.as_deref() {
+        if let Some(watch) = state.owner_watch.take() {
+            if let Some(id) = state.player_id {
+                watch.left(id);
+                game_state.unwatch_player(id);
+            }
+            game_state.release_account_watch(account_name, watch);
+        }
+        if let Some(watcher) = state.watcher.take() {
+            game_state.release_account_watch(account_name, watcher.watch);
         }
     }
 
@@ -415,6 +449,24 @@ async fn send_due_ip_notices<S>(
     }
 }
 
+/// A watcher may only keep its socket alive and ask for a fresh snapshot;
+/// everything else is dropped, as the web client sends plenty on its own.
+async fn watcher_message(game_state: &GameState, state: &mut ConnectionState, msg: ClientMessage) {
+    let Some(watcher) = &state.watcher else {
+        return;
+    };
+    match msg {
+        ClientMessage::Heartbeat => state.last_heartbeat = std::time::Instant::now(),
+        ClientMessage::ResyncWorld => {
+            let watched = watcher.watch.player();
+            if let Some(id) = watched.filter(|_| watcher.watch.resync_due()) {
+                game_state.reset_world_view(&id).await;
+            }
+        }
+        _ => {}
+    }
+}
+
 async fn handle_client_message(
     message: &[u8],
     game_state: &Arc<GameState>,
@@ -428,9 +480,16 @@ async fn handle_client_message(
         return Ok(responses);
     }
 
+    if state.watcher.is_some() {
+        watcher_message(game_state, state, client_msg).await;
+        return Ok(vec![]);
+    }
+
     if matches!(
         client_msg,
-        ClientMessage::Authenticate { .. } | ClientMessage::AuthenticateNpc { .. }
+        ClientMessage::Authenticate { .. }
+            | ClientMessage::AuthenticateNpc { .. }
+            | ClientMessage::WatchAccount { .. }
     ) && state.account_name.is_some()
     {
         warn!(ip = %state.client_ip, account = state.account_name.as_deref(),
@@ -469,6 +528,17 @@ async fn handle_client_message(
     match client_msg {
         ClientMessage::Authenticate { google_id_token } => {
             return Ok(account::authenticate(
+                game_state,
+                auth_service,
+                auth_ctx,
+                state,
+                google_id_token,
+            )
+            .await);
+        }
+
+        ClientMessage::WatchAccount { google_id_token } => {
+            return Ok(account::watch_account(
                 game_state,
                 auth_service,
                 auth_ctx,

@@ -13,9 +13,10 @@
       googleIdToken: string
     ) => Promise<{ ok: boolean; message?: string }>
     kickedMessage?: string
+    notice?: string
   }
 
-  let { onLogin, kickedMessage }: Props = $props()
+  let { onLogin, kickedMessage, notice }: Props = $props()
 
   let isConnecting = $state(false)
   let errorMessage = $state('')
@@ -177,6 +178,10 @@
       <div class="login-panel">
         {#if kickedMessage}
           <div class="kicked-message">{kickedMessage}</div>
+        {/if}
+
+        {#if notice}
+          <div class="watch-notice">{notice}</div>
         {/if}
 
         {#if errorMessage}
@@ -416,6 +421,17 @@
   .connecting-label {
     color: #a0aec0;
     font-size: 13px;
+  }
+
+  .watch-notice {
+    margin-bottom: 20px;
+    padding: 12px 14px;
+    background: rgba(99, 179, 237, 0.12);
+    border: 1px solid #63b3ed;
+    border-radius: 6px;
+    color: #bee3f8;
+    font-size: 13px;
+    text-align: center;
   }
 
   .kicked-message {
