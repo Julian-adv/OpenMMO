@@ -1415,6 +1415,29 @@ fn chase_goal_avoids_a_cell_a_bystander_stands_in() {
     );
 }
 
+#[test]
+fn an_attacker_steps_off_a_player_who_walks_into_it() {
+    let mut players = attacker_at(10.0, 10.5);
+    let mut brain = chase_until_attack(&players, &[]);
+    players[0].position = brain.position;
+    players[0].position.x += 0.2;
+    let tree = chase_attack_tree();
+    let mut rng = SmallRng::seed_from_u64(7);
+    let mut left_attack = false;
+    for _ in 0..250 {
+        brain.tick_with_behavior_tree(16.0, &players, &[], &tree, &DirectPath, &mut rng);
+        left_attack |= brain.state() != AiState::Attack;
+    }
+
+    assert!(left_attack, "never moved off the player");
+    assert_eq!(brain.state(), AiState::Attack);
+    let gap = brain.position.dist_xz_sq(&players[0].position).sqrt();
+    assert!(
+        gap >= crate::occupancy::OVERLAP_M,
+        "still in the player at {gap:.2} m"
+    );
+}
+
 /// A lone chaser closes in instead of stopping at the edge of its reach.
 #[test]
 fn a_lone_chaser_stops_close_not_at_the_edge_of_its_range() {

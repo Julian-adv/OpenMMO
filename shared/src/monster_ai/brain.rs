@@ -116,6 +116,8 @@ pub struct MonsterBrain {
     pub staggers: bool,
     /// Time left in the Hit stagger; a later blow never shortens it.
     pub(super) stagger_left_ms: f32,
+    /// Until the next look for a player standing in us while attacking.
+    pub(super) overlap_check_left_ms: f32,
     /// Steps run at `slow_mult` while this lasts.
     pub(super) slow_left_ms: f32,
     pub(super) slow_mult: f32,
@@ -215,6 +217,7 @@ impl MonsterBrain {
             noticing: None,
             staggers: true,
             stagger_left_ms: 0.0,
+            overlap_check_left_ms: 0.0,
             slow_left_ms: 0.0,
             slow_mult: 1.0,
             aggro: super::aggro_for(monster_type)
@@ -369,6 +372,7 @@ impl MonsterBrain {
             *left = (*left - delta_ms).max(0.0);
         }
         self.stagger_left_ms = (self.stagger_left_ms - delta_ms).max(0.0);
+        self.overlap_check_left_ms = (self.overlap_check_left_ms - delta_ms).max(0.0);
         self.slow_left_ms = (self.slow_left_ms - delta_ms).max(0.0);
         self.waking_left_ms = (self.waking_left_ms - delta_ms).max(0.0);
         if let Some((_, left)) = &mut self.noticing {

@@ -12,10 +12,15 @@ use super::{
     FLEE_SAFE_DIST_MARGIN, MAX_SLOT_PATH_TRIES, MIN_PARTIAL_PROGRESS_METERS,
     NETWORK_SYNC_INTERVAL_MS, SIDESTEP_MAX_PATH_METERS,
 };
-use crate::occupancy::ranked_cells;
+use crate::occupancy::{ranked_cells, OVERLAP_M};
 use crate::world::{shortest_world_delta_x, wrap_world_x};
 use rand::Rng;
 use std::collections::HashMap;
+
+/// How often an attacking monster looks for a player standing in it, and the
+/// longer wait after finding no free slot to step to.
+const OVERLAP_CHECK_MS: f32 = 1000.0;
+const OVERLAP_RETRY_MS: f32 = 4000.0;
 
 /// How close a chase closes before it swings: well inside the reach, so a
 /// monster doesn't stop and flail at the edge of it.
@@ -333,6 +338,12 @@ impl MonsterBrain {
             if self.reslotting && self.state != AiState::Attack {
                 return BehaviorStatus::Failure;
             }
+            if self.state == AiState::Attack
+                && self.overlap_check_left_ms <= 0.0
+                && self.step_off_players(&target.position, nearby_players, path_provider)
+            {
+                return BehaviorStatus::Failure;
+            }
         }
 
         let range = param(params, "range", self.attack_range);
@@ -383,6 +394,29 @@ impl MonsterBrain {
         }
 
         BehaviorStatus::Running
+    }
+
+    /// A player stands in us: walk to a free slot when one is reachable,
+    /// re-slotting like a yield. Without one, keep swinging where we are.
+    fn step_off_players(
+        &mut self,
+        target_pos: &crate::Position,
+        nearby_players: &[NearbyPlayer],
+        path_provider: &dyn PathProvider,
+    ) -> bool {
+        self.overlap_check_left_ms = OVERLAP_CHECK_MS;
+        let overlapped = nearby_players
+            .iter()
+            .any(|p| p.health > 0 && p.position.dist_xz_sq(&self.position) < OVERLAP_M * OVERLAP_M);
+        if !overlapped {
+            return false;
+        }
+        if !self.path_to_chase_slot(target_pos, nearby_players, path_provider) {
+            self.overlap_check_left_ms = OVERLAP_RETRY_MS;
+            return false;
+        }
+        self.reslotting = true;
+        true
     }
 
     /// How a swing from here reaches `to`, if it does; a ground strike reaches
@@ -759,12 +793,12 @@ impl MonsterBrain {
             self.chase_goal_cell = None;
             return false;
         }
-        let reach_sq = (max_d + 1.0) * (max_d + 1.0);
+        let reach_sq = (max_d + 1.0 + OVERLAP_M) * (max_d + 1.0 + OVERLAP_M);
         self.occupancy.set_others(
             nearby_players
                 .iter()
                 .filter(|p| p.health > 0 && p.position.dist_xz_sq(target_pos) <= reach_sq)
-                .map(|p| (p.position.x, p.position.z, 0.0)),
+                .map(|p| (p.position.x, p.position.z, OVERLAP_M)),
         );
 
         if let Some(cell) = self.chase_goal_cell {

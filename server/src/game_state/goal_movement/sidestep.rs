@@ -1,8 +1,8 @@
-use super::synchronization::BODY_RADIUS;
 use super::*;
-use onlinerpg_shared::occupancy::{cell_center, cell_of, ranked_cells, window_reach, Occupancy};
+use onlinerpg_shared::occupancy::{
+    cell_center, cell_of, ranked_cells, window_reach, Occupancy, BODY_RADIUS_M, OVERLAP_M,
+};
 
-pub(super) const OVERLAP_M: f32 = 2.0 * BODY_RADIUS;
 /// Cells searched around the arrival; the second ring is for crowds.
 const SEARCH_CELLS: i32 = 2;
 /// Extra cost of stepping back the way the walker came.
@@ -130,7 +130,7 @@ impl GameState {
                     .monster_defs
                     .get(&monster.monster_type)
                     .map_or(0.0, |def| def.body_radius);
-                (monster.position, BODY_RADIUS + body.max(BODY_RADIUS))
+                (monster.position, BODY_RADIUS_M + body.max(BODY_RADIUS_M))
             })
             .collect()
     }

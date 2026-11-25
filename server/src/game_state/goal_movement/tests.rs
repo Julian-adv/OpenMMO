@@ -3,6 +3,7 @@ use super::super::tests::{
     make_test_game_state,
 };
 use super::*;
+use onlinerpg_shared::occupancy::OVERLAP_M;
 use onlinerpg_shared::pathfinding::{RuntimeFloorGrid, RuntimePassability};
 
 fn corridor(closed: bool) -> RuntimePassability {
@@ -2216,7 +2217,7 @@ async fn walkers_converging_on_one_spot_all_end_apart() {
         for b in &ids[i + 1..] {
             let gap = xz_gap(players[a].position, players[b].position);
             assert!(
-                gap >= sidestep::OVERLAP_M,
+                gap >= OVERLAP_M,
                 "{} and {} overlap at {gap}",
                 players[a].name,
                 players[b].name
@@ -2238,10 +2239,7 @@ async fn a_partial_route_still_reports_partial_after_stepping_aside() {
     assert_eq!(last_status(&mut rx).await, (1, None));
     advance(&game, walker, 1.0).await;
     let at = game.players.read().await[&walker].position;
-    assert!(
-        xz_gap(at, end) >= sidestep::OVERLAP_M,
-        "{at:?} still on {end:?}"
-    );
+    assert!(xz_gap(at, end) >= OVERLAP_M, "{at:?} still on {end:?}");
     assert_eq!(last_status(&mut rx).await, (0, Some(MoveStatus::Partial)));
 }
 

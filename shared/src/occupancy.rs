@@ -5,6 +5,10 @@ use crate::world::{shortest_world_delta_x, wrap_world_x};
 
 pub type Cell = (i32, i32);
 
+/// A character's body radius; two of them touch inside `OVERLAP_M`.
+pub const BODY_RADIUS_M: f32 = 0.31;
+pub const OVERLAP_M: f32 = 2.0 * BODY_RADIUS_M;
+
 pub fn cell_of(x: f32, z: f32) -> Cell {
     (wrap_world_x(x).floor() as i32, z.floor() as i32)
 }

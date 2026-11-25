@@ -4,11 +4,10 @@ use onlinerpg_shared::estate_storage::{
     estate_storage_def, is_estate_storage_item, INTERACTION_RANGE,
 };
 use onlinerpg_shared::furniture::{self, FurniturePlacement};
+use onlinerpg_shared::occupancy::BODY_RADIUS_M as BODY_RADIUS;
 use onlinerpg_shared::pathfinding::{self, PassabilityCache};
 use onlinerpg_shared::{shortest_world_delta_x, wrap_world_x, WORLD_WIDTH_X};
 use std::{collections::HashMap, sync::OnceLock};
-
-const BODY_RADIUS: f32 = 0.31;
 
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]

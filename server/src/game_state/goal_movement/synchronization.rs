@@ -1,10 +1,10 @@
 use super::*;
+use onlinerpg_shared::occupancy::BODY_RADIUS_M as BODY_RADIUS;
 use std::collections::{BTreeSet, HashMap};
 use std::sync::{RwLock, Weak};
 use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard};
 
 const REGION_SIZE: f32 = 128.0;
-pub(super) const BODY_RADIUS: f32 = 0.31;
 
 type StateLock = MovementMutex<Option<GoalMovement>>;
 
