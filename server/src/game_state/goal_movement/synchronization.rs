@@ -4,7 +4,7 @@ use std::sync::{RwLock, Weak};
 use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard};
 
 const REGION_SIZE: f32 = 128.0;
-const BODY_RADIUS: f32 = 0.31;
+pub(super) const BODY_RADIUS: f32 = 0.31;
 
 type StateLock = MovementMutex<Option<GoalMovement>>;
 
