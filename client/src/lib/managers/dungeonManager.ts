@@ -12,7 +12,6 @@
  */
 import { get } from 'svelte/store'
 import { preloadDungeonSounds, type PropSound } from './sfxManager'
-import { dungeonCaveTheme } from '../utils/dungeon-cave-themes'
 import {
   dungeon_layout,
   dungeon_set_layout_variants,
@@ -426,6 +425,9 @@ function segmentBlocksMovement(
 class DungeonManager {
   private id: string | null = null
   private entrance: DungeonEntrance | null = null
+  /** Loaded on first entry: the themes pull three/webgpu, kept out of the login bundle. */
+  private caveThemes: typeof import('../utils/dungeon-cave-themes') | null =
+    null
   private layouts: DungeonFloorLayout[] = []
   /** Cached surface-opening rects per entrance id (see allEntranceHoleRects). */
   private entranceRectCache = new Map<string, DungeonRect>()
@@ -661,6 +663,10 @@ class DungeonManager {
   }
 
   private load(id: string, entrance: DungeonEntrance) {
+    if (!this.caveThemes)
+      void import('../utils/dungeon-cave-themes').then(
+        (themes) => (this.caveThemes = themes)
+      )
     this.layouts = dungeon_layout(id) as DungeonFloorLayout[]
     dungeon_add_passability(id, entrance.x, entrance.y, entrance.z)
     this.brokenProps.clear()
@@ -745,8 +751,11 @@ class DungeonManager {
   /** The sound of prop `propId` shattering, in this floor's theme. */
   breakSound(depth: number, propId: number): PropSound {
     const kind = this.propKind(depth, propId)
-    const sounds = dungeonCaveTheme(this.dungeonId ?? '', depth).breakSounds
-    return (kind && sounds[kind]) || 'break'
+    const sounds = this.caveThemes?.dungeonCaveTheme(
+      this.dungeonId ?? '',
+      depth
+    ).breakSounds
+    return (kind && sounds?.[kind]) || 'break'
   }
 
   /** Cells rail cart `propId` stands pushed along its rail. */

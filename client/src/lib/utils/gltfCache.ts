@@ -3,7 +3,6 @@ import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.j
 import { KTX2Loader } from 'three/examples/jsm/loaders/KTX2Loader.js'
 import type { WebGPURenderer } from 'three/webgpu'
 import { FileLoader, LoadingManager, LoaderUtils } from 'three'
-import { applyMetalReflections } from '../effects/metal-reflection'
 import basisTranscoder from 'three/examples/jsm/libs/basis/basis_transcoder.js?url'
 import basisWasm from 'three/examples/jsm/libs/basis/basis_transcoder.wasm?url'
 
@@ -53,7 +52,10 @@ export function loadGLB(url: string): Promise<GLTF> {
   // Only the parse needs KTX2 support; download alongside GPU init.
   const promise = Promise.all([fileLoader.loadAsync(url), textureSupport])
     .then(([data]) => loader.parseAsync(data, LoaderUtils.extractUrlBase(url)))
-    .then((gltf) => {
+    .then(async (gltf) => {
+      // Dynamic: metal-reflection pulls three/webgpu, which stays out of the login bundle.
+      const { applyMetalReflections } =
+        await import('../effects/metal-reflection')
       applyMetalReflections(gltf.scene)
       cache.set(url, gltf)
       inflight.delete(url)
