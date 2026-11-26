@@ -1,7 +1,5 @@
-//! Seasonal props standing in the world: the props of every event running
-//! today. An event runs on its dates in `data-src/seasonal_events.csv` unless
-//! an operator set another schedule. Today is the real-world date in Korea
-//! (UTC+9), read at boot and every hour after (doc/SEASONAL_PROPS.md).
+//! Seasonal props of the events running today, in Korean days
+//! (doc/SEASONAL_PROPS.md).
 
 use std::collections::HashMap;
 
@@ -24,12 +22,21 @@ const SEASON_USAGE: &str = "Season: /season, /season <event> <MM-DD> <MM-DD>, \
 
 /// Every seasonal prop on sampled ground, with the day and the operator
 /// schedules that decide which stand.
-#[derive(Default)]
 pub(crate) struct SeasonalProps {
     sites: Vec<SeasonalSite>,
-    today: Option<MonthDay>,
+    today: MonthDay,
     /// By event id. An event without one runs on its table dates.
     schedules: HashMap<String, SeasonSchedule>,
+}
+
+impl Default for SeasonalProps {
+    fn default() -> Self {
+        Self {
+            sites: Vec::new(),
+            today: today_kst(),
+            schedules: HashMap::new(),
+        }
+    }
 }
 
 impl SeasonalProps {
@@ -38,12 +45,12 @@ impl SeasonalProps {
     }
 
     fn runs(&self, event: &str) -> bool {
-        let (Some(today), Some(def)) = (self.today, seasonal_event_def(event)) else {
+        let Some(def) = seasonal_event_def(event) else {
             return false;
         };
         self.schedule(event)
             .season(def.season)
-            .is_some_and(|season| season.contains(today))
+            .is_some_and(|season| season.contains(self.today))
     }
 
     fn standing(&self) -> impl Iterator<Item = &FurniturePlacement> {
@@ -52,6 +59,12 @@ impl SeasonalProps {
             .filter(|(def, _)| self.runs(&def.event))
             .map(|(_, placement)| placement)
     }
+}
+
+fn sorted_regions(mut regions: Vec<(i32, i32)>) -> Vec<(i32, i32)> {
+    regions.sort_unstable();
+    regions.dedup();
+    regions
 }
 
 fn today_kst() -> MonthDay {
@@ -76,7 +89,7 @@ impl GameState {
     pub(super) fn place_seasonal_props(&self, sites: Vec<SeasonalSite>, today: MonthDay) {
         let mut props = self.seasonal_props_write();
         props.sites = sites;
-        props.today = Some(today);
+        props.today = today;
     }
 
     /// Operator schedules an earlier run stored. Boot only, before the
@@ -104,31 +117,22 @@ impl GameState {
             .unwrap_or_else(|e| e.into_inner())
     }
 
-    /// Placements no region file holds: field-boss sites and the seasonal
-    /// props standing today.
-    pub(crate) fn fixed_placements_in(&self, rx: i32, rz: i32) -> Vec<FurniturePlacement> {
-        let mut placements = self.field_boss_placements_in(rx, rz);
-        placements.extend(
-            self.seasonal_props_read()
-                .standing()
-                .filter(|p| region_of(p.x, p.z) == (rx, rz))
-                .cloned(),
-        );
-        placements
+    /// The seasonal props standing today in this region.
+    pub(super) fn seasonal_placements_in(&self, rx: i32, rz: i32) -> Vec<FurniturePlacement> {
+        self.seasonal_props_read()
+            .standing()
+            .filter(|p| region_of(p.x, p.z) == (rx, rz))
+            .cloned()
+            .collect()
     }
 
-    /// Regions a fixed placement can stand in, in or out of season.
-    pub(super) fn fixed_regions(&self) -> Vec<(i32, i32)> {
-        let mut regions = self.field_boss_regions();
-        regions.extend(
-            self.seasonal_props_read()
-                .sites
-                .iter()
-                .map(|(_, p)| region_of(p.x, p.z)),
-        );
-        regions.sort_unstable();
-        regions.dedup();
-        regions
+    /// Regions a seasonal prop can stand in, in or out of season.
+    pub(super) fn seasonal_regions(&self) -> Vec<(i32, i32)> {
+        self.seasonal_props_read()
+            .sites
+            .iter()
+            .map(|(_, p)| region_of(p.x, p.z))
+            .collect()
     }
 
     /// Apply `edit`; the regions whose props went up or came down.
@@ -140,21 +144,20 @@ impl GameState {
             .map(|(def, _)| props.runs(&def.event))
             .collect();
         edit(&mut props);
-        let mut regions: Vec<_> = props
-            .sites
-            .iter()
-            .zip(stood)
-            .filter(|((def, _), stood)| props.runs(&def.event) != *stood)
-            .map(|((_, p), _)| region_of(p.x, p.z))
-            .collect();
-        regions.sort_unstable();
-        regions.dedup();
-        regions
+        sorted_regions(
+            props
+                .sites
+                .iter()
+                .zip(stood)
+                .filter(|((def, _), stood)| props.runs(&def.event) != *stood)
+                .map(|((_, p), _)| region_of(p.x, p.z))
+                .collect(),
+        )
     }
 
     /// Move the calendar to `today`.
     pub(super) fn set_seasonal_date(&self, today: MonthDay) -> Vec<(i32, i32)> {
-        self.change_seasonal(|props| props.today = Some(today))
+        self.change_seasonal(|props| props.today = today)
     }
 
     /// Put `event` on `schedule`, in memory only.
@@ -261,7 +264,7 @@ impl GameState {
                 active: props.runs(&def.id),
             })
             .collect();
-        (props.today.unwrap_or_else(today_kst), events)
+        (props.today, events)
     }
 
     pub fn seasonal_events_message(&self, error: Option<String>) -> ServerMessage {

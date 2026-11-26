@@ -2,12 +2,18 @@ use super::{AuthError, AuthService};
 use onlinerpg_shared::seasonal::{MonthDay, Season, SeasonSchedule};
 use rusqlite::{params, Connection};
 
-fn read_schedule(row: &rusqlite::Row) -> rusqlite::Result<(String, Option<[u8; 4]>)> {
-    let dates = match (row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?) {
-        (Some(sm), Some(sd), Some(em), Some(ed)) => Some([sm, sd, em, ed]),
-        _ => None,
+/// `None` for dates that are not calendar days.
+fn read_schedule(row: &rusqlite::Row) -> rusqlite::Result<Option<(String, SeasonSchedule)>> {
+    let schedule = match (row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?) {
+        (Some(sm), Some(sd), Some(em), Some(ed)) => {
+            match (MonthDay::new(sm, sd), MonthDay::new(em, ed)) {
+                (Some(start), Some(end)) => SeasonSchedule::Period(Season { start, end }),
+                _ => return Ok(None),
+            }
+        }
+        _ => SeasonSchedule::Off,
     };
-    Ok((row.get(0)?, dates))
+    Ok(Some((row.get(0)?, schedule)))
 }
 
 impl AuthService {
@@ -36,19 +42,7 @@ impl AuthService {
         let rows = query
             .query_map([], read_schedule)?
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(rows
-            .into_iter()
-            .filter_map(|(event, dates)| {
-                let schedule = match dates {
-                    None => SeasonSchedule::Off,
-                    Some([sm, sd, em, ed]) => SeasonSchedule::Period(Season {
-                        start: MonthDay::new(sm, sd)?,
-                        end: MonthDay::new(em, ed)?,
-                    }),
-                };
-                Some((event, schedule))
-            })
-            .collect())
+        Ok(rows.into_iter().flatten().collect())
     }
 
     pub fn save_seasonal_schedule(

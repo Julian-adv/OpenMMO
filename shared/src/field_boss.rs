@@ -5,14 +5,12 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use crate::furniture::{FurniturePlacement, FIXED_PLACEMENT_ID_BASE};
+use crate::furniture::{FurniturePlacement, FIELD_BOSS_PLACEMENT_ID_BASE};
 use crate::moon::is_full_moon_night;
 use crate::world::{wrap_world_x, GameDateTime};
 
 static FIELD_BOSSES_JSON: &str = include_str!("../../data/field_bosses.json");
 static CATALOG_JSON: &str = include_str!("../../data/object_catalog.json");
-
-const PLACEMENT_ID_BASE: u32 = FIXED_PLACEMENT_ID_BASE;
 
 /// What must hold for a raid to open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
@@ -217,11 +215,11 @@ pub fn field_boss_by_altar(id: u32) -> Option<(&'static FieldBossDef, &'static A
 
 impl FieldBossDef {
     pub fn altar_placement_id(&self) -> u32 {
-        PLACEMENT_ID_BASE + self.index * 2
+        FIELD_BOSS_PLACEMENT_ID_BASE + self.index * 2
     }
 
     pub fn dormant_placement_id(&self) -> u32 {
-        PLACEMENT_ID_BASE + self.index * 2 + 1
+        FIELD_BOSS_PLACEMENT_ID_BASE + self.index * 2 + 1
     }
 
     pub fn condition_holds(&self, at: &GameDateTime) -> bool {

@@ -461,6 +461,23 @@ impl super::GameState {
         self.rebuild_region_furniture_passability(rx, rz, placements)
     }
 
+    /// Placements no region file holds: field-boss sites and the seasonal
+    /// props standing today.
+    pub(crate) fn fixed_placements_in(&self, rx: i32, rz: i32) -> Vec<FurniturePlacement> {
+        let mut placements = self.field_boss_placements_in(rx, rz);
+        placements.extend(self.seasonal_placements_in(rx, rz));
+        placements
+    }
+
+    /// Regions a fixed placement can stand in.
+    fn fixed_regions(&self) -> Vec<(i32, i32)> {
+        let mut regions = self.field_boss_regions();
+        regions.extend(self.seasonal_regions());
+        regions.sort_unstable();
+        regions.dedup();
+        regions
+    }
+
     /// Region furniture collision alone, for a stand-in waking or sleeping.
     pub(super) fn rebuild_region_furniture_passability(
         &self,

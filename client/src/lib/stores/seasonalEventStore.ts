@@ -52,6 +52,6 @@ export function markSeasonalEventsPending() {
   )
 }
 
-export function resetSeasonalEvents() {
+export function closeSeasonalEvents() {
   seasonalEventsPanel.set(null)
 }

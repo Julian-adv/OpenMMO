@@ -30,7 +30,11 @@ import {
 } from 'three/tsl'
 import spots from '../data/winterTreeLights.json'
 import { serverGameTime } from '../stores/timeStore'
-import { OBJECT_SNOW, perlin, snowCover } from '../shaders/snow-cover-nodes'
+import {
+  perlin,
+  snowCover,
+  snowyStandardMaterial,
+} from '../shaders/snow-cover-nodes'
 
 type Point = [number, number, number]
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -56,9 +60,7 @@ const GLINT_SIZE = 0.42 * SIZE
 const MOTE_COUNT = 28
 const MOTE_COLOR = '#ffd9a0'
 const DAY_GLOW = 0.15
-/** Daylight shows the boughs pale and thin, with the core plain between
- *  them. By day they are pulled to a deep fir green and cut out fuller, and
- *  the core is shaded. Night keeps the model as built. */
+/** By day the boughs are drawn deeper green and fuller; night keeps the model. */
 const DAY_FOLIAGE_TINT = [0.5, 0.72, 1.25]
 const DAY_FOLIAGE_CUTOFF = 0.2
 const DAY_CORE_SHADE = 0.5
@@ -73,18 +75,19 @@ const TAU = Math.PI * 2
 
 const crownTop = WINTER_TREE_STAR[1] - 0.3 * SIZE
 
-let dark: ReturnType<typeof createNight> | null = null
-
-function createNight() {
-  const night = uniform(0)
-  serverGameTime.subscribe((now) => {
-    night.value = now?.isNight ? 1 : 0
-  })
-  return night
-}
+let nightUniform: N = null
 
 /** 1 at night and 0 by day, shared by every tree. */
-const night = () => (dark ??= createNight())
+function night(): N {
+  if (!nightUniform) {
+    const u = uniform(0)
+    serverGameTime.subscribe((now) => {
+      u.value = now?.isNight ? 1 : 0
+    })
+    nightUniform = u
+  }
+  return nightUniform
+}
 /** 1 at night and faint by day. */
 const nightGlow = (): N => mix(DAY_GLOW, 1, night())
 
@@ -296,20 +299,14 @@ export function buildWinterTreeGlow(): THREE.Group {
   return group
 }
 
+function nodeCopy(src: THREE.Material) {
+  return new MeshStandardNodeMaterial().copy(src as MeshStandardNodeMaterial)
+}
+
 /** The boughs as built at night, deeper and fuller by day, dusted with
  *  whatever snow lies around. */
 function boughMaterial(src: THREE.MeshStandardMaterial) {
-  const material = new MeshStandardNodeMaterial({
-    name: src.name,
-    normalMap: src.normalMap,
-    roughnessMap: src.roughnessMap,
-    metalnessMap: src.metalnessMap,
-    roughness: src.roughness,
-    metalness: src.metalness,
-    side: src.side,
-  })
   const day = night().oneMinus()
-  const leaf = texture(src.map!)
   const tint = mix(vec3(1), vec3(...DAY_FOLIAGE_TINT), day)
   // Even over the tree: the ground's snow patches are metres wide and would
   // whiten one side of it.
@@ -324,20 +321,18 @@ function boughMaterial(src: THREE.MeshStandardMaterial) {
     .mul(smoothstep(0.3, 0.6, grain).mul(0.65).add(0.35))
     .mul(BOUGH_SNOW)
     .clamp()
-  material.colorNode = vec4(mix(leaf.rgb.mul(tint), OBJECT_SNOW, snow), leaf.a)
-  material.roughnessNode = mix(float(src.roughness), float(0.85), snow)
+  const material = snowyStandardMaterial(
+    src,
+    (base) => vec4(base.rgb.mul(tint), base.a),
+    snow
+  )
   material.alphaTestNode = mix(src.alphaTest, DAY_FOLIAGE_CUTOFF, day)
   return material
 }
 
 /** The dark core behind the boughs, sunk further into shadow by day. */
 function coreMaterial(src: THREE.MeshStandardMaterial) {
-  const material = new MeshStandardNodeMaterial({
-    name: src.name,
-    roughness: src.roughness,
-    metalness: src.metalness,
-    side: src.side,
-  })
+  const material = nodeCopy(src)
   const shade = mix(1, DAY_CORE_SHADE, night().oneMinus())
   material.colorNode = vec3(...src.color.toArray()).mul(shade)
   return material
@@ -366,17 +361,7 @@ function lightDecorations(model: THREE.Object3D) {
     if (src.alphaTest > 0 || !(src.map || src.vertexColors)) return
     o.geometry.computeBoundingBox()
     if (o.geometry.boundingBox!.max.y < DECOR_FLOOR) return
-    const material = new MeshStandardNodeMaterial({
-      name: src.name,
-      map: src.map,
-      normalMap: src.normalMap,
-      roughnessMap: src.roughnessMap,
-      metalnessMap: src.metalnessMap,
-      roughness: src.roughness,
-      metalness: src.metalness,
-      side: src.side,
-      vertexColors: src.vertexColors,
-    })
+    const material = nodeCopy(src)
     const tint = src.map ? texture(src.map).rgb : vertexColor().rgb
     material.emissiveNode = tint.mul(shine)
     o.material = material

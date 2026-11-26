@@ -4,7 +4,9 @@
   import { networkManager } from '../network/socket'
   import { draggablePanel } from '../actions/draggablePanel'
   import { mountOverlay } from '../stores/overlayStack'
+  import './hudDialog.css'
   import {
+    closeSeasonalEvents,
     markSeasonalEventsPending,
     seasonalEventsPanel,
     type SeasonalEvent,
@@ -37,9 +39,7 @@
   const events = $derived(panel?.events ?? [])
   let drafts = $state<Record<string, Draft>>({})
 
-  const close = () => seasonalEventsPanel.set(null)
-
-  $effect(() => mountOverlay('seasonalEvents', close))
+  $effect(() => mountOverlay('seasonalEvents', closeSeasonalEvents))
   onMount(() => networkManager.sendQuerySeasonalEvents())
 
   $effect(() => {
@@ -94,7 +94,7 @@
 
 {#snippet dayPicker(draft: Draft, edge: Edge)}
   <span class="day-picker">
-    <span class="edge">{$t(`season.${edge}`)}</span>
+    <span class="hint">{$t(`season.${edge}`)}</span>
     <select
       aria-label={`${$t(`season.${edge}`)} ${$t('season.month')}`}
       value={draft.period[edge].month}
@@ -104,7 +104,7 @@
         <option value={month}>{month}</option>
       {/each}
     </select>
-    <span class="dim">/</span>
+    <span class="hint">/</span>
     <select
       aria-label={`${$t(`season.${edge}`)} ${$t('season.day')}`}
       bind:value={draft.period[edge].day}
@@ -117,7 +117,7 @@
 {/snippet}
 
 <div
-  class="season-panel"
+  class="hud-dialog season-panel"
   role="dialog"
   aria-labelledby="season-title"
   use:draggablePanel={'seasonalEvents'}
@@ -125,23 +125,23 @@
   <div class="panel-header" data-drag-handle>
     <h2 class="panel-title" id="season-title">{$t('season.title')}</h2>
     {#if panel?.today}
-      <span class="dim"
+      <span class="hint"
         >{$t('season.today', { date: formatMonthDay(panel.today) })}</span
       >
     {/if}
     <button
       type="button"
       class="close-btn"
-      onclick={close}
+      onclick={closeSeasonalEvents}
       title={$t('common.close')}
       aria-label={$t('common.close')}>&times;</button
     >
   </div>
-  <p class="dim">{$t('season.hint')}</p>
+  <p class="hint">{$t('season.hint')}</p>
   {#if !panel?.today}
-    <p class="dim">{$t('season.loading')}</p>
+    <p class="hint">{$t('season.loading')}</p>
   {:else if events.length === 0}
-    <p class="dim">{$t('season.empty')}</p>
+    <p class="hint">{$t('season.empty')}</p>
   {:else}
     <ul>
       {#each events as event (event.id)}
@@ -149,12 +149,12 @@
         <li>
           <div class="event-head">
             <span class="name">{eventName(event.id)}</span>
-            <span class="dim">{event.id}</span>
+            <span class="hint">{event.id}</span>
             <span class="badge" class:up={event.active}
               >{$t(event.active ? 'season.up' : 'season.down')}</span
             >
           </div>
-          <div class="dim">
+          <div class="hint">
             {$t('season.defaultRun', {
               start: formatMonthDay(event.default_season.start),
               end: formatMonthDay(event.default_season.end),
@@ -177,7 +177,7 @@
             {#if draft.mode === 'period'}
               <div class="period">
                 {@render dayPicker(draft, 'start')}
-                <span class="dim">~</span>
+                <span class="hint">~</span>
                 {@render dayPicker(draft, 'end')}
               </div>
             {/if}
@@ -193,7 +193,7 @@
               {/if}
               <button
                 type="button"
-                class="btn"
+                class="btn primary"
                 disabled={panel.pending || !changed(event)}
                 onclick={() => apply(event)}>{$t('season.apply')}</button
               >
@@ -214,57 +214,11 @@
     right: 24px;
     top: 96px;
     z-index: 40;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    box-sizing: border-box;
     width: 340px;
-    max-width: calc(100vw - 32px);
     max-height: 70vh;
-    padding: 10px;
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 10px;
-    background: rgba(6, 10, 14, 0.88);
-    backdrop-filter: blur(4px);
-    color: #e6edf3;
-    font-family: 'Noto Sans KR', sans-serif;
-    font-size: 12px;
-    pointer-events: auto;
-  }
-  .panel-header {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
   }
   .panel-title {
     flex: 1;
-    margin: 0;
-    font-size: 14px;
-    font-weight: 700;
-    color: #f0c040;
-  }
-  .close-btn {
-    padding: 0 2px;
-    border: none;
-    background: none;
-    color: #9fb2c3;
-    font-size: 18px;
-    line-height: 1;
-    cursor: pointer;
-  }
-  .close-btn:hover {
-    color: #fff;
-  }
-  p {
-    margin: 0;
-  }
-  .dim {
-    color: #9fb2c3;
-  }
-  .error {
-    color: #f0a08c;
   }
   ul {
     margin: 0;
@@ -326,9 +280,6 @@
   .period {
     flex-wrap: wrap;
   }
-  .edge {
-    color: #9fb2c3;
-  }
   select {
     padding: 2px 4px;
     border: 1px solid rgba(255, 255, 255, 0.2);
@@ -347,25 +298,5 @@
   .preview {
     margin-right: auto;
     color: #c8b88a;
-  }
-  .btn {
-    padding: 3px 12px;
-    border: 1px solid rgba(240, 192, 64, 0.5);
-    border-radius: 4px;
-    background: none;
-    color: #f0c040;
-    font-family: inherit;
-    font-size: 11px;
-    font-weight: 700;
-    white-space: nowrap;
-    cursor: pointer;
-  }
-  .btn:hover:not(:disabled) {
-    border-color: rgba(240, 192, 64, 0.9);
-    color: #ffd75e;
-  }
-  .btn:disabled {
-    opacity: 0.5;
-    cursor: default;
   }
 </style>

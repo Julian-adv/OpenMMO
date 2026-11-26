@@ -197,7 +197,7 @@ export function applySnowCover(
   return mask
 }
 
-export const OBJECT_SNOW = vec3(0.86, 0.88, 0.92)
+const OBJECT_SNOW = vec3(0.86, 0.88, 0.92)
 
 /** copy() skips the node slots a plain material lacks, so recopying after the
  *  source changes keeps the snow. It also skips alphaTest, a Material setter. */
@@ -211,13 +211,13 @@ class SnowyStandardMaterial extends MeshStandardNodeMaterial {
 
 /** Node copy of a GLB material whose upward faces gather the lying snow;
  *  vertex normals keep rounded canopies white on top only. `tint` recolours
- *  the bare surface beneath the snow. */
+ *  the bare surface beneath the snow; `mask` replaces the ground's snow. */
 export function snowyStandardMaterial(
   source: THREE.MeshStandardMaterial,
-  tint?: (base: Node<'vec4'>) => Node<'vec4'>
+  tint?: (base: Node<'vec4'>) => Node<'vec4'>,
+  mask: Node<'float'> = snowMask(normalWorld.y)
 ): MeshStandardNodeMaterial {
   const material = new SnowyStandardMaterial().copy(source)
-  const mask = snowMask(normalWorld.y)
   // The map's alpha rides in materialColor, so cut-out leaves keep it.
   const color = convert(materialColor, 'vec4') as Node<'vec4'>
   const base = tint ? tint(color) : color

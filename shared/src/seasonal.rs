@@ -6,15 +6,12 @@
 use std::collections::{HashMap, HashSet};
 use std::sync::OnceLock;
 
-use crate::furniture::{FurniturePlacement, FIXED_PLACEMENT_ID_BASE};
+use crate::furniture::{FurniturePlacement, SEASONAL_PLACEMENT_ID_BASE};
 use crate::world::wrap_world_x;
 
 static SEASONAL_EVENTS_JSON: &str = include_str!("../../data/seasonal_events.json");
 static SEASONAL_PROPS_JSON: &str = include_str!("../../data/seasonal_props.json");
 static CATALOG_JSON: &str = include_str!("../../data/object_catalog.json");
-
-/// Clear of the field-boss ids, which start at `FIXED_PLACEMENT_ID_BASE`.
-const PLACEMENT_ID_BASE: u32 = FIXED_PLACEMENT_ID_BASE + 100_000_000;
 
 const DAYS_IN_MONTH: [u8; 12] = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
 
@@ -156,7 +153,7 @@ pub struct SeasonalPropDef {
 impl SeasonalPropDef {
     pub fn placement(&self, ground: f32) -> FurniturePlacement {
         FurniturePlacement {
-            id: PLACEMENT_ID_BASE + self.index,
+            id: SEASONAL_PLACEMENT_ID_BASE + self.index,
             type_id: self.object.clone(),
             x: self.x,
             y: ground,

@@ -31,11 +31,6 @@ export interface ChangedObjectRegion {
 
 const HOUSE_SIGN_ATTACH_DISTANCE = 1
 
-/** Clients re-reading a changed region spread their requests over this long. */
-export const OBJECT_REFRESH_SPREAD_MS = 2000
-const REFRESH_ATTEMPTS = 3
-const REFRESH_RETRY_MS = 2000
-
 export function isObjectInsideHouse(
   placement: ObjectPlacement,
   house: HouseData
@@ -80,10 +75,10 @@ export class ObjectManager {
   private terrainApiUrl: string
   private footprintCache = new Map<string, FootprintData>()
   private regionChanged = createEvent<(region: ChangedObjectRegion) => void>()
+  private regionInvalidated =
+    createEvent<(region: { rx: number; rz: number }) => void>()
   private worldReset = createEvent<() => void>()
   private generation = 0
-  /** Per region, bumped when the server changes it under a read. */
-  private revisions = new Map<string, number>()
 
   constructor() {
     this.terrainApiUrl = getTerrainApiUrl()
@@ -107,34 +102,10 @@ export class ObjectManager {
     if (cached) return cached
 
     const generation = this.generation
-    const revision = this.revisions.get(key)
     const data = await this.loadObjectRegion(rx, rz)
-    if (
-      generation !== this.generation ||
-      revision !== this.revisions.get(key)
-    ) {
-      return this.fetchObject(rx, rz)
-    }
+    if (generation !== this.generation) return this.fetchObject(rx, rz)
     this.cache.set(key, data)
     return data
-  }
-
-  /** The server changed this region's fixed placements: read it again
-   *  and tell whoever shows it. A region not held is read fresh later. */
-  async refreshRegion(rx: number, rz: number): Promise<void> {
-    const key = regionKey(rx, rz)
-    this.revisions.set(key, (this.revisions.get(key) ?? 0) + 1)
-    if (!this.cache.delete(key)) return
-    for (let attempt = 1; attempt <= REFRESH_ATTEMPTS; attempt++) {
-      try {
-        const data = await this.fetchObject(rx, rz)
-        this.regionChanged.emit({ rx, rz, data })
-        return
-      } catch (error) {
-        console.error(`Object region ${rx},${rz} refresh failed`, error)
-        await new Promise((resolve) => setTimeout(resolve, REFRESH_RETRY_MS))
-      }
-    }
   }
 
   resetWorld(): void {
@@ -286,8 +257,18 @@ export class ObjectManager {
     return this.cache.get(regionKey(rx, rz)) ?? null
   }
 
+  /** The server changed this region: reads in flight are dropped and
+   *  whoever shows it reads it again. */
   invalidate(rx: number, rz: number): void {
+    this.generation++
     this.cache.delete(regionKey(rx, rz))
+    this.regionInvalidated.emit({ rx, rz })
+  }
+
+  onRegionInvalidated(
+    cb: (region: { rx: number; rz: number }) => void
+  ): () => void {
+    return this.regionInvalidated.on(cb)
   }
 
   /** Prefer the server's placement ID, then the nearest object of that type. */

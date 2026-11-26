@@ -25,6 +25,8 @@ use crate::{
 /// (field-boss sites, seasonal props), never to a region file, so the editor
 /// can neither collide with nor save them.
 pub const FIXED_PLACEMENT_ID_BASE: u32 = 2_000_000_000;
+pub const FIELD_BOSS_PLACEMENT_ID_BASE: u32 = FIXED_PLACEMENT_ID_BASE;
+pub const SEASONAL_PLACEMENT_ID_BASE: u32 = FIXED_PLACEMENT_ID_BASE + 100_000_000;
 
 pub fn is_fixed_placement(id: u32) -> bool {
     id >= FIXED_PLACEMENT_ID_BASE

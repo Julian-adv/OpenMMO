@@ -28,7 +28,7 @@ import {
   openBookmarks,
   resetBookmarks,
 } from '../stores/bookmarkStore'
-import { resetSeasonalEvents } from '../stores/seasonalEventStore'
+import { closeSeasonalEvents } from '../stores/seasonalEventStore'
 import type { SeasonSchedule } from '../utils/seasonDates'
 import { claimPotionCooldown } from '../stores/potionCooldownStore'
 import { currentDungeonDepth } from '../stores/dungeonStore'
@@ -398,7 +398,7 @@ class NetworkManager {
       resetFriendStores()
       resetFamilyStores()
       resetBookmarks()
-      resetSeasonalEvents()
+      closeSeasonalEvents()
       // Disconnect cancels any open trade.
       resetPlayerTrade()
       if (watchMode) {

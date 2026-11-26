@@ -121,6 +121,8 @@
   let currentHouseId = $state<string | null>(null)
 
   let lastLoadedRegion = { rx: NaN, rz: NaN }
+  /** Clients re-reading a changed region spread their requests over this long. */
+  const REGION_REFRESH_SPREAD_MS = 2000
   let regionLoadGeneration = 0
   let regionRetry: ReturnType<typeof setTimeout> | undefined
 
@@ -152,6 +154,15 @@
       if (rx === lastLoadedRegion.rx && rz === lastLoadedRegion.rz) {
         currentObjectData.set(data)
       }
+    }),
+    objectManager.onRegionInvalidated(({ rx, rz }) => {
+      if (rx !== lastLoadedRegion.rx || rz !== lastLoadedRegion.rz) return
+      const generation = regionLoadGeneration
+      clearTimeout(regionRetry)
+      regionRetry = setTimeout(
+        () => void reloadShownRegion(rx, rz, generation),
+        Math.random() * REGION_REFRESH_SPREAD_MS
+      )
     }),
     objectManager.onWorldReset(() => {
       const { rx, rz } = lastLoadedRegion
@@ -192,6 +203,21 @@
         lastLoadedRegion = { rx: NaN, rz: NaN }
         void loadRegionObject(rx, rz)
       }, 1000)
+    }
+  }
+
+  async function reloadShownRegion(rx: number, rz: number, generation: number) {
+    if (generation !== regionLoadGeneration) return
+    try {
+      const data = await objectManager.fetchObject(rx, rz)
+      if (generation === regionLoadGeneration) currentObjectData.set(data)
+    } catch (error) {
+      if (generation !== regionLoadGeneration) return
+      console.error('Object region refresh failed', error)
+      regionRetry = setTimeout(
+        () => void reloadShownRegion(rx, rz, generation),
+        1000
+      )
     }
   }
 

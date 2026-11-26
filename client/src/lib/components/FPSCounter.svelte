@@ -64,7 +64,7 @@
   import { t } from '../i18n'
   import {
     openSeasonalEvents,
-    resetSeasonalEvents,
+    closeSeasonalEvents,
     seasonalEventsPanel,
   } from '../stores/seasonalEventStore'
   import { closeTopOverlay } from '../stores/overlayStack'
@@ -204,7 +204,7 @@
   }
 
   function toggleSeasonalEvents() {
-    if ($seasonalEventsPanel) resetSeasonalEvents()
+    if ($seasonalEventsPanel) closeSeasonalEvents()
     else openSeasonalEvents()
   }
 

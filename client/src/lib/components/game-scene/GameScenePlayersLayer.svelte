@@ -382,8 +382,7 @@
 
   // Glow pool: shadowless lights on the nearest crystal clusters underground
   // and on winter trees at night, always mounted like the wall-torch pool.
-  const CRYSTAL_GLOW_POOL_SIZE = 2
-  const CRYSTAL_GLOW_DISTANCE = 7
+  const GLOW_POOL_SIZE = 2
   interface GlowStyle {
     color: THREE.Color
     intensity: number
@@ -396,7 +395,7 @@
   const CRYSTAL_GLOW: GlowStyle = {
     color: new THREE.Color('#4a78ff'),
     intensity: 6,
-    distance: CRYSTAL_GLOW_DISTANCE,
+    distance: 7,
     rangeSq: 12 * 12,
     speed: CRYSTAL_GLOW_SPEED,
     pulse: 0.2,
@@ -409,11 +408,11 @@
     speed: 0.9,
     pulse: 0.08,
   }
-  const crystalGlowSlots = Array.from({ length: CRYSTAL_GLOW_POOL_SIZE })
-  let crystalGlowLights = $state<(THREE.PointLight | undefined)[]>([])
-  const _crystalRanking: { idx: number; dist: number }[] = []
-  let crystalGlowTime = 0
-  let crystalGlowIdle = false
+  const glowSlots = Array.from({ length: GLOW_POOL_SIZE })
+  let glowLights = $state<(THREE.PointLight | undefined)[]>([])
+  const _glowRanking: { idx: number; dist: number }[] = []
+  let glowTime = 0
+  let glowIdle = false
   const NO_POSITIONS: THREE.Vector3[] = []
 
   // The bearer's y already resolves house/dungeon floors, so don't resample terrain
@@ -638,19 +637,19 @@
 
   /** Park the glow lights on the nearest sources with a slow pulse like
    *  their shimmer. */
-  function updateCrystalGlowPool(
+  function updateGlowPool(
     deltaTime: number,
     positions: THREE.Vector3[],
     style: GlowStyle
   ) {
-    if (positions.length === 0 && crystalGlowIdle) return
-    crystalGlowIdle = positions.length === 0
-    crystalGlowTime += deltaTime
-    rankNearest(positions, style.rangeSq, _crystalRanking)
-    for (let slot = 0; slot < crystalGlowLights.length; slot++) {
-      const light = crystalGlowLights[slot]
+    if (positions.length === 0 && glowIdle) return
+    glowIdle = positions.length === 0
+    glowTime += deltaTime
+    rankNearest(positions, style.rangeSq, _glowRanking)
+    for (let slot = 0; slot < glowLights.length; slot++) {
+      const light = glowLights[slot]
       if (!light) continue
-      const ranked = _crystalRanking[slot]
+      const ranked = _glowRanking[slot]
       if (!ranked) {
         light.intensity = 0
         continue
@@ -663,8 +662,7 @@
         style.intensity *
         (1 -
           style.pulse +
-          style.pulse *
-            Math.sin(crystalGlowTime * style.speed + crystalGlowPhase(p)))
+          style.pulse * Math.sin(glowTime * style.speed + crystalGlowPhase(p)))
     }
   }
 
@@ -740,19 +738,19 @@
     if (unifiedTorchLight)
       unifiedTorchLight.shadow.autoUpdate = unifiedTorchLight.intensity > 0
     updateWallTorchPool(deltaTime, wallPositions, occupiedWallIdx)
-    const treesLit =
-      !isUnderground && localHouseId == null && !!$serverGameTime?.isNight
-    updateCrystalGlowPool(
-      deltaTime,
-      torchEffectsDisabled
-        ? NO_POSITIONS
-        : isUnderground
-          ? (crystalGlowPositions?.() ?? NO_POSITIONS)
-          : treesLit
-            ? (treeLightPositions?.() ?? NO_POSITIONS)
-            : NO_POSITIONS,
-      treesLit ? TREE_GLOW : CRYSTAL_GLOW
-    )
+    let glowPositions = NO_POSITIONS
+    let glowStyle = CRYSTAL_GLOW
+    if (!torchEffectsDisabled && isUnderground) {
+      glowPositions = crystalGlowPositions?.() ?? NO_POSITIONS
+    } else if (
+      !torchEffectsDisabled &&
+      localHouseId == null &&
+      $serverGameTime?.isNight
+    ) {
+      glowPositions = treeLightPositions?.() ?? NO_POSITIONS
+      glowStyle = TREE_GLOW
+    }
+    updateGlowPool(deltaTime, glowPositions, glowStyle)
   }
 
   export function getUnifiedTorchLight(): THREE.PointLight | undefined {
@@ -1022,13 +1020,11 @@
         castShadow={false}
       />
     {/each}
-    {#each crystalGlowSlots as _slot, i (i)}
+    {#each glowSlots as _slot, i (i)}
       <T.PointLight
-        bind:ref={crystalGlowLights[i]}
+        bind:ref={glowLights[i]}
         position={[0, 0, 0]}
-        color="#4a78ff"
         intensity={0}
-        distance={CRYSTAL_GLOW_DISTANCE}
         decay={TORCH_BASE_DECAY}
         castShadow={false}
       />
