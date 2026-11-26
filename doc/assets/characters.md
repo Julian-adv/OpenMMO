@@ -447,6 +447,7 @@ node tools/optimize-character-textures.mjs assets/npcs/tobin/tobin-before-textur
 - 검증: 세 동작 총 **616시점**, 바닥 관통·본 길이 변화·비정상 좌표 검사 통과. 양손 열 손끝 모두 자체 손가락 체인 가중치 약 100%이며 각 둘째 관절을 45° 굽히면 손끝이 3.35–4.67cm 움직인다. bind 위치 오차 최대 약 `1.16e-7m`, 가중치 합 오차 최대 약 `4.47e-8`. Khronos glTF Validator 오류 0개·경고 1개(원본과 같은 tangent 미포함, 런타임 생성).
 - 재현: `.venv/bin/python assets/npcs/ysolde/export_rig.py`. 원본에서 피팅·리깅·동작 생성·검증·Blender 저장을 실행하고, 중간 GLB·클립 JSON·개별 검사 파일을 삭제한다. 관절·가중치·클립·검증 기록은 `tripo_v1/generation.json`의 `rigging`에 통합했다. 표정·눈 깜빡임·독립적인 머리카락 물리 본은 없다. 사용자 요청으로 중간 결과물을 삭제한 뒤 최종 GLB·Blender와 재현 소스만 보존한다.
 - 게임 연결(2026-10-24): `Ysolde`의 전용 모델은 `client/public/models/characters/ysolde.glb`. 위 Tripo 모델·로컬 리그와 같은 출처·라이선스다. `.venv/bin/python tools/repack-glb-textures.py assets/npcs/ysolde/rig_v1/ysolde.glb --out client/public/models/characters`로 12.35MB → 6.02MB. 4096² base color는 유지하고 normal·ORM은 1024² JPEG q92·q90으로 줄였다. 메시·리그·내장 `idle1`·`walk`·`run`은 유지하며, 게임에서도 내장 동작을 우선 사용한다. 월드 (−1880.7, 6.9, 5522.7)에 상주하도록 등록했다.
+  - 2026-11-26 용량 최적화: 6.02MB → 1.47MB. base color 4096² JPEG → 2048² WebP q92, normal·ORM 1024² WebP q92, 메시·클립 gltf-transform dedup/weld/prune + meshopt(medium). 다른 NPC(그리다·집사·건축가)와 같은 2048²다. 게임 최대 줌에서 렌더 차이 평균 0.01/255, 얼굴 초근접에서만 4096²보다 아주 약간 부드럽다.
 - 개발 미리보기: `/modular-character-preview.html?character=ysolde`. 상단 캐릭터 목록에서 이졸데를 선택한다. 기준 A포즈·대기·걷기·달리기·발굴, 재생 속도·일시정지·구간 탐색, 얼굴·오른손 확대, 뼈대·와이어프레임·작은 삽 표시를 지원한다. 몸체는 `rig_v1/ysolde.glb`, 발굴 동작과 삽은 게임과 같은 전용 GLB를 읽는다. `&motion=excavate&camera=side`를 붙이면 발굴 측면으로 바로 열린다.
 
 ## 텍스처 재패킹 (2026-08-06)
