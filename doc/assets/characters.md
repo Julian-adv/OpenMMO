@@ -211,7 +211,7 @@ Three.js 디코더로 비교한 10팩 56개 클립의 2,808개 트랙·251,569�
 
 ## Bard
 
-`female_bard.glb` — 단일 성별(female). Meshy.ai Premium 등급, 생성 2026-08-05 (프롬프트명 "Crimson Vanguard").
+`female_bard.glb` — 단일 성별(female). Meshy.ai Premium 등급, 생성 2026-08-05 (프롬프트명 "Crimson Vanguard"). 플레이어는 2026-11-06, NPC Signe는 2026-11-26에 [모듈형 바드 복장](modular-female-bard-tripo.md)으로 옮겨 가 모델을 삭제했다(`assets.lock`에서 뺌).
 
 - 원화 ![원화](../../client/public/character_concepts/female_bard.webp) (ChatGPT Pro 20x로 배경 투명화, 2026-08-28; WebP q85)
 

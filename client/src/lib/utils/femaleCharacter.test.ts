@@ -345,38 +345,23 @@ describe('female modular starter outfits', () => {
       disposeCharacterSkeletons(modelRoot)
     }
   )
-  it('uses the modular female player while keeping NPCs and other classes unchanged', () => {
+  it('uses the modular female body for female players', () => {
     expect(getCharacterModelPath('knight', 'female')).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('barbarian', 'female')).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
-    expect(getCharacterModelPath('knight', 'female', true)).toBe(
-      MODULAR_FEMALE_MODEL_PATH
-    )
     expect(getCharacterModelPath('rogue', 'female')).toBe(
-      MODULAR_FEMALE_MODEL_PATH
-    )
-    expect(getCharacterModelPath('rogue', 'female', true)).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
     expect(getCharacterModelPath('caveman', 'female')).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
-    expect(getCharacterModelPath('caveman', 'female', true)).toBe(
-      MODULAR_FEMALE_MODEL_PATH
-    )
     expect(getCharacterModelPath('priest', 'female')).toBe(
       MODULAR_FEMALE_MODEL_PATH
     )
-    expect(getCharacterModelPath('priest', 'female', true)).toBe(
-      MODULAR_FEMALE_MODEL_PATH
-    )
     expect(getCharacterModelPath('valkyrie', 'female')).toBe(
-      MODULAR_VALKYRIE_MODEL_PATH
-    )
-    expect(getCharacterModelPath('valkyrie', 'female', true)).toBe(
       MODULAR_VALKYRIE_MODEL_PATH
     )
   })

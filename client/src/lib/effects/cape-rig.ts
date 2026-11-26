@@ -2,7 +2,6 @@ import * as THREE from 'three'
 import { MeshStandardNodeMaterial } from 'three/webgpu'
 import { color, float, frontFacing, mix, texture } from 'three/tsl'
 import type { WindSample } from '../shaders/grass-material'
-import { FEMALE_BARD_CHARACTER_MODEL_PATH } from '../utils/modelPaths'
 
 /** Procedural back cape: a tapered skinned sheet driven by a tiny verlet cloth
  *  (3 chains × `segments` points). The solve runs in world space, so the sheet
@@ -723,22 +722,10 @@ export interface CapeCollarTuning {
   fade: number
 }
 
-/** Hand-tuned per character model: hair and pauldrons read as body in the
- *  silhouette and hold the cape off the shoulders, so eyeball the bias and
- *  record it here. A short fade sinks only the collar under the hair and gives
- *  the sheet its clearance back just below, so a bending spine has room. */
-const COLLAR_TUNING_BY_MODEL: Record<string, Partial<CapeCollarTuning>> = {
-  [FEMALE_BARD_CHARACTER_MODEL_PATH]: { bias: 0.03 },
-}
-
-const DEFAULT_COLLAR_TUNING: CapeCollarTuning = {
+/** Collar sits flush; the dev bias override nudges it in game. */
+export const DEFAULT_COLLAR_TUNING: CapeCollarTuning = {
   bias: 0,
   fade: COLLAR_BIAS_FADE,
-}
-
-/** Recorded tuning for a character model path; untouched models sit flush. */
-export function capeCollarTuningFor(modelPath: string): CapeCollarTuning {
-  return { ...DEFAULT_COLLAR_TUNING, ...COLLAR_TUNING_BY_MODEL[modelPath] }
 }
 
 /** Measured fits, keyed by model path and tuning. Everything the fit measures

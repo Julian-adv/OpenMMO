@@ -19,8 +19,6 @@ export function isModularModel(path: string): boolean {
   return path === MODULAR_MALE_MODEL_PATH || isModularFemaleModel(path)
 }
 
-export const FEMALE_BARD_CHARACTER_MODEL_PATH =
-  '/models/characters/female_bard.glb'
 export const NIGHT_MERCHANT_CHARACTER_MODEL_PATH =
   '/models/characters/night_merchant.glb'
 export const STEWARD_CHARACTER_MODEL_PATH = '/models/characters/steward.glb'
@@ -49,8 +47,9 @@ export function getObjectModelPath(model: string): string {
   return `/models/${model}`
 }
 
-const CLASS_GENDER_MODELS: Partial<
-  Record<CharacterClass, Partial<Record<Gender, string>>>
+const CLASS_GENDER_MODELS: Record<
+  CharacterClass,
+  Partial<Record<Gender, string>>
 > = {
   knight: {
     male: MODULAR_MALE_MODEL_PATH,
@@ -78,7 +77,7 @@ const CLASS_GENDER_MODELS: Partial<
     female: MODULAR_FEMALE_MODEL_PATH,
   },
   bard: {
-    female: FEMALE_BARD_CHARACTER_MODEL_PATH,
+    female: MODULAR_FEMALE_MODEL_PATH,
     male: MODULAR_MALE_MODEL_PATH,
   },
   merchant: { female: MODULAR_FEMALE_MODEL_PATH },
@@ -111,46 +110,21 @@ export function usesOwnClips(path: string): boolean {
 }
 
 const NPC_CLASSES: CharacterClass[] = ['merchant', 'guard', 'maid']
-export const PLAYER_CLASSES = (
-  Object.keys(CLASS_GENDER_MODELS) as CharacterClass[]
-).filter((cls) => !NPC_CLASSES.includes(cls))
+export const CHARACTER_CLASSES = Object.keys(
+  CLASS_GENDER_MODELS
+) as CharacterClass[]
+export const PLAYER_CLASSES = CHARACTER_CLASSES.filter(
+  (cls) => !NPC_CLASSES.includes(cls)
+)
 
 export function getAvailableGenders(characterClass: CharacterClass): Gender[] {
-  const genders = CLASS_GENDER_MODELS[characterClass]
-  if (!genders) return ['male', 'female']
-  return Object.keys(genders) as Gender[]
+  return Object.keys(CLASS_GENDER_MODELS[characterClass]) as Gender[]
 }
 
 export function getCharacterModelPath(
   characterClass: CharacterClass,
-  gender?: Gender,
-  isNpc = false
+  gender?: Gender
 ): string {
   const genders = CLASS_GENDER_MODELS[characterClass]
-  const effectiveGender = gender ?? getAvailableGenders(characterClass)[0]
-  if (
-    !isNpc &&
-    PLAYER_CLASSES.includes(characterClass) &&
-    effectiveGender === 'male' &&
-    genders?.male
-  )
-    return MODULAR_MALE_MODEL_PATH
-  if (
-    !isNpc &&
-    (characterClass === 'knight' ||
-      characterClass === 'barbarian' ||
-      characterClass === 'rogue' ||
-      characterClass === 'caveman' ||
-      characterClass === 'priest' ||
-      characterClass === 'bard') &&
-    effectiveGender === 'female'
-  )
-    return MODULAR_FEMALE_MODEL_PATH
-  if (!isNpc && characterClass === 'valkyrie' && effectiveGender === 'female')
-    return MODULAR_VALKYRIE_MODEL_PATH
-  if (genders) {
-    if (gender && genders[gender]) return genders[gender]
-    return Object.values(genders)[0]
-  }
-  return MODULAR_MALE_MODEL_PATH
+  return (gender && genders[gender]) || Object.values(genders)[0]!
 }

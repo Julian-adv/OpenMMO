@@ -206,7 +206,7 @@
   import type { WindState } from '../shaders/grass-material'
   import {
     attachCapeFit,
-    capeCollarTuningFor,
+    DEFAULT_COLLAR_TUNING,
     DEFAULT_CAPE_COLOR,
     fitCapeToSkeleton,
     type CapeRig,
@@ -409,7 +409,7 @@
   // svelte-ignore state_referenced_locally
   const modelPath =
     (npcPlayerId !== undefined ? getNpcModelPath(name) : undefined) ??
-    getCharacterModelPath(characterClass, gender, npcPlayerId !== undefined)
+    getCharacterModelPath(characterClass, gender)
   const modelPromise = loadCharacterModel(
     modelPath,
     untrack(() => appearance),
@@ -1009,9 +1009,10 @@
   let capeRig: CapeRig | null = null
 
   const capeCollarTuning = $derived.by(() => {
-    const tuning = capeCollarTuningFor(modelPath)
     const override = $capeCollarBiasOverride
-    return override === null ? tuning : { ...tuning, bias: override }
+    return override === null
+      ? DEFAULT_COLLAR_TUNING
+      : { ...DEFAULT_COLLAR_TUNING, bias: override }
   })
 
   const equippedBackItemId = $derived(

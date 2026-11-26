@@ -12,9 +12,11 @@ import {
 } from './characterModel'
 import {
   CHARACTER_ANIMATION_PACK_PATHS,
+  CHARACTER_CLASSES,
   getAvailableGenders,
   getCharacterModelPath,
   getNpcModelPath,
+  isModularModel,
   MODULAR_FEMALE_MODEL_PATH,
   MODULAR_MALE_MODEL_PATH,
   PLAYER_CLASSES,
@@ -82,18 +84,22 @@ describe('male player model selection', () => {
         )
     }
     expect(getNpcModelPath('Karl')).toBeUndefined()
-    expect(getCharacterModelPath('guard', 'female', true)).toBe(
-      MODULAR_FEMALE_MODEL_PATH
-    )
     expect(getNpcModelPath('Tobin')).toBe('/models/characters/tobin.glb')
   })
 
-  it('offers both bard genders while retaining the default female NPC model', () => {
+  it('offers both bard genders on the modular bodies', () => {
     expect(getAvailableGenders('bard')).toEqual(['female', 'male'])
     expect(getCharacterModelPath('bard', 'male')).toBe(MODULAR_MALE_MODEL_PATH)
-    expect(getCharacterModelPath('bard', undefined, true)).toBe(
-      '/models/characters/female_bard.glb'
-    )
+    expect(getCharacterModelPath('bard')).toBe(MODULAR_FEMALE_MODEL_PATH)
+  })
+
+  it('leaves one-piece models to named NPC overrides', () => {
+    for (const cls of CHARACTER_CLASSES)
+      for (const gender of [undefined, 'male', 'female'] as const)
+        expect(
+          isModularModel(getCharacterModelPath(cls, gender)),
+          `${cls}/${gender}`
+        ).toBe(true)
   })
 })
 

@@ -88,7 +88,7 @@ const LIFT = Number(opt('lift', 0))
 // spread across these is the check that it does.
 const CHARS = opt(
   'char',
-  'female_bard.glb,modular_male/base.glb'
+  'modular_female/base.glb,modular_male/base.glb'
 ).split(',')
 
 // ── GLB reading (JSON + BIN chunks, no glTF library) ────────────────────────

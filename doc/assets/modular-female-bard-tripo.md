@@ -1,6 +1,6 @@
 # 여성 바드 복장
 
-여성 바드는 지금 모듈형이 아닌 통짜 모델 `female_bard.glb`를 쓴다([캐릭터 기록](characters.md#bard)). 이 문서는 여성 공통 몸체에 입힐 모듈형 바드 복장 기록이다.
+여성 공통 몸체에 입히는 모듈형 바드 복장 기록이다. 예전 통짜 모델 `female_bard.glb`는 [캐릭터 기록](characters.md#bard)에 남는다.
 여성 공통 몸체는 [여성 몸체 기록](modular-human-female-01.md), 제작 절차는 [공통 워크플로우](modular-outfit-workflow.md)와 [연결 기준](modular-outfit-connections.md)을 따른다.
 
 ## 원화 — 2026-11-05
@@ -143,6 +143,10 @@ blender -b --python-exit-code 1 --python tools/blender-scripts/export_outfit_ite
 ```
 
 워크트리 서버에서 여성 바드를 새로 만들어 생성 화면·캐릭터 선택·월드 진입을 확인했다. 만돌린 연주 동작과 다른 플레이어에게 보이는 모습은 아직 확인하지 않았다.
+
+## NPC Signe — 2026-11-26
+
+NPC 바드 Signe는 플레이어 전환 뒤에도 클래스 표에 남은 통짜 모델을 썼다. 이제 이 복장 다섯 부위를 loadout으로 입고, 사용자가 고른 `long_wavy` 헤어에 빨간 머리(`#a8321f`)를 한다(`data-src/npcs.csv`). 통짜 모델은 이름별 `NPC_MODEL_OVERRIDES`로만 들어온다.
 
 ## 모자 원화 — 2026-11-06
 

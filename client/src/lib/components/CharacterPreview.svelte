@@ -55,7 +55,7 @@
   } from '../utils/torchFlicker'
   import {
     attachCapeFit,
-    capeCollarTuningFor,
+    DEFAULT_COLLAR_TUNING,
     fitCapeToSkeleton,
     type CapeRig,
   } from '../effects/cape-rig'
@@ -318,7 +318,7 @@
 
     const fit = fitCapeToSkeleton(
       characterRoot,
-      capeCollarTuningFor(modelPath),
+      DEFAULT_COLLAR_TUNING,
       modelPath
     )
     if (fit) {

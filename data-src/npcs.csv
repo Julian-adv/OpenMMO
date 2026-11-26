@@ -1,7 +1,7 @@
 id,npcName,class,wishlist,wishlistRatePercent,salaryPerDay,walletCap,keepsakes,loadout,chatAliases,spawnAtSchedule,minLevel,minMaxHp,minGuard,unarmedDamageRoll,respawnAtSpawn,selfDefense,walkSpeed,dialogueOnly,capeCrest,rank,protects,hair,hairColor,gender,outfit,outfitPrice,face
 rica,Rica,merchant,,,,,,shopkeeper_top;shopkeeper_pants;shopkeeper_boots,리카,,,,,,,,,,,,,long_wavy,#d9d5cd,female,shopkeeper_top;shopkeeper_pants;shopkeeper_boots,30000,
 karl,Karl,guard,torch;dagger,120,5000,30000,,guard_spear;guard_helmet;guard_top;guard_pants;guard_gloves;guard_boots;guard_tabard,카를,,,,,,,,,,aldermark,captain,,,,male,guard_helmet;guard_top;guard_pants;guard_gloves;guard_boots;guard_tabard,25000,
-signe,Signe,bard,,,,,mandolin;worn_mandolin,worn_torch;tip_hat,시그네,,,,,,,,,,,,,,,,,,
+signe,Signe,bard,,,,,mandolin;worn_mandolin,worn_torch;tip_hat;worn_bard_helmet;worn_bard_top;worn_bard_pants;worn_bard_gloves;worn_bard_boots,시그네,,,,,,,,,,,,,long_wavy,#a8321f,female,,,
 wick,Wick,merchant,,,,,,,위크;윅,,,,,,,,,,,,,,,,,,
 miriel,Miriel,maid,,,,,,maid_helmet;maid_top;maid_pants;maid_gloves;maid_boots,미리엘,,,,,,,,,,,,,twintail,,female,,,
 cocoly,Cocoly,maid,,,,,,maid_helmet;pink_maid_top;pink_maid_pants;pink_maid_gloves;pink_maid_boots,코콜리,,,,,,,,,,,,,ponytail,#e3c27a,female,,,
