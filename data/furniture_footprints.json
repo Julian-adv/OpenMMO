@@ -6,6 +6,12 @@
     "maxZ": 0.4,
     "cellCoverage": 0.15
   },
+  "winter_tree": {
+    "minX": -1.7,
+    "maxX": 1.7,
+    "minZ": -1.7,
+    "maxZ": 1.7
+  },
   "mannequin": {
     "minX": -0.42,
     "maxX": 0.42,

@@ -21,6 +21,15 @@ use crate::{
     shortest_world_delta_x,
 };
 
+/// Placement ids from here up belong to placements made from tracked tables
+/// (field-boss sites, seasonal props), never to a region file, so the editor
+/// can neither collide with nor save them.
+pub const FIXED_PLACEMENT_ID_BASE: u32 = 2_000_000_000;
+
+pub fn is_fixed_placement(id: u32) -> bool {
+    id >= FIXED_PLACEMENT_ID_BASE
+}
+
 /// Model-local XZ footprint of an object, in metres (the GLB's world-space XZ
 /// bounding box). Deserialised from the embedded footprint table.
 #[derive(Clone, Copy, Debug, serde::Deserialize)]

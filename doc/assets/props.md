@@ -28,6 +28,40 @@
   - `client/public/items/objects/shop_sign.png`, `shop_sign_plank.png`, `shop_sign_oval.png`, `shop_sign_weathered.png` — ORKEA 간판 4종 아이콘 (2026-09-19). 게임의 `buildShopSignBoard`가 만든 메시·UV와 각 스타일의 기존 Poly Haven 나무 텍스처를 그대로 사용해 Blender 5.2.0 LTS에서 투명 128² PNG로 렌더. 메시·렌더 스크립트는 프로젝트와 동일 라이선스, `wood_shutter`, `wood_planks`, `dark_wooden_planks`, `weathered_planks` 텍스처는 CC0. `node tools/export-shop-sign-icons.mjs` 실행 후 `blender -b -P tools/blender-scripts/render_furniture_icon.py -- MODEL --geometry assets/shop-sign-icons/MODEL.json --yaw -10 --tilt -80`으로 재생성한다. 간판 문구는 포함하지 않는다. `assets/shop-sign-icons/`의 중간 메시 JSON 4개는 2026-10-09 삭제했으며, 아이콘 재생성 시 내보내기 도구로 다시 만든다.
 - empty_plate.glb — Meshy AI "Sunlit Ceramic Plate" (Pro 요금제, 2026-09-02 생성, 소스 `assets/objects/empty_plate/Meshy_AI_Sunlit_Ceramic_Plate_0902163541_texture.glb`). 완전 소유권·상업 OK (characters.md License 참조). 여관 테이블에서 손님이 다 먹은 접시 — `Meal.eaten`이면 클라이언트가 요리 모델 대신 이걸 그린다 (HUNGER.md "여관 식사"). Blender에서 chicken_rice.glb와 같은 지름 0.35m로 스케일 적용(0.35×0.03×0.35 W×H×D), 원점=바닥 중심, 텍스처 2048→512 축소, 검은 emissive 제거 (2026-09-03). 아이콘 없음(월드 전용)
     - 원화는 ChatGPT 이미지 생성 (ChatGPT Pro 20x, 2026-09-03) ![원화](../images/props/empty_plate.png)
+- winter_tree.glb — 앨더마크 광장의 겨울 나무 (2026-11-23). David Montaña (@David55504)의
+  [Christmas tree low poly 4 lods](https://sketchfab.com/3d-models/christmas-tree-low-poly-4-lods-9d5502124c954756a347d7ab07557b93),
+  [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). 게시 2021-11-25, 내려받기 2026-11-23 (무료, AI 생성 아님).
+  제작자·원본 링크·라이선스·변경 내용을 함께 표시한다.
+  - 원본: `assets/objects/winter_tree/source/christmas_tree_low_poly_4_lods.glb` (Sketchfab 변환본, 텍스처 1k)와
+    `christmas-tree-low-poly-4-lods.zip` (원본 FBX).
+  - 가공: `tools/prepare_winter_tree.py` (Blender 5.2). LOD 4단 중 LOD1의 나무·장식 줄·전구·장식만 남기고
+    줄기 자리를 원점에 두고 높이 5.0m로 키워 꾸민다. 원본의 화분과 선물 상자는 뺐다.
+    아래 보강의 치수는 모두 이 5m 나무 기준이고, 마지막에 전체를 1.216배로 키워 6.2m로 세운다 (스크립트의 `SIZE`).
+    8m는 캐릭터에 비해 너무 컸고 (사용자 확인 2026-11-23), 5.1m는 광장에 묻혀 작아 보였다.
+    둘을 나란히 비교해 6.2m, 캐릭터 키의 약 3.2배로 정했다 (사용자 확인 2026-11-24).
+  - 보강 (2026-11-24): 게임 카메라(등각, 화면 높이 20m)에서는 잎 카드가 가늘어 속이 비쳐 앙상하고
+    장식이 16개뿐이라 초라하다는 평이었다 (사용자 확인). 같은 스크립트가 아래를 더한다.
+    - 잎을 돌린 사본 3겹(47°·101°·163°)과 속을 채우는 짙은 녹색 몸통을 넣었다.
+    - 원본 장식(지팡이 사탕·종)은 1.35배, 별은 1.1배로 키우고 별을 십자로 겹쳐 어느 쪽에서도 보이게 했다.
+    - 구슬 36개(빨강·금·파랑·아이보리, 반지름 0.08~0.15m)를 6단으로 걸었다.
+    - 밑동: 화분 위에 맨 줄기로 선 원본은 받침대에 올려 둔 것처럼 어색하다는 평이었다 (사용자 확인 2026-11-24).
+      다른 게임의 광장 나무(WoW 겨울맞이 축제, FFXIV 별빛축제)는 가지가 땅까지 내려오고 선물 더미가 밑동을 가린다.
+      그래서 화분을 빼고 원본 높이의 11%(화분과 맨 줄기)를 땅 밑으로 내려 가지가 바닥에 닿게 했다.
+      밑에는 포도주색 치마 천(반지름 1.5m, 아이보리 털 테두리까지 1.7m)을 깔고 리본 선물 상자 10개를 올렸다.
+      게임 카메라가 보는 쪽(모델의 −X·+Z)에 선물이 가장 많다.
+    - 구슬·선물·치마 천은 스크립트가 만든 도형이고 정점 색을 쓴다 (프로젝트와 같은 라이선스).
+      광택 있는 `winter_tree_decor`와 천 `winter_tree_cloth` 두 재질이고, glTF 내보내기가 한 메시에서 재질 하나만
+      정점 색을 살려서 메시도 둘로 나눴다.
+    - 결과 (6.2m로 키운 뒤): 치마 천까지 4.2 × 4.1 × 6.2m (가지 폭 약 3.8m), 삼각형 26,416개, 재질 8개.
+  - 텍스처: 잎·장식 줄 1024², 나머지 512², WebP q88. 잎과 장식 줄 재질은 알파 블렌드를 컷아웃(MASK 0.35)·양면으로 바꿨다.
+    2,232,432 bytes.
+  - 전구 70개의 중심과 꼭대기 별의 중심 좌표를 `client/src/lib/data/winterTreeLights.json`으로 뽑아 밤 빛무리에 쓴다 (`winter-tree.ts`).
+    같은 파일의 `scale`이 `SIZE`를 전해서, 5m 나무에 맞춘 빛무리 크기가 나무를 따라 커진다.
+    장식 줄을 따라 311곳으로 늘린 안은 작은 점이 너무 많아 징그럽다는 평으로 버렸다 (사용자 확인 2026-11-23).
+  - 통행을 막는 범위는 모델 경계 상자가 아니라 카탈로그의 3.4m 사각형이다 (선물 더미까지).
+    나무 크기를 바꾸면 `data/object_catalog.json`과 `data/furniture_footprints.json`의 범위도 같은 비율로 고친다.
+    치마 천 가장자리는 밟고 지나간다.
+  - 규칙과 기간: [SEASONAL_PROPS.md](../SEASONAL_PROPS.md).
 - stone bridge https://sketchfab.com/3d-models/stone-bridge-a5d380cd08654b508b4b643056038605
 - bridge wood https://sketchfab.com/3d-models/bridge-wood-20c090db0a7345898e20e2621fc2ba4c
 - big bridge https://sketchfab.com/3d-models/bridge-9328bbfc04a84202a6a97bd59408473a

@@ -639,6 +639,10 @@ async fn main() -> ExitCode {
         Ok(rows) => game_state.load_statues(&rows),
         Err(err) => warn!("No dungeon statues loaded: {}", err),
     }
+    match auth_service.seasonal_schedules() {
+        Ok(stored) => game_state.load_seasonal_schedules(stored),
+        Err(err) => warn!("No seasonal schedules loaded: {}", err),
+    }
     if let Err(err) = game_state.init_passability(&terrain_io).await {
         error!(
             "Failed to build passability cache; refusing to start: {}",
@@ -1082,6 +1086,7 @@ async fn main() -> ExitCode {
                 metrics::record_hourly_metrics(&metrics_game, Arc::clone(&metrics_auth)),
             )
             .await;
+            guard_tick("seasonal props", metrics_game.refresh_seasonal_props()).await;
             let remaining = metrics::SAMPLE_INTERVAL_SECONDS
                 - auth::unix_now().rem_euclid(metrics::SAMPLE_INTERVAL_SECONDS);
             tokio::select! {

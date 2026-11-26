@@ -80,6 +80,10 @@
   } from '../../utils/shop-sign'
   import { buildNoticeBoard, mountNoticePapers } from '../../utils/notice-board'
   import {
+    decorateWinterTree,
+    WINTER_TREE_LIGHT_HEIGHT,
+  } from '../../utils/winter-tree'
+  import {
     buildMannequinStand,
     mountMannequin,
     updateMannequins,
@@ -270,6 +274,7 @@
         })
       }
       if (!model) return null
+      if (def.glow === 'winterTree') decorateWinterTree(model)
 
       const box = new THREE.Box3().setFromObject(model)
       const center = new THREE.Vector3()
@@ -449,6 +454,8 @@
    *  fires (hearths) take the unified light, torches feed the glow pool. */
   const firePositions: THREE.Vector3[] = []
   const torchPositions: THREE.Vector3[] = []
+  /** Where visible winter trees throw their night light. */
+  const treeLightPositions: THREE.Vector3[] = []
   const _placementPos = new THREE.Vector3()
   const _fireOrigin = new THREE.Vector3()
   // eslint-disable-next-line svelte/prefer-svelte-reactivity
@@ -471,10 +478,15 @@
   function syncFires(visible: ObjectPlacement[]) {
     firePositions.length = 0
     torchPositions.length = 0
+    treeLightPositions.length = 0
     _activeFires.length = 0
     _seenFires.clear()
     for (const p of visible) {
       const def = objectDefsById.get(p.type)
+      if (def?.glow === 'winterTree')
+        treeLightPositions.push(
+          new THREE.Vector3(p.x, p.y + WINTER_TREE_LIGHT_HEIGHT, p.z)
+        )
       const fire = def?.fire
       if (!fire) continue
       const isTorch = def?.fireKind === 'torch'
@@ -569,6 +581,10 @@
 
   export function getTorchPositions(): THREE.Vector3[] {
     return torchPositions
+  }
+
+  export function getTreeLightPositions(): THREE.Vector3[] {
+    return treeLightPositions
   }
 
   /** Apply a placement's position + rotation (yaw + pitch) to its clone. Single

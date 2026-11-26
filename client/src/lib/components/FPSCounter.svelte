@@ -61,6 +61,12 @@
     windDebugVisible,
   } from '../stores/debugStore'
   import { isAdminUser } from '../stores/gameStore'
+  import { t } from '../i18n'
+  import {
+    openSeasonalEvents,
+    resetSeasonalEvents,
+    seasonalEventsPanel,
+  } from '../stores/seasonalEventStore'
   import { closeTopOverlay } from '../stores/overlayStack'
   import { friendPanelVisible } from '../stores/friendStore'
   import { familyPanelVisible, familyHotkeyActive } from '../stores/familyStore'
@@ -197,6 +203,11 @@
     windDebugVisible.update((v) => !v)
   }
 
+  function toggleSeasonalEvents() {
+    if ($seasonalEventsPanel) resetSeasonalEvents()
+    else openSeasonalEvents()
+  }
+
   // Clear admin flags when switching characters.
   $effect(() => {
     if ($isAdminUser) return
@@ -207,31 +218,58 @@
 <svelte:window onkeydown={handleKeydown} />
 
 {#if $isAdminUser && !$debugVisible}
-  <button
-    class="debug-toggle-btn"
-    onclick={() => debugVisible.set(true)}
-    title="Show Debug Panel (Ctrl+D)"
-  >
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
+  <div class="admin-tools">
+    <button
+      class="debug-toggle-btn"
+      onclick={() => debugVisible.set(true)}
+      title="Show Debug Panel (Ctrl+D)"
     >
-      <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v1h4" /><path
-        d="M18 8h-2V6a4 4 0 0 0-4-4"
-      /><path d="M20 10a2 2 0 0 0-2-2" /><path d="M2 13h4" /><path
-        d="M18 13h4"
-      /><path d="M6 18H4a2 2 0 0 1-2-2" /><path d="M20 18h2" /><path
-        d="M6 8v10a6 6 0 0 0 12 0V8"
-      /><path d="M2 10h4" /><path d="M18 10h4" />
-    </svg>
-  </button>
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <path d="M12 2a4 4 0 0 0-4 4v2H6a2 2 0 0 0-2 2v1h4" /><path
+          d="M18 8h-2V6a4 4 0 0 0-4-4"
+        /><path d="M20 10a2 2 0 0 0-2-2" /><path d="M2 13h4" /><path
+          d="M18 13h4"
+        /><path d="M6 18H4a2 2 0 0 1-2-2" /><path d="M20 18h2" /><path
+          d="M6 8v10a6 6 0 0 0 12 0V8"
+        /><path d="M2 10h4" /><path d="M18 10h4" />
+      </svg>
+    </button>
+    <button
+      class="debug-toggle-btn season-toggle-btn"
+      class:active={$seasonalEventsPanel !== null}
+      onclick={toggleSeasonalEvents}
+      title={$t('season.title')}
+      aria-label={$t('season.title')}
+    >
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        stroke-width="2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      >
+        <rect x="3" y="4" width="18" height="18" rx="2" /><path
+          d="M16 2v4"
+        /><path d="M8 2v4" /><path d="M3 10h18" /><path
+          d="m12 12.5 1 2.1 2.3.3-1.7 1.6.4 2.3-2-1.1-2 1.1.4-2.3-1.7-1.6 2.3-.3z"
+        />
+      </svg>
+    </button>
+  </div>
 {:else if $isAdminUser}
   <!-- svelte-ignore a11y_click_events_have_key_events -->
   <div
@@ -338,6 +376,15 @@
             RADAR
           </button>
 
+          <button
+            class="action-btn"
+            class:active={$seasonalEventsPanel !== null}
+            onclick={toggleSeasonalEvents}
+            title="Toggle Seasonal Events Panel"
+          >
+            SEASON
+          </button>
+
           {#if !$mapEditorMode}
             <button
               class="action-btn grid-btn"
@@ -428,6 +475,17 @@
     background: rgba(0, 0, 0, 0.8);
     color: #00ff00;
     border-color: rgba(0, 255, 0, 0.3);
+  }
+
+  .admin-tools {
+    display: flex;
+    gap: 6px;
+  }
+
+  .season-toggle-btn:hover,
+  .season-toggle-btn.active {
+    color: #f0c040;
+    border-color: rgba(240, 192, 64, 0.4);
   }
 
   .hud-container {

@@ -79,9 +79,10 @@ async function measure(io, path) {
 const FORCE = process.argv.includes("--force");
 
 const catalog = JSON.parse(await readFile(CATALOG_PATH, "utf8"));
-const solidDefs = catalog.filter((d) => d.solid && d.model);
-// Procedural objects have no GLB; their catalog entry gives the footprint.
-const fixedDefs = catalog.filter((d) => d.solid && !d.model && d.footprint);
+const solidDefs = catalog.filter((d) => d.solid && d.model && !d.footprint);
+// A catalog footprint wins: procedural objects have no GLB, and a model's
+// bounding box can reach far past what should block the way.
+const fixedDefs = catalog.filter((d) => d.solid && d.footprint);
 
 async function mtimeMs(path) {
   try {

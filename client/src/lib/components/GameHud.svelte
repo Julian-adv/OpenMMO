@@ -59,6 +59,8 @@
   import { impoundSession } from '../stores/impoundStore'
   import BookmarkDialog from './BookmarkDialog.svelte'
   import PartySummonDialog from './PartySummonDialog.svelte'
+  import SeasonalEventsPanel from './SeasonalEventsPanel.svelte'
+  import { seasonalEventsPanel } from '../stores/seasonalEventStore'
   import BlessDialog from './BlessDialog.svelte'
   import { blessSession, bookmarkDialog } from '../stores/bookmarkStore'
   import { salonSession } from '../stores/salonStore'
@@ -574,6 +576,10 @@
 
 {#if $summonPicker !== null}
   <PartySummonDialog />
+{/if}
+
+{#if $seasonalEventsPanel}
+  <SeasonalEventsPanel />
 {/if}
 
 {#if $blessSession}

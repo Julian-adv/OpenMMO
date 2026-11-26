@@ -7,6 +7,7 @@ import type { MonsterData } from '../types/Monster'
 import type { ClientEnvReport } from '../utils/clientEnvReport'
 import type { FenceEdge } from '../terrain/fenceEdges'
 import type { LandscapingTool } from '../terrain/landscaping'
+import type { SeasonSchedule } from '../utils/seasonDates'
 
 export type Position = {
   x: number
@@ -329,6 +330,8 @@ export type ClientMessage =
   | { DebugDropItem: { item_def_id: string } }
   | { DebugSetTime: { hour: number; minute: number } }
   | { DebugResetDungeonProps: { entrance_id: string } }
+  | 'QuerySeasonalEvents'
+  | { SetSeasonalEvent: { event: string; schedule: SeasonSchedule } }
   | { SetActiveTitle: { title: string | null } }
   | { ToggleDoor: { door: string } }
   | { InteractObject: { object_type: string; object_id: number } }

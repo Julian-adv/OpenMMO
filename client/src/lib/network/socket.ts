@@ -28,6 +28,8 @@ import {
   openBookmarks,
   resetBookmarks,
 } from '../stores/bookmarkStore'
+import { resetSeasonalEvents } from '../stores/seasonalEventStore'
+import type { SeasonSchedule } from '../utils/seasonDates'
 import { claimPotionCooldown } from '../stores/potionCooldownStore'
 import { currentDungeonDepth } from '../stores/dungeonStore'
 import { playerVisualFloorLevel } from '../stores/housingStore'
@@ -396,6 +398,7 @@ class NetworkManager {
       resetFriendStores()
       resetFamilyStores()
       resetBookmarks()
+      resetSeasonalEvents()
       // Disconnect cancels any open trade.
       resetPlayerTrade()
       if (watchMode) {
@@ -793,6 +796,14 @@ class NetworkManager {
 
   sendDebugSetTime(hour: number, minute: number) {
     this.sendMessage({ DebugSetTime: { hour, minute } })
+  }
+
+  sendQuerySeasonalEvents() {
+    this.sendMessage('QuerySeasonalEvents')
+  }
+
+  sendSetSeasonalEvent(event: string, schedule: SeasonSchedule) {
+    this.sendMessage({ SetSeasonalEvent: { event, schedule } })
   }
 
   sendDebugResetDungeonProps(entranceId: string) {

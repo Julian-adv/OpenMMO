@@ -64,6 +64,11 @@ fn requires_admin_classifies_cheat_messages() {
     assert!(requires_admin(&ClientMessage::DebugDropItem {
         item_def_id: "x".into()
     }));
+    assert!(requires_admin(&ClientMessage::QuerySeasonalEvents));
+    assert!(requires_admin(&ClientMessage::SetSeasonalEvent {
+        event: "winter".into(),
+        schedule: onlinerpg_shared::seasonal::SeasonSchedule::Off,
+    }));
     assert!(requires_admin(&ClientMessage::ChatMessage {
         message: "/give sword".into()
     }));
@@ -96,6 +101,9 @@ fn requires_admin_classifies_cheat_messages() {
         "/weather clear",
         "/weather auto",
         "/weather invalid",
+        "/season",
+        "/season winter 12-01 01-10",
+        "/season winter off",
     ] {
         assert!(
             requires_admin(&ClientMessage::ChatMessage {
@@ -116,6 +124,9 @@ fn requires_admin_classifies_cheat_messages() {
     assert!(!requires_admin(&ClientMessage::Heartbeat));
     assert!(!requires_admin(&ClientMessage::ChatMessage {
         message: "/weathering".into()
+    }));
+    assert!(!requires_admin(&ClientMessage::ChatMessage {
+        message: "/seasoning".into()
     }));
 }
 

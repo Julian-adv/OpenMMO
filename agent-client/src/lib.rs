@@ -185,6 +185,8 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::PatrolShovelled { .. } => "PatrolShovelled",
         ServerMessage::PlayerShovelled { .. } => "PlayerShovelled",
         ServerMessage::RoadSnowCleared { .. } => "RoadSnowCleared",
+        ServerMessage::SeasonalEvents { .. } => "SeasonalEvents",
+        ServerMessage::ObjectRegionsChanged { .. } => "ObjectRegionsChanged",
         ServerMessage::PatrolBrokeOut { .. } => "PatrolBrokeOut",
         ServerMessage::PlayerSwung { .. } => "PlayerSwung",
         ServerMessage::ImpoundState { .. } => "ImpoundState",

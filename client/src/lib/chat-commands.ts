@@ -37,6 +37,7 @@ import { chatChannel } from './stores/chatChannelStore'
 import { partyRoster } from './stores/partyStore'
 import { familyInfo } from './stores/familyStore'
 import { openBookmarks } from './stores/bookmarkStore'
+import { openSeasonalEvents } from './stores/seasonalEventStore'
 import { queueMergerCelebration } from './stores/mergerCelebrationStore'
 import { EMOTE_LIST } from './emote-meta'
 import { DEBUG_ANIM_NAMES, emoteRequest } from './stores/emoteStore'
@@ -199,6 +200,15 @@ const COMMANDS: Record<string, Command> = {
   '/weather': {
     desc: 'command.help.weather',
     admin: true,
+  },
+  '/season': {
+    desc: 'command.help.season',
+    admin: true,
+    run: (args) => {
+      const trimmed = args.trim()
+      if (trimmed) networkManager.sendChatMessage(`/season ${trimmed}`)
+      else openSeasonalEvents()
+    },
   },
   '/spawnmob': {
     desc: 'command.help.spawnmob',

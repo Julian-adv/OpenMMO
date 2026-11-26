@@ -740,6 +740,7 @@ pub async fn llm_driver(
         fetch_furniture_around(&world_cache, &area, &api_base_url, &label).await;
         around.map(|p| (p.x, p.z))
     };
+    let mut furniture_generation = 0;
 
     // Execute initial schedule move (go to correct position for current time)
     if !schedule.is_empty() {
@@ -858,10 +859,12 @@ pub async fn llm_driver(
                     let (dx, dz) = (p.x - x, p.z - z);
                     dx * dx + dz * dz > 64.0 * 64.0
                 });
-                if moved_a_chunk {
+                let generation = world_cache.read().unwrap().furniture_generation();
+                if moved_a_chunk || generation != furniture_generation {
                     let area = [(p.x, p.z)];
                     fetch_furniture_around(&world_cache, &area, &api_base_url, &label).await;
                     world_data_at = Some((p.x, p.z));
+                    furniture_generation = generation;
                 }
             }
         }

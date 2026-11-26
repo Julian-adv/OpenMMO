@@ -44,6 +44,7 @@ pub mod pricing;
 pub mod reach;
 pub mod salon;
 pub mod schedule;
+pub mod seasonal;
 pub mod shelter;
 pub mod skills;
 pub mod stall;
@@ -331,7 +332,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `PlayerTorchToggled`, so others see shields as well as torches.
 /// v180: `Player.gear` and one `PlayerGearChanged` replace the per-slot gear
 /// fields and messages.
-pub const PROTOCOL_VERSION: u32 = 180;
+/// v181: operator schedules for seasonal events: `QuerySeasonalEvents`/`SetSeasonalEvent`,
+/// `SeasonalEvents` and `ObjectRegionsChanged`.
+pub const PROTOCOL_VERSION: u32 = 181;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

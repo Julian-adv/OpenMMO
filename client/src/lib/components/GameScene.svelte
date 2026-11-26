@@ -1674,6 +1674,7 @@
     wallTorchPositions={() => dungeonLayerRef?.getWallTorchPositions() ?? []}
     crystalGlowPositions={() =>
       dungeonLayerRef?.getCrystalGlowPositions() ?? []}
+    treeLightPositions={() => objectOverlayRef?.getTreeLightPositions() ?? []}
     hearthFirePositions={() => [
       ...(objectOverlayRef?.getFirePositions() ?? []),
       ...(estateFurnitureRef?.getFirePositions() ?? []),

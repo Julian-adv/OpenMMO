@@ -185,6 +185,8 @@ export interface ObjectDef {
   /** Procedural builder id (e.g. "shopSign"). When set, geometry is generated
    *  in code instead of loaded from a GLB. */
   procedural?: string
+  /** Effect drawn over the model, by builder id (e.g. "winterTree"). */
+  glow?: string
   shopSignStyle?: ShopSignStyleId
   interaction?: string
   interactOffset?: Position

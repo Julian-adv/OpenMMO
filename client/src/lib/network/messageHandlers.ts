@@ -117,7 +117,11 @@ import {
 import { monsterManager } from '../managers/monsterManager'
 import { housingManager } from '../managers/housingManager'
 import { bridgeManager } from '../managers/bridgeManager'
-import { objectManager } from '../managers/objectManager'
+import {
+  OBJECT_REFRESH_SPREAD_MS,
+  objectManager,
+} from '../managers/objectManager'
+import { applySeasonalEvents } from '../stores/seasonalEventStore'
 import { groundItemManager } from '../managers/groundItemManager'
 import { cartRollSpeed, dungeonManager } from '../managers/dungeonManager'
 import { setDoorState } from '../stores/objectDoorStore'
@@ -2092,6 +2096,21 @@ export function handleServerMessage(
 
     case 'Bookmarks':
       applyBookmarks(data.bookmarks)
+      break
+
+    case 'SeasonalEvents':
+      applySeasonalEvents(data)
+      break
+
+    case 'ObjectRegionsChanged':
+      for (const [rx, rz] of data.regions as [number, number][]) {
+        // Spread over a moment so a full server does not ask at once.
+        // An operator watching the change gets it straight away.
+        const delay = get(isAdminUser)
+          ? 0
+          : Math.random() * OBJECT_REFRESH_SPREAD_MS
+        setTimeout(() => void objectManager.refreshRegion(rx, rz), delay)
+      }
       break
 
     case 'BookmarkRefused':

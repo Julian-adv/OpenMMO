@@ -125,6 +125,7 @@ impl AuthService {
         Self::ensure_landscaping_schema(conn)?;
         Self::ensure_bookmark_schema(conn)?;
         Self::ensure_statue_schema(conn)?;
+        Self::ensure_seasonal_schema(conn)?;
         Self::ensure_estate_storage_schema(conn)?;
         Self::ensure_family_schema(conn)?;
         Self::ensure_notice_board_schema(conn)?;

@@ -18,6 +18,7 @@
   import GameSceneTeleportLayer from './GameSceneTeleportLayer.svelte'
   import GameSceneGroundEruptionLayer from './GameSceneGroundEruptionLayer.svelte'
   import { teleportHiddenPlayers } from '../../stores/teleportEffectStore'
+  import { serverGameTime } from '../../stores/timeStore'
   import type { EnchantSuccess } from '../../stores/enchantSuccessStore'
   import type { EnchantEffectAnchor } from '../../utils/playerEffectAnchors'
   import {
@@ -126,6 +127,7 @@
     wallTorchPositions?: () => THREE.Vector3[]
     /** Per-frame provider of the dungeon floor's crystal glow positions. */
     crystalGlowPositions?: () => THREE.Vector3[]
+    treeLightPositions?: () => THREE.Vector3[]
     /** World light positions of burning hearths (placed furniture). */
     hearthFirePositions?: () => THREE.Vector3[]
     /** Flame world-positions of wall torches placed in houses. */
@@ -169,6 +171,7 @@
     torchShadowMapSize = TORCH_SHADOW_MAP_SIZE,
     wallTorchPositions,
     crystalGlowPositions,
+    treeLightPositions,
     hearthFirePositions,
     houseTorchPositions,
   }: Props = $props()
@@ -377,12 +380,35 @@
   const _wallTorchRanking: { idx: number; dist: number }[] = []
   let wallTorchPoolIdle = false
 
-  // Crystal glow pool: shadowless cold-blue lights on the nearest crystal
-  // clusters, always mounted like the wall-torch pool.
+  // Glow pool: shadowless lights on the nearest crystal clusters underground
+  // and on winter trees at night, always mounted like the wall-torch pool.
   const CRYSTAL_GLOW_POOL_SIZE = 2
-  const CRYSTAL_GLOW_INTENSITY = 6
   const CRYSTAL_GLOW_DISTANCE = 7
-  const CRYSTAL_GLOW_RANGE_SQ = 12 * 12
+  interface GlowStyle {
+    color: THREE.Color
+    intensity: number
+    distance: number
+    rangeSq: number
+    speed: number
+    /** Share of the intensity that pulses. */
+    pulse: number
+  }
+  const CRYSTAL_GLOW: GlowStyle = {
+    color: new THREE.Color('#4a78ff'),
+    intensity: 6,
+    distance: CRYSTAL_GLOW_DISTANCE,
+    rangeSq: 12 * 12,
+    speed: CRYSTAL_GLOW_SPEED,
+    pulse: 0.2,
+  }
+  const TREE_GLOW: GlowStyle = {
+    color: new THREE.Color('#ffb866'),
+    intensity: 14,
+    distance: 12,
+    rangeSq: 45 * 45,
+    speed: 0.9,
+    pulse: 0.08,
+  }
   const crystalGlowSlots = Array.from({ length: CRYSTAL_GLOW_POOL_SIZE })
   let crystalGlowLights = $state<(THREE.PointLight | undefined)[]>([])
   const _crystalRanking: { idx: number; dist: number }[] = []
@@ -610,16 +636,17 @@
     out.sort((a, b) => a.dist - b.dist)
   }
 
-  /** Park the crystal lights on the nearest clusters with a slow pulse like
+  /** Park the glow lights on the nearest sources with a slow pulse like
    *  their shimmer. */
   function updateCrystalGlowPool(
     deltaTime: number,
-    positions: THREE.Vector3[]
+    positions: THREE.Vector3[],
+    style: GlowStyle
   ) {
     if (positions.length === 0 && crystalGlowIdle) return
     crystalGlowIdle = positions.length === 0
     crystalGlowTime += deltaTime
-    rankNearest(positions, CRYSTAL_GLOW_RANGE_SQ, _crystalRanking)
+    rankNearest(positions, style.rangeSq, _crystalRanking)
     for (let slot = 0; slot < crystalGlowLights.length; slot++) {
       const light = crystalGlowLights[slot]
       if (!light) continue
@@ -630,13 +657,14 @@
       }
       const p = positions[ranked.idx]
       light.position.copy(p)
+      light.color.copy(style.color)
+      light.distance = style.distance
       light.intensity =
-        CRYSTAL_GLOW_INTENSITY *
-        (0.8 +
-          0.2 *
-            Math.sin(
-              crystalGlowTime * CRYSTAL_GLOW_SPEED + crystalGlowPhase(p)
-            ))
+        style.intensity *
+        (1 -
+          style.pulse +
+          style.pulse *
+            Math.sin(crystalGlowTime * style.speed + crystalGlowPhase(p)))
     }
   }
 
@@ -712,11 +740,18 @@
     if (unifiedTorchLight)
       unifiedTorchLight.shadow.autoUpdate = unifiedTorchLight.intensity > 0
     updateWallTorchPool(deltaTime, wallPositions, occupiedWallIdx)
+    const treesLit =
+      !isUnderground && localHouseId == null && !!$serverGameTime?.isNight
     updateCrystalGlowPool(
       deltaTime,
-      isUnderground && !torchEffectsDisabled
-        ? (crystalGlowPositions?.() ?? NO_POSITIONS)
-        : NO_POSITIONS
+      torchEffectsDisabled
+        ? NO_POSITIONS
+        : isUnderground
+          ? (crystalGlowPositions?.() ?? NO_POSITIONS)
+          : treesLit
+            ? (treeLightPositions?.() ?? NO_POSITIONS)
+            : NO_POSITIONS,
+      treesLit ? TREE_GLOW : CRYSTAL_GLOW
     )
   }
 

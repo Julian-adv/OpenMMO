@@ -5,16 +5,14 @@
 use std::collections::HashMap;
 use std::sync::OnceLock;
 
-use crate::furniture::FurniturePlacement;
+use crate::furniture::{FurniturePlacement, FIXED_PLACEMENT_ID_BASE};
 use crate::moon::is_full_moon_night;
 use crate::world::{wrap_world_x, GameDateTime};
 
 static FIELD_BOSSES_JSON: &str = include_str!("../../data/field_bosses.json");
 static CATALOG_JSON: &str = include_str!("../../data/object_catalog.json");
 
-/// Placement ids from here up belong to field-boss sites, never to a region
-/// file, so the editor can neither collide with nor save them.
-const PLACEMENT_ID_BASE: u32 = 2_000_000_000;
+const PLACEMENT_ID_BASE: u32 = FIXED_PLACEMENT_ID_BASE;
 
 /// What must hold for a raid to open.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Deserialize)]
@@ -256,10 +254,6 @@ impl FieldBossDef {
     }
 }
 
-pub fn is_field_boss_placement(id: u32) -> bool {
-    id >= PLACEMENT_ID_BASE
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -279,7 +273,9 @@ mod tests {
         assert!(std::ptr::eq(boss, def));
         let placements = def.placements(16.5, 23.4);
         assert_eq!(placements.len(), 2);
-        assert!(placements.iter().all(|p| is_field_boss_placement(p.id)));
+        assert!(placements
+            .iter()
+            .all(|p| crate::furniture::is_fixed_placement(p.id)));
         assert!((placements[0].y - 16.3).abs() < 1e-4, "altar sunk a little");
         assert!((placements[1].y - 20.5).abs() < 1e-4, "sunk into the slope");
     }
