@@ -1902,3 +1902,36 @@ fn every_garden_floor_has_room_for_its_statues() {
         }
     }
 }
+
+#[test]
+fn a_route_out_that_cannot_reach_the_goal_never_ends_deeper() {
+    let def = entrance("old_crypt").unwrap();
+    let floors = generate_dungeon_for(&def.id);
+    let cache = PassabilityCache::from([(
+        dungeon_cache_key(&def.id),
+        dungeon_passability(&def.position(), &floors),
+    )]);
+    let two = passability_floor_for_depth(2);
+    for start in &floors[1].rooms {
+        let from = cell_center(&def.position(), 2, start.center());
+        // A surface goal straight above each floor 3 room.
+        for below in &floors[2].rooms {
+            let goal = cell_center(&def.position(), 0, below.center());
+            let result = find_and_smooth_path(
+                from.x,
+                from.z,
+                two,
+                goal.x,
+                goal.z,
+                0,
+                &cache,
+                DUNGEON_PATH_MAX_NODES,
+            );
+            assert!(
+                result.found || result.waypoints.iter().all(|w| w.floor <= two),
+                "partial route from {from:?} went below floor 2: {:?}",
+                result.waypoints
+            );
+        }
+    }
+}

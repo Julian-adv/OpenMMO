@@ -32,8 +32,9 @@ struct EnterParams {
 struct WalkParams {
     x: f32,
     z: f32,
-    /// Storey index inside a building; 0 is ground level.
-    floor: Option<u8>,
+    /// Storey inside a building, 0 being its ground floor. Omit it to stay on
+    /// the floor you are on, dungeon floors included.
+    floor: Option<i32>,
 }
 
 #[derive(Deserialize, schemars::JsonSchema)]
@@ -101,7 +102,7 @@ impl Server {
         description = "Walk to world coordinates (metres on the x and z axes), routing around obstacles and through doors. Returns once the character arrives or gives up."
     )]
     async fn walk_to(&self, Parameters(p): Parameters<WalkParams>) -> CallToolResult {
-        reply(self.game.walk_to(p.x, p.z, p.floor.unwrap_or(0)).await)
+        reply(self.game.walk_to(p.x, p.z, p.floor).await)
     }
 
     #[tool(

@@ -485,8 +485,13 @@ impl Game {
         }
     }
 
-    pub async fn walk_to(&self, x: f32, z: f32, floor: u8) -> anyhow::Result<String> {
+    pub async fn walk_to(&self, x: f32, z: f32, storey: Option<i32>) -> anyhow::Result<String> {
         let state = self.state().await?;
+        let floor = state
+            .lock()
+            .await
+            .resolve_goal_floor(x, z, storey)
+            .map_err(|why| anyhow::anyhow!("you cannot go to ({x:.1}, {z:.1}): {why}"))?;
         let outcome = walk(&state, &WalkTo::Place { x, z, floor }, false, None).await;
         let at = position_line(&*state.lock().await);
         Ok(match outcome {

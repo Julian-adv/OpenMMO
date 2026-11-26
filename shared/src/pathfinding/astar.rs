@@ -15,6 +15,7 @@ use super::stair::{
     build_stair_cells, floor_to_key, is_regular_key, key_to_floor, AStarKey, StairCellExpansion,
 };
 use super::{PassabilityCache, PathResult, PathWaypoint, DIRS};
+use crate::dungeon::floor_level_for_passability;
 use crate::world::wrap_world_x;
 
 /// Default max nodes for each direction of the search. Sized for multi-floor
@@ -408,6 +409,10 @@ pub(super) fn find_path_avoiding_counted(
             + (a.1 - b.1).unsigned_abs()
             + (i32::from(key_to_floor(a.2)) - i32::from(key_to_floor(b.2))).unsigned_abs() * 2
     };
+    // Storeys apart by height: cache indices stack dungeon floors above house
+    // storeys, so their raw difference is not how far apart they are.
+    let level = |key: AStarKey| i32::from(floor_level_for_passability(key_to_floor(key.2)));
+    let floor_gap = |a: AStarKey, b: AStarKey| (level(a) - level(b)).unsigned_abs();
     let to_goal = |key: AStarKey| distance(key, goal_key);
     let to_start = |key: AStarKey| distance(key, start_key);
 
@@ -435,8 +440,13 @@ pub(super) fn find_path_avoiding_counted(
             *meeting = Some((cost, key));
         }
     };
-    // The start side's nearest key to the goal, and its nodes spent finding it.
-    let mut closest = (to_goal(start_key), start_key);
+    // The start side's key nearest the goal (nearest floor first, so an
+    // unreachable goal never leads down to a room under it), and the nodes
+    // spent finding it.
+    let mut closest = (
+        (floor_gap(start_key, goal_key), to_goal(start_key)),
+        start_key,
+    );
     let mut closest_at = 0;
     // The goal's sealed pocket once its side has run dry, the rim cells not yet
     // tried (farthest from the goal first) and how far the ones being tried stand.
@@ -519,8 +529,9 @@ pub(super) fn find_path_avoiding_counted(
                 if !forward.reach(next, cur, g + 1, h) {
                     continue;
                 }
-                if h < closest.0 {
-                    closest = (h, next);
+                let near = (floor_gap(next, goal_key), h);
+                if near < closest.0 {
+                    closest = (near, next);
                     closest_at = forward.expanded;
                 }
                 if let Some(to_end) = backward.seen.get(&next) {
