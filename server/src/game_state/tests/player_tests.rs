@@ -258,7 +258,12 @@ async fn equipped_torch_syncs_live_and_late_join_player_state() {
     );
 
     game_state.equip_item(&torch_holder_id, 1).await;
-    assert!(game_state.get_all_players().await[&torch_holder_id].torch_on);
+    assert_eq!(
+        game_state.get_all_players().await[&torch_holder_id]
+            .off_hand
+            .as_deref(),
+        Some("torch")
+    );
 
     let snapshot = join_snapshot(&game_state, make_player("late_joiner", 1.0, 0.0))
         .await
@@ -268,13 +273,18 @@ async fn equipped_torch_syncs_live_and_late_join_player_state() {
             _ => None,
         })
         .collect::<Vec<_>>();
-    assert!(find_player(&snapshot, torch_holder_id).torch_on);
+    assert_eq!(
+        find_player(&snapshot, torch_holder_id).off_hand.as_deref(),
+        Some("torch")
+    );
 
     game_state
         .unequip_item(&torch_holder_id, EquipSlot::OffHand)
         .await;
 
-    assert!(!game_state.get_all_players().await[&torch_holder_id].torch_on);
+    assert!(game_state.get_all_players().await[&torch_holder_id]
+        .off_hand
+        .is_none());
 }
 
 #[tokio::test]

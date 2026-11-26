@@ -285,10 +285,11 @@
     lastDamageInfo?: PlayerDamageInfo
     lastRegenInfo?: PlayerDamageInfo
     lastGoldInfo?: PlayerGoldInfo
-    torchOn?: boolean
     /** Remote players' broadcast main-hand item def id; the local player
      *  renders from inventory instead. */
     mainHand?: string | null
+    /** Remote players' broadcast off-hand item def id (shield, torch). */
+    offHand?: string | null
     armor?: ArmorEquipment
     /** Dye on that cape, as broadcast with it. */
     backColor?: string | null
@@ -350,8 +351,8 @@
     lastDamageInfo,
     lastRegenInfo,
     lastGoldInfo,
-    torchOn = false,
     mainHand = null,
+    offHand = null,
     armor,
     back = null,
     backColor = null,
@@ -965,16 +966,15 @@
     })
   })
 
-  // Local equipment comes from inventory; remote torch state comes from the server.
-  const equippedOffHandItemId = $derived(
-    torchEffectsDisabled
+  // Local equipment comes from inventory; remote players' from the server.
+  const equippedOffHandItemId = $derived.by(() => {
+    const itemDefId = isCurrentPlayer
+      ? ($inventoryStore.equipped.off_hand?.item_def_id ?? null)
+      : offHand
+    return torchEffectsDisabled && isTorchItemDefId(itemDefId)
       ? null
-      : isCurrentPlayer
-        ? ($inventoryStore.equipped.off_hand?.item_def_id ?? null)
-        : torchOn
-          ? 'torch'
-          : null
-  )
+      : itemDefId
+  })
 
   let attachedOffhandItemId: string | null = null
   let offhandAttachGeneration = 0

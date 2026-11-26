@@ -445,10 +445,12 @@ pub(super) async fn enter_game(
         .as_ref()
         .map(|inv| inv.equipped_armor())
         .unwrap_or_default();
-    player.torch_on = inventory.as_ref().is_some_and(|inv| inv.is_torch_lit());
     player.main_hand = inventory
         .as_ref()
         .and_then(|inv| inv.equipped_def_id(EquipSlot::MainHand));
+    player.off_hand = inventory
+        .as_ref()
+        .and_then(|inv| inv.equipped_def_id(EquipSlot::OffHand));
     player.back = inventory
         .as_ref()
         .and_then(|inv| inv.equipped_def_id(EquipSlot::Back));

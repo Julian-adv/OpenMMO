@@ -70,7 +70,6 @@ interface PlayerBase {
   appearance?: CharacterAppearance
   gender: Gender
   mount?: MountKind | null
-  torchOn?: boolean
   radianceOn?: boolean
   raging?: boolean
   /** Soaked, so nearby clients draw wet footprints (doc/DEBUFF.md). */
@@ -83,6 +82,7 @@ interface PlayerBase {
   family?: string | null
   rank?: string | null
   mainHand?: string | null
+  offHand?: string | null
   armor?: ArmorEquipment
   back?: string | null
   /** Dye on that cape, as broadcast with it. */

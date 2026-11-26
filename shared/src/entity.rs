@@ -65,8 +65,6 @@ pub struct Player {
     #[serde(default)]
     pub is_official_npc: bool,
     #[serde(default)]
-    pub torch_on: bool,
-    #[serde(default)]
     pub floor_level: i8,
     // NEVER add `skip_serializing_if` here: rmp_serde::to_vec encodes
     // structs as positional arrays, so skipping a mid-struct field shifts
@@ -118,6 +116,9 @@ pub struct Player {
     /// An official NPC's rank id, shown where a family name would be.
     #[serde(default)]
     pub rank: Option<String>,
+    /// Equipped off-hand item def id (shield, torch, ...); `None` holds nothing.
+    #[serde(default)]
+    pub off_hand: Option<String>,
     #[serde(skip)]
     pub last_combat_at: u64,
     /// Unix ms of the last healing potion drunk; raid bosses notice it.
@@ -346,12 +347,12 @@ mod tests {
             gender: Gender::default(),
             appearance: Default::default(),
             is_official_npc: false,
-            torch_on: false,
             radiance_on: false,
             raging: false,
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            off_hand: None,
             back: None,
             object_id: None,
             last_combat_at: 0,
@@ -406,12 +407,12 @@ mod tests {
             gender: Gender::default(),
             appearance: Default::default(),
             is_official_npc: false,
-            torch_on: false,
             radiance_on: false,
             raging: false,
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            off_hand: None,
             back: None,
             object_id: None,
             last_combat_at: 0,
@@ -473,12 +474,12 @@ mod tests {
                 eye_color_original: false,
             },
             is_official_npc: false,
-            torch_on: true,
             radiance_on: true,
             raging: false,
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            off_hand: None,
             back: None,
             object_id: Some(52),
             last_combat_at: 0,
@@ -503,7 +504,6 @@ mod tests {
         let bytes = rmp_serde::to_vec(&player).unwrap();
         let decoded: Player = rmp_serde::from_slice(&bytes).unwrap();
         assert_eq!(decoded.object_type, None);
-        assert!(decoded.torch_on);
         assert!(decoded.radiance_on);
         assert_eq!(decoded.appearance, player.appearance);
         // The occupied bed must survive the wire: a `#[serde(skip)]` here

@@ -326,7 +326,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// v177: `WatchAccount`, `WatchWaiting`, `WatchTarget`: watching the account's character.
 /// v178: `WatchPlaying` and `AuthSuccess.playing`: login no longer takes over a
 /// session in the world until the player enters or edits a character.
-pub const PROTOCOL_VERSION: u32 = 178;
+/// v179: `Player.off_hand` and `PlayerOffHandChanged` replace `torch_on` and
+/// `PlayerTorchToggled`, so others see shields as well as torches.
+pub const PROTOCOL_VERSION: u32 = 179;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -652,12 +654,12 @@ mod tests {
             gender: Gender::default(),
             appearance: Default::default(),
             is_official_npc: false,
-            torch_on: false,
             radiance_on: false,
             raging: false,
             floor_level: 0,
             object_type: None,
             main_hand: None,
+            off_hand: None,
             back: None,
             object_id: None,
             last_combat_at: 0,

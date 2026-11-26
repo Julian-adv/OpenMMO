@@ -70,6 +70,7 @@
   } from '../../terrain/world-wrap'
   import { OFFSCREEN_Y } from '../../utils/house-geo-utils'
   import {
+    isTorchItemDefId,
     localHeadLight,
     localTorchEquipped,
   } from '../../stores/inventoryStore'
@@ -496,11 +497,8 @@
     for (const [id, player] of otherPlayers) {
       const rp = remotePlayers.get(id)
       const radiance = radianceStrengths.get(id) ?? 0
-      if (
-        (!player.torchOn && radiance <= 0) ||
-        !rp ||
-        !remoteVisibility.get(id)
-      )
+      const torch = isTorchItemDefId(player.offHand)
+      if ((!torch && radiance <= 0) || !rp || !remoteVisibility.get(id))
         continue
       const dx = shortestWrappedDeltaX(playerPos.x, rp.position.x)
       const dz = rp.position.z - playerPos.z
@@ -509,8 +507,8 @@
         bestDist = dist
         bestRp = rp
         bestWallIdx = -1
-        bestRadiance = glowing(player) || (!player.torchOn && radiance > 0)
-        bestScale = player.torchOn ? 1 : radiance
+        bestRadiance = glowing(player) || (!torch && radiance > 0)
+        bestScale = torch ? 1 : radiance
       }
     }
     for (let i = 0; i < wallPositions.length; i++) {
@@ -909,9 +907,9 @@
           health={player.health}
           maxHealth={player.maxHealth}
           lastRegenInfo={player.lastRegenInfo}
-          torchOn={player.torchOn}
           mount={player.mount}
           mainHand={player.mainHand}
+          offHand={player.offHand}
           armor={player.armor}
           back={player.back}
           backColor={player.backColor}
@@ -949,6 +947,7 @@
         health={1}
         maxHealth={0}
         mainHand={statue.player.mainHand}
+        offHand={statue.player.offHand}
         armor={statue.player.armor}
         back={statue.player.back}
         backColor={statue.player.backColor}

@@ -420,9 +420,8 @@ impl super::GameState {
     }
 
     /// Mirror the soaking onto the broadcast `Player` so nearby clients can
-    /// draw wet footprints, and tell them when it flips. Compare-and-set like
-    /// `set_player_torch`, which is what keeps a wading player's per-step
-    /// refresh off the wire.
+    /// draw wet footprints, and tell them when it flips. Compare-and-set keeps
+    /// a wading player's per-step refresh off the wire.
     async fn set_player_wet(&self, player_id: &PlayerId, wet: bool) {
         let changed = {
             let mut players = self.players.write().await;
@@ -470,8 +469,8 @@ impl super::GameState {
         })
     }
 
-    /// Skips the owner like `set_player_torch` does: their own trail rides
-    /// `DebuffUpdate`, and the client drops this message for itself anyway.
+    /// Skips the owner: their own trail rides `DebuffUpdate`, and the client
+    /// drops this message for itself anyway.
     async fn announce_wet(
         &self,
         player_id: &PlayerId,

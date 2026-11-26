@@ -1066,14 +1066,14 @@ async fn direction_preserves_damage_and_stops_if_killed_during_simulation() {
             let player = players.get_mut(&id).unwrap();
             player.health = health;
             player.last_combat_at = 123;
-            player.torch_on = true;
+            player.off_hand = Some("torch".into());
         }
         drop(sampling);
         tick.await;
         let player = game.players.read().await[&id].clone();
         assert_eq!(player.health, health);
         assert_eq!(player.last_combat_at, 123);
-        assert!(player.torch_on);
+        assert_eq!(player.off_hand.as_deref(), Some("torch"));
         if health == 0 {
             assert_eq!(player.position, before.position);
             assert_eq!(player.rotation, before.rotation);

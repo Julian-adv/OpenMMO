@@ -415,7 +415,6 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     gender: sp.gender,
     appearance: sp.appearance,
     mount: sp.mount ?? null,
-    torchOn: sp.torch_on,
     radianceOn: sp.radiance_on ?? false,
     raging: sp.raging ?? false,
     wet: sp.wet ?? false,
@@ -424,6 +423,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     family: sp.family ?? null,
     rank: sp.rank ?? null,
     mainHand: sp.main_hand ?? null,
+    offHand: sp.off_hand ?? null,
     armor: sp.armor,
     back: sp.back ?? null,
     backColor: sp.back_color ?? null,
@@ -2054,14 +2054,6 @@ export function handleServerMessage(
       break
     }
 
-    case 'PlayerTorchToggled': {
-      const state = get(gameStore)
-      if (state.currentPlayer?.id === data.player_id) {
-        break
-      }
-      updatePlayer(data.player_id, { torchOn: data.enabled })
-      break
-    }
     case 'PlayerRadianceToggled':
       updatePlayer(data.player_id, { radianceOn: data.enabled })
       break
@@ -2147,6 +2139,11 @@ export function handleServerMessage(
       updatePlayer(data.player_id, { mainHand: data.item_def_id ?? null })
       break
     }
+
+    case 'PlayerOffHandChanged':
+      if (!isSelfPlayer(data.player_id))
+        updatePlayer(data.player_id, { offHand: data.item_def_id ?? null })
+      break
 
     case 'CapeDyePrompt': {
       capeDyeDialog.set({ instanceId: data.instance_id })

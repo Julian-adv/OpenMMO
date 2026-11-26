@@ -3,6 +3,7 @@ import { SvelteMap } from 'svelte/reactivity'
 import { get } from 'svelte/store'
 import { hmrSingleton } from '../utils/hmr'
 import { gameStore } from '../stores/gameStore'
+import { isTorchItemDefId } from '../stores/inventoryStore'
 import {
   calculateMovementStep,
   initMovementState,
@@ -178,7 +179,7 @@ class PlayerStateManager {
       const other = otherPlayers.get(playerId)
       const mount = other?.mount ?? null
       const floor = other?.floorLevel ?? 0
-      const hasTorch = other?.torchOn ?? false
+      const hasTorch = isTorchItemDefId(other?.offHand)
       const movementConfig = movementConfigFor(mount, sprinting)
 
       const trail = this.trails.get(playerId)

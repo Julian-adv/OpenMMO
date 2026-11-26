@@ -941,7 +941,7 @@ impl super::GameState {
             .await
             .get(player_id)
             .is_some_and(Self::in_combat);
-        let (snapshot, torch_on) = {
+        let snapshot = {
             let mut inventories = self.inventories.write().await;
             let inv = match inventories.get_mut(player_id) {
                 Some(inv) => inv,
@@ -1022,11 +1022,9 @@ impl super::GameState {
             if let Some(old_item) = inv.equipped.insert(target_slot, item) {
                 inv.bag.push(old_item);
             }
-            let mut off_hand_cleared = false;
             if two_handed && target_slot == EquipSlot::MainHand {
                 if let Some(displaced) = inv.equipped.remove(&EquipSlot::OffHand) {
                     inv.bag.push(displaced);
-                    off_hand_cleared = true;
                 }
             }
             // Keep the player's choice while its stack remains in the bag.
@@ -1039,16 +1037,11 @@ impl super::GameState {
                     .and_then(|kind| self.best_ammo_in_bag(inv, kind))
                     .map(|item| item.item_def_id.clone());
             }
-            let torch_on =
-                (target_slot == EquipSlot::OffHand || off_hand_cleared).then(|| inv.is_torch_lit());
-            (inv.clone(), torch_on)
+            inv.clone()
         };
 
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
-        if let Some(torch_on) = torch_on {
-            self.set_player_torch(player_id, torch_on).await;
-        }
         self.abort_fishing_if_rod_lost(player_id).await;
     }
 
@@ -1107,9 +1100,6 @@ impl super::GameState {
 
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
-        if slot == EquipSlot::OffHand {
-            self.set_player_torch(player_id, false).await;
-        }
         self.abort_fishing_if_rod_lost(player_id).await;
     }
 
@@ -2319,12 +2309,6 @@ impl super::GameState {
 
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
-        if plans
-            .iter()
-            .any(|plan| plan.slot == Some(EquipSlot::OffHand))
-        {
-            self.set_player_torch(player_id, false).await;
-        }
         self.abort_fishing_if_rod_lost(player_id).await;
         self.abort_instrument_if_lost(player_id).await;
 

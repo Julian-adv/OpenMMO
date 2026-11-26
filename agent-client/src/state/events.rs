@@ -219,8 +219,8 @@ impl SharedState {
             | ServerMessage::MonsterRemoved { .. }
             | ServerMessage::XpGained { .. }
             | ServerMessage::PlayerHealthUpdate { .. }
-            | ServerMessage::PlayerTorchToggled { .. }
             | ServerMessage::PlayerMainHandChanged { .. }
+            | ServerMessage::PlayerOffHandChanged { .. }
             | ServerMessage::PlayerBackChanged { .. }
             | ServerMessage::PlayerArmorChanged { .. }
             | ServerMessage::PlayerMountChanged { .. }

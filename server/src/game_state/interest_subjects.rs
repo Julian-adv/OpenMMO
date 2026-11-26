@@ -196,8 +196,7 @@ impl Interest {
                     );
                 }
             }
-            ServerMessage::PlayerTorchToggled { player_id, .. }
-            | ServerMessage::PlayerRadianceToggled { player_id, .. }
+            ServerMessage::PlayerRadianceToggled { player_id, .. }
             | ServerMessage::PlayerRageToggled { player_id, .. }
             | ServerMessage::PlayerWetToggled { player_id, .. }
             | ServerMessage::PlayerPetrifiedToggled { player_id, .. }
@@ -206,6 +205,7 @@ impl Interest {
             | ServerMessage::PlayerAppearanceChanged { player_id, .. }
             | ServerMessage::PlayerFamilyChanged { player_id, .. }
             | ServerMessage::PlayerMainHandChanged { player_id, .. }
+            | ServerMessage::PlayerOffHandChanged { player_id, .. }
             | ServerMessage::PlayerBackChanged { player_id, .. }
             | ServerMessage::PlayerArmorChanged { player_id, .. }
             | ServerMessage::PlayerInteractionChanged { player_id, .. }
@@ -215,7 +215,6 @@ impl Interest {
                     for entry in snapshot.iter_mut() {
                         if let ServerMessage::PlayerAppeared { player } = entry {
                             match msg {
-                                ServerMessage::PlayerTorchToggled { enabled, .. } => { player.torch_on = *enabled; },
                                 ServerMessage::PlayerRadianceToggled { enabled, .. } => { player.radiance_on = *enabled; },
                                 ServerMessage::PlayerRageToggled { enabled, .. } => { player.raging = *enabled; },
                                 ServerMessage::PlayerWetToggled { wet, .. } => { player.wet = *wet; },
@@ -225,6 +224,7 @@ impl Interest {
                                 ServerMessage::PlayerAppearanceChanged { appearance, .. } => { player.appearance = *appearance; },
                                 ServerMessage::PlayerFamilyChanged { family, .. } => { player.family = family.clone(); },
                                 ServerMessage::PlayerMainHandChanged { item_def_id, .. } => { player.main_hand = item_def_id.clone(); },
+                                ServerMessage::PlayerOffHandChanged { item_def_id, .. } => { player.off_hand = item_def_id.clone(); },
                                 ServerMessage::PlayerArmorChanged { armor, .. } => { player.armor = armor.clone(); },
                                 ServerMessage::PlayerBackChanged { item_def_id, cape_color, cape_texture, .. } => { player.back = item_def_id.clone(); player.back_color = cape_color.clone(); player.back_texture = cape_texture.clone(); },
                                 ServerMessage::PlayerInteractionChanged { object_type, object_id, .. } => { player.object_type = object_type.clone(); player.object_id = *object_id; },

@@ -1401,34 +1401,6 @@ impl super::GameState {
             .map(|p| (p.position, p.rotation, p.floor_level))
     }
 
-    pub async fn set_player_torch(&self, player_id: &PlayerId, enabled: bool) {
-        let position = {
-            let mut players = self.players.write().await;
-            if let Some(player) = players.get_mut(player_id) {
-                if player.torch_on == enabled {
-                    return;
-                }
-                player.torch_on = enabled;
-                Some((player.position, player.floor_level))
-            } else {
-                None
-            }
-        };
-
-        if let Some((position, floor_level)) = position {
-            self.publish_nearby(
-                &position,
-                floor_level,
-                ServerMessage::PlayerTorchToggled {
-                    player_id: *player_id,
-                    enabled,
-                },
-                Some(player_id),
-            )
-            .await;
-        }
-    }
-
     /// Attacking breaks the cloak's invisibility until it is put on again.
     pub(super) fn reveal_locked(&self, player: &mut Player) -> bool {
         if !player.invisible {
@@ -1474,6 +1446,7 @@ impl super::GameState {
     /// Broadcast changed gear, including armor and cape customization.
     pub async fn set_player_gear(&self, player_id: &PlayerId, inventory: &PlayerInventory) {
         let main_hand = inventory.equipped_def_id(EquipSlot::MainHand);
+        let off_hand = inventory.equipped_def_id(EquipSlot::OffHand);
         let back = inventory.equipped_def_id(EquipSlot::Back);
         let emblem = self.family_emblem_of(player_id).await;
         let (back_color, back_texture) = super::family::shown_cape(
@@ -1522,6 +1495,13 @@ impl super::GameState {
                 messages.push(ServerMessage::PlayerMainHandChanged {
                     player_id: *player_id,
                     item_def_id: main_hand,
+                });
+            }
+            if player.off_hand != off_hand {
+                player.off_hand = off_hand.clone();
+                messages.push(ServerMessage::PlayerOffHandChanged {
+                    player_id: *player_id,
+                    item_def_id: off_hand,
                 });
             }
             // Only a new back item re-cloaks: dye and transfer kits keep the id.

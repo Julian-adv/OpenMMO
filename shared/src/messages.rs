@@ -2164,10 +2164,6 @@ pub enum ServerMessage {
     OperatorNotice {
         message: String,
     },
-    PlayerTorchToggled {
-        player_id: PlayerId,
-        enabled: bool,
-    },
     PlayerMountChanged {
         player_id: PlayerId,
         mount: Option<crate::mount::MountKind>,
@@ -2364,6 +2360,11 @@ pub enum ServerMessage {
     /// A player's equipped main-hand item changed; `None` reverts remote
     /// rendering to the class default weapon.
     PlayerMainHandChanged {
+        player_id: PlayerId,
+        item_def_id: Option<String>,
+    },
+    /// A player's off-hand item changed, so others draw the shield or torch.
+    PlayerOffHandChanged {
         player_id: PlayerId,
         item_def_id: Option<String>,
     },
@@ -3114,7 +3115,6 @@ impl ServerMessage {
             | Self::FishingBite { .. }
             | Self::FishingFight { .. }
             | Self::FishingEnded { .. }
-            | Self::PlayerTorchToggled { .. }
             | Self::PlayerMountChanged { .. }
             | Self::PlayerWetToggled { .. }
             | Self::PlayerPetrifiedToggled { .. }
@@ -3124,6 +3124,7 @@ impl ServerMessage {
             | Self::FenceVisibility { .. }
             | Self::EstateChestVisibility { .. }
             | Self::PlayerMainHandChanged { .. }
+            | Self::PlayerOffHandChanged { .. }
             | Self::PlayerBackChanged { .. }
             | Self::PlayerArmorChanged { .. }
             | Self::PlayerInteractionChanged { .. }

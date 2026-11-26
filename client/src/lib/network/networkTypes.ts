@@ -71,7 +71,6 @@ export type ServerPlayer = {
   appearance?: CharacterAppearance
   is_official_npc: boolean
   mount?: MountKind | null
-  torch_on: boolean
   radiance_on?: boolean
   raging?: boolean
   floor_level: number
@@ -79,6 +78,7 @@ export type ServerPlayer = {
   /** Placement id of the occupied chair/bed (v47); absent for emotes. */
   object_id?: number | null
   main_hand?: string | null
+  off_hand?: string | null
   back?: string | null
   back_color?: string | null
   back_texture?: string | null

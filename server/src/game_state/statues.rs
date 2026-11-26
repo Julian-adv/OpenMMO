@@ -155,7 +155,8 @@ impl GameState {
         look.object_type = None;
         look.object_id = None;
         look.mount = None;
-        look.torch_on = false;
+        look.off_hand
+            .take_if(|id| onlinerpg_shared::inventory::TORCH_ITEM_IDS.contains(&id.as_str()));
         look.radiance_on = false;
         look.raging = false;
         look.wet = false;
