@@ -1996,10 +1996,7 @@ export function handleServerMessage(
         // Respawns now travel across floors (for NPCs tending the sick
         // room); a player this client doesn't render is not ours to move.
         if (!gameState.otherPlayers.has(serverPlayer.id)) break
-        updatePlayer(serverPlayer.id, {
-          health: serverPlayer.health,
-          maxHealth: serverPlayer.max_health,
-        })
+        updatePlayer(serverPlayer.id, toRemotePlayer(serverPlayer))
         addChatMessage({
           text: translate('system.playerRevived', { name: serverPlayer.name }),
           sender: 'system',
