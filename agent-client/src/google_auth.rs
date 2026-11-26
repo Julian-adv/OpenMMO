@@ -310,11 +310,11 @@ fn resolve_cache_path(configured: Option<&str>) -> PathBuf {
 
     #[cfg(windows)]
     if let Some(app_data) = std::env::var_os("APPDATA") {
-        return PathBuf::from(app_data).join("onlinerpg/google.json");
+        return PathBuf::from(app_data).join("openmmo/google.json");
     }
 
     home_dir()
-        .map(|home| home.join(".config/onlinerpg/google.json"))
+        .map(|home| home.join(".config/openmmo/google.json"))
         .unwrap_or_else(|| PathBuf::from("data/google.json"))
 }
 
@@ -387,6 +387,6 @@ mod tests {
     fn default_cache_path_is_absolute_and_per_user() {
         let path = resolve_cache_path(None);
         assert!(path.is_absolute(), "{path:?}");
-        assert!(path.ends_with("onlinerpg/google.json"), "{path:?}");
+        assert!(path.ends_with("openmmo/google.json"), "{path:?}");
     }
 }

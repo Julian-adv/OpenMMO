@@ -72,7 +72,7 @@ terrain = "https://<prod-host>"      # 로컬 경로 대신 HTTP 소스
 
 [auth]
 mode = "google"                       # 기본값은 기존 "npc_token"
-# token_cache = "~/.config/onlinerpg/google.json"  # refresh token 저장 위치
+# token_cache = "~/.config/openmmo/google.json"  # refresh token 저장 위치
 
 [codex]
 model = "gpt-5.4-mini"
@@ -134,7 +134,7 @@ agent-client                     구글                      사용자
 
 **서버 변경**: device flow는 별도 OAuth 클라이언트를 쓰므로 `aud`가 웹 클라이언트 ID와 다르다. [`google_auth.rs`](../server/src/google_auth.rs)의 `set_audience(&[&self.client_id])`를 복수 audience로 바꾸고 `--google-cli-client-id`를 추가한다. JWKS 캐시·검증 로직은 그대로 재사용된다.
 
-**토큰 수명**: ID 토큰은 1시간이고 에이전트는 며칠을 산다. `refresh_token`을 `~/.config/onlinerpg/google.json`(0600)에 저장하고 **재접속마다** 새 ID 토큰을 발급받는다. 서버는 접속 시점에만 검증하므로 세션 도중 갱신은 불필요하다.
+**토큰 수명**: ID 토큰은 1시간이고 에이전트는 며칠을 산다. `refresh_token`을 `~/.config/openmmo/google.json`(0600)에 저장하고 **재접속마다** 새 ID 토큰을 발급받는다. 서버는 접속 시점에만 검증하므로 세션 도중 갱신은 불필요하다.
 
 ## 터레인: HTTP 높이 소스
 
@@ -334,7 +334,7 @@ Online: 12 (9 web, 1 cli, 2 npc)
 
 ### Phase 2 — 구글 로그인 — **완료 2026-07-22**
 8. [x] 서버: `GoogleAuthVerifier`가 복수 audience 허용 + `--google-cli-client-id` / `GOOGLE_CLI_CLIENT_ID`
-9. [x] agent-client: device flow(`google_auth.rs`), refresh token 캐시(Linux `~/.config/onlinerpg/google.json`, Windows `%APPDATA%\onlinerpg\google.json`), 접속마다 ID 토큰 재발급
+9. [x] agent-client: device flow(`google_auth.rs`), refresh token 캐시(Linux `~/.config/openmmo/google.json`, Windows `%APPDATA%\openmmo\google.json`), 접속마다 ID 토큰 재발급
 10. [x] google 모드 제약 집행 (레지스트리 id 금지, 클래스 화이트리스트, character_name 필수, account 무시)
 
 **운영 메모**: CLI용 OAuth 클라이언트는 "TV 및 입력 제한 기기" 타입이어야 하고, 구글이 토큰 교환 때 **client_secret을 요구한다** (없으면 `invalid_request: Missing required parameter: client_secret`). 기본 client_id는 `google_auth.rs`의 `DEFAULT_CLIENT_ID`에 박혀 있지만, **secret은 저장소에 두지 않는다** — 커밋하면 GitHub 푸시 보호가 막고, 시크릿 스캐너 경고가 계속 따라붙는다. 대신 배포물을 만들 때 `GOOGLE_CLI_CLIENT_SECRET` 환경변수에서 읽어 Linux tarball이나 Windows zip의 `config.toml`에 써 넣는다 (`tools/package-agent-client.sh`, `tools/package-agent-client.ps1`). 사용자는 여전히 아무것도 입력하지 않는다.

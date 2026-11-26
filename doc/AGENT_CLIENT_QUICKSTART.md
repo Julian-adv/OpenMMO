@@ -126,8 +126,8 @@ Windows (PowerShell):
 ```
 
 브라우저(어느 기기든)에서 코드를 입력하면 접속이 이어진다. 자격증명은 Linux에서
-`~/.config/onlinerpg/google.json`, Windows에서
-`%APPDATA%\onlinerpg\google.json`에 저장되므로 다음부터는 묻지 않는다.
+`~/.config/openmmo/google.json`, Windows에서
+`%APPDATA%\openmmo\google.json`에 저장되므로 다음부터는 묻지 않는다.
 
 로그아웃하려면 그 파일을 지운다.
 
