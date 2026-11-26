@@ -198,20 +198,20 @@ async fn the_season_command_lists_sets_and_explains_itself() {
 
     assert_eq!(
         say("/season").await,
-        "Season (UTC 11-10): winter 11-24..12-30 (default), down"
+        "Season (KST 11-10): winter 11-24..01-05 (default), down"
     );
     assert_eq!(
         say("/season winter 11-01 1/5").await,
-        "Season (UTC 11-10): winter 11-01..01-05, up"
+        "Season (KST 11-10): winter 11-01..01-05, up"
     );
     assert_eq!(game.fixed_placements_in(rx, rz).len(), 1);
     assert_eq!(
         say("/season winter off").await,
-        "Season (UTC 11-10): winter off, down"
+        "Season (KST 11-10): winter off, down"
     );
     assert_eq!(
         say("/season winter default").await,
-        "Season (UTC 11-10): winter 11-24..12-30 (default), down"
+        "Season (KST 11-10): winter 11-24..01-05 (default), down"
     );
     assert!(say("/season winter 11-31 12-01").await.contains("MM-DD"));
     assert!(say("/season winter").await.starts_with("Season: /season"));

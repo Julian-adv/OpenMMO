@@ -55,7 +55,10 @@ export function scheduledSeason(
   return schedule === 'Off' ? null : schedule.Period
 }
 
-export function buildSchedule(mode: SeasonMode, period: Season): SeasonSchedule {
+export function buildSchedule(
+  mode: SeasonMode,
+  period: Season
+): SeasonSchedule {
   if (mode === 'default') return 'Default'
   return mode === 'off' ? 'Off' : { Period: period }
 }

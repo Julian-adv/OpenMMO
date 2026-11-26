@@ -2201,7 +2201,7 @@ pub enum ServerMessage {
         message: String,
     },
     /// Answers `QuerySeasonalEvents` and `SetSeasonalEvent`. `today` is the
-    /// UTC date the schedules are read against.
+    /// Korean (UTC+9) date the schedules are read against.
     SeasonalEvents {
         today: crate::seasonal::MonthDay,
         events: Vec<crate::seasonal::SeasonalEventState>,

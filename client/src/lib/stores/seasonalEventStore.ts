@@ -11,7 +11,7 @@ export interface SeasonalEvent {
 }
 
 export interface SeasonalEventsPanel {
-  /** The UTC date the server reads schedules against; `null` until it answers. */
+  /** The Korean (UTC+9) date the server reads schedules against; `null` until it answers. */
   today: MonthDay | null
   events: SeasonalEvent[]
   error: string | null

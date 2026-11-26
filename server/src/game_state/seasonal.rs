@@ -1,7 +1,7 @@
 //! Seasonal props standing in the world: the props of every event running
 //! today. An event runs on its dates in `data-src/seasonal_events.csv` unless
-//! an operator set another schedule. Today is the real-world UTC date, read at
-//! boot and every hour after (doc/SEASONAL_PROPS.md).
+//! an operator set another schedule. Today is the real-world date in Korea
+//! (UTC+9), read at boot and every hour after (doc/SEASONAL_PROPS.md).
 
 use std::collections::HashMap;
 
@@ -54,8 +54,8 @@ impl SeasonalProps {
     }
 }
 
-fn today_utc() -> MonthDay {
-    let now = time::OffsetDateTime::now_utc();
+fn today_kst() -> MonthDay {
+    let now = time::OffsetDateTime::now_utc() + time::Duration::hours(9);
     MonthDay::new(u8::from(now.month()), now.day()).expect("the clock reads a calendar day")
 }
 
@@ -70,7 +70,7 @@ impl GameState {
                 Err(e) => warn!("Seasonal prop {}: no ground to stand on: {e}", def.id),
             }
         }
-        self.place_seasonal_props(sites, today_utc());
+        self.place_seasonal_props(sites, today_kst());
     }
 
     pub(super) fn place_seasonal_props(&self, sites: Vec<SeasonalSite>, today: MonthDay) {
@@ -201,7 +201,7 @@ impl GameState {
     /// Put props up and take them down as the real-world date crosses the
     /// edge of a run.
     pub async fn refresh_seasonal_props(&self) {
-        let regions = self.set_seasonal_date(today_utc());
+        let regions = self.set_seasonal_date(today_kst());
         self.resync_seasonal_regions(regions).await;
     }
 
@@ -261,7 +261,7 @@ impl GameState {
                 active: props.runs(&def.id),
             })
             .collect();
-        (props.today.unwrap_or_else(today_utc), events)
+        (props.today.unwrap_or_else(today_kst), events)
     }
 
     pub fn seasonal_events_message(&self, error: Option<String>) -> ServerMessage {
@@ -287,7 +287,7 @@ impl GameState {
                 format!("{} {run}, {state}", event.id)
             })
             .collect();
-        format!("Season (UTC {today}): {}", lines.join("; "))
+        format!("Season (KST {today}): {}", lines.join("; "))
     }
 
     pub(super) async fn season_command(
