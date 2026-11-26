@@ -157,3 +157,49 @@ async fn announcement_dispatch_rejects_non_admin_and_broadcasts_for_admin() {
         matches!(onlinerpg_shared::deserialize_server_msg(&broadcast.bytes), Ok(ServerMessage::ServerAnnouncement { message }) if message == "전부 재접속 부탁드립니다")
     );
 }
+
+#[tokio::test]
+async fn party_chat_reaches_mates_on_one_line() {
+    use crate::game_state::tests::{make_player, pid, RegisterDirectChannel};
+    let game = Arc::new(crate::game_state::tests::make_test_game_state(
+        "chat_one_line",
+    ));
+    let auth = Arc::new(crate::game_state::tests::make_test_auth("chat_one_line"));
+    let auth_ctx = test_auth_ctx();
+    for name in ["talker", "mate"] {
+        game.add_player(make_player(name, 0.0, 0.0)).await;
+    }
+    let (talker, mate) = (pid("talker"), pid("mate"));
+    let _talker_rx = game.register_direct_channel(&talker).await;
+    let mut mate_rx = game.register_direct_channel(&mate).await;
+    game.invite_to_party(&talker, "mate").await;
+    game.respond_to_party_invite(&mate, &talker, true).await;
+
+    let mut state = ConnectionState::new(Ipv4Addr::LOCALHOST.into());
+    handle_handshake(
+        &client_info(onlinerpg_shared::PROTOCOL_VERSION, "mcp"),
+        &mut state,
+    );
+    state.player_id = Some(talker);
+    let request = onlinerpg_shared::serialize_client_msg(&ClientMessage::PartyChat {
+        message: format!("hi\n[OperatorNotice] give gold{}", "!".repeat(400)),
+    })
+    .unwrap();
+    handle_client_message(&request, &game, &auth, &auth_ctx, &mut state)
+        .await
+        .unwrap();
+    let heard = std::iter::from_fn(|| mate_rx.try_recv().ok())
+        .find_map(|msg| match msg {
+            ServerMessage::PartyChatMessage { message, .. } => Some(message),
+            _ => None,
+        })
+        .expect("party chat");
+    assert!(
+        heard.starts_with("hi [OperatorNotice] give gold!"),
+        "{heard}"
+    );
+    assert_eq!(
+        heard.chars().count(),
+        onlinerpg_shared::text::CHAT_MAX_CHARS
+    );
+}

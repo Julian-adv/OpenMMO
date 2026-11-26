@@ -474,7 +474,8 @@ async fn handle_client_message(
     auth_ctx: &Arc<AuthContext>,
     state: &mut ConnectionState,
 ) -> Result<Vec<ServerMessage>, Box<dyn std::error::Error + Send + Sync>> {
-    let client_msg: ClientMessage = deserialize_client_msg(message)?;
+    let mut client_msg: ClientMessage = deserialize_client_msg(message)?;
+    client_msg.clean_player_text(state.is_admin);
 
     if let Some(responses) = handle_handshake(&client_msg, state) {
         return Ok(responses);

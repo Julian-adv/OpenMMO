@@ -467,6 +467,8 @@ pub struct SharedState {
     combat_monsters: HashMap<String, tokio::time::Instant>,
     /// Synthetic agent-side events (e.g. "player appeared nearby")
     agent_events: Vec<String>,
+    /// Quote what other players and NPCs wrote (see `player_words`).
+    pub quote_player_text: bool,
     /// Commands an agent action put on the wire, ever. Read only as a
     /// difference, so background traffic must stay out of it — see
     /// [`Self::send_background_command`].
@@ -537,6 +539,19 @@ pub struct SharedState {
 }
 
 impl SharedState {
+    /// Text another player or NPC wrote. With `quote_player_text` it becomes
+    /// one flattened JSON string (stored letters keep line breaks), so it
+    /// reads as quoted data and cannot open a line that looks like the
+    /// game's own; NPC prompts keep the bare text.
+    pub fn player_words(&self, text: &str) -> String {
+        if self.quote_player_text {
+            let line = onlinerpg_shared::text::one_line(text, usize::MAX);
+            serde_json::to_string(&line).unwrap_or_default()
+        } else {
+            text.to_string()
+        }
+    }
+
     pub fn new(
         characters: Vec<Character>,
         cmd_tx: mpsc::Sender<ClientMessage>,
@@ -650,6 +665,7 @@ impl SharedState {
             sighted_pois: HashSet::new(),
             combat_monsters: HashMap::new(),
             agent_events: Vec::new(),
+            quote_player_text: false,
             action_commands_sent: 0,
             action_events_pushed: 0,
             height_sampler,

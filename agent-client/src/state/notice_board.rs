@@ -21,7 +21,7 @@ pub struct NoticeBoardPanel {
 }
 
 pub(super) fn clip(text: &str, max_chars: usize) -> String {
-    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let flat = onlinerpg_shared::text::one_line(text, usize::MAX);
     if flat.chars().count() <= max_chars {
         flat
     } else {
@@ -71,6 +71,15 @@ pub fn refusal_text(reason: NoticeBoardRefusal) -> &'static str {
 }
 
 impl SharedState {
+    fn title(&self, text: &str) -> String {
+        let title = clip(text, NOTICE_TITLE_MAX_CHARS);
+        if self.quote_player_text {
+            self.player_words(&title)
+        } else {
+            format!("\"{title}\"")
+        }
+    }
+
     /// Family boards on our family's estates within `max_dist`, nearest first.
     pub fn family_boards_near(
         &self,
@@ -210,9 +219,9 @@ impl SharedState {
         }
         for post in panel.posts.iter().take(LISTED_POSTS) {
             lines.push(format!(
-                "  Post [post_id {}] \"{}\" by {}, {}, {} comments{}{}{}",
+                "  Post [post_id {}] {} by {}, {}, {} comments{}{}{}",
                 post.id,
-                clip(&post.title, NOTICE_TITLE_MAX_CHARS),
+                self.title(&post.title),
                 post.author,
                 post.written_at,
                 post.comment_count,
@@ -235,13 +244,16 @@ impl SharedState {
             return;
         };
         lines.push(format!(
-            "Reading post [post_id {}] \"{}\" by {}, {}:",
+            "Reading post [post_id {}] {} by {}, {}:",
             post.id,
-            clip(&post.title, NOTICE_TITLE_MAX_CHARS),
+            self.title(&post.title),
             post.author,
             post.written_at
         ));
-        lines.push(format!("  | {}", clip(&post.body, BODY_CHARS)));
+        lines.push(format!(
+            "  | {}",
+            self.player_words(&clip(&post.body, BODY_CHARS))
+        ));
         let skipped = comments.len().saturating_sub(LISTED_COMMENTS);
         if skipped > 0 {
             lines.push(format!("  ({skipped} earlier comments not shown)"));
@@ -251,7 +263,7 @@ impl SharedState {
                 "  Comment by {}, {}: {}",
                 comment.author,
                 comment.written_at,
-                clip(&comment.body, COMMENT_CHARS)
+                self.player_words(&clip(&comment.body, COMMENT_CHARS))
             ));
         }
     }

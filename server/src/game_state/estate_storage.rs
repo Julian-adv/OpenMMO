@@ -892,7 +892,7 @@ impl GameState {
         text: String,
         auth: &AuthService,
     ) -> Result<(), &'static str> {
-        if text.chars().count() > 120 || text.chars().any(|c| c.is_control() && c != '\n') {
+        if text.chars().count() > 120 {
             return Err("Sign text must be at most 120 characters.");
         }
         let _persistence = self.persistence_lock.lock().await;

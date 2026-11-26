@@ -305,7 +305,10 @@ impl Game {
         let buffered = tokio::time::timeout(ENTRY_TIMEOUT, entering)
             .await
             .map_err(|_| anyhow::anyhow!("the server did not answer the entry request"))??;
-        let session = Session::start(lobby, buffered, &self.world, LABEL, None, |_| {}).await;
+        let session = Session::start(lobby, buffered, &self.world, LABEL, None, |s| {
+            s.quote_player_text = true;
+        })
+        .await;
         let state = Arc::clone(&session.state);
         *slot = Some(session);
         drop(slot);

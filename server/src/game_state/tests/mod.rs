@@ -116,7 +116,7 @@ async fn titles_of(game_state: &GameState, name: &str) -> (Vec<String>, Option<S
 /// players ("owner", "buyer") instead of carrying opaque integers. Only needs
 /// to be consistent within one process; a collision between two names in the
 /// same test would surface as an immediate failure, never as a silent pass.
-fn pid(name: &str) -> PlayerId {
+pub(crate) fn pid(name: &str) -> PlayerId {
     use std::hash::{Hash, Hasher};
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     name.hash(&mut hasher);
@@ -139,7 +139,7 @@ fn expect_attack_rejected(
     }
 }
 
-pub(super) fn make_player(id: &str, x: f32, z: f32) -> Player {
+pub(crate) fn make_player(id: &str, x: f32, z: f32) -> Player {
     Player {
         appearance: Default::default(),
         id: pid(id),
@@ -424,13 +424,13 @@ async fn player_xz(game_state: &GameState, player_id: &PlayerId) -> (f32, f32) {
 
 /// Decodes direct payloads back into `ServerMessage`, mirroring the
 /// receiver API so tests assert on exactly what a client would decode.
-struct DirectRx(
+pub(crate) struct DirectRx(
     tokio::sync::mpsc::UnboundedReceiver<Bytes>,
     std::collections::VecDeque<ServerMessage>,
 );
 
 impl DirectRx {
-    fn try_recv(&mut self) -> Result<ServerMessage, MpscTryRecvError> {
+    pub(crate) fn try_recv(&mut self) -> Result<ServerMessage, MpscTryRecvError> {
         loop {
             if let Some(message) = self.1.pop_front() {
                 return Ok(message);
@@ -449,7 +449,7 @@ impl DirectRx {
 }
 
 /// Test-side name for the connection channel, wrapped in the decoder.
-trait RegisterDirectChannel {
+pub(crate) trait RegisterDirectChannel {
     async fn register_direct_channel(&self, player_id: &PlayerId) -> DirectRx;
 }
 

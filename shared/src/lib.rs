@@ -49,6 +49,7 @@ pub mod skills;
 pub mod stall;
 pub mod tales;
 pub mod terrain_files;
+pub mod text;
 pub mod tip_hat;
 pub mod tree_format;
 pub mod weather;

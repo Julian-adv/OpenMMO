@@ -122,7 +122,7 @@ impl SharedState {
                 letter.sender,
                 letter.written_at,
                 if letter.read { "" } else { ", UNREAD" },
-                super::notice_board::clip(&letter.excerpt, BODY_CHARS)
+                self.player_words(&super::notice_board::clip(&letter.excerpt, BODY_CHARS))
             ));
         }
         if panel.letters.len() > LISTED_LETTERS {
@@ -140,7 +140,7 @@ impl SharedState {
         ));
         lines.push(format!(
             "  | {}",
-            super::notice_board::clip(&letter.body, BODY_CHARS)
+            self.player_words(&super::notice_board::clip(&letter.body, BODY_CHARS))
         ));
     }
 }

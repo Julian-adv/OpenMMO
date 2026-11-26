@@ -1442,6 +1442,41 @@ pub enum ClientMessage {
 }
 
 impl ClientMessage {
+    /// Cleans the text players write for others (see [`crate::text`]): chat
+    /// becomes one capped line, letters and posts keep only plain line
+    /// breaks. The server runs it on every message before dispatch; a new
+    /// variant carrying free text belongs in this match.
+    pub fn clean_player_text(&mut self, is_admin: bool) {
+        use crate::text::{multiline, one_line, ADMIN_CHAT_MAX_CHARS, CHAT_MAX_CHARS};
+        let chat_max = if is_admin {
+            ADMIN_CHAT_MAX_CHARS
+        } else {
+            CHAT_MAX_CHARS
+        };
+        let chat = |text: &mut String| *text = one_line(text, chat_max);
+        let flat = |text: &mut String| *text = one_line(text, usize::MAX);
+        let lines = |text: &mut String| *text = multiline(text);
+        match self {
+            Self::ChatMessage { message }
+            | Self::PartyChat { message }
+            | Self::FamilyChat { message } => chat(message),
+            Self::WriteNoticePost { title, body, .. } => {
+                flat(title);
+                lines(body);
+            }
+            Self::SendMail {
+                recipient, body, ..
+            } => {
+                flat(recipient);
+                lines(body);
+            }
+            Self::WriteNoticeComment { body, .. }
+            | Self::SetEstateFurnitureText { text: body, .. } => lines(body),
+            Self::SetStallSign { sign: text } | Self::OfferDeal { reason: text, .. } => flat(text),
+            _ => {}
+        }
+    }
+
     /// Acts a player turned to stone may not take (doc/DEBUFF.md
     /// `petrifies`). Movement and facing check `Player.petrified` where they
     /// apply, off this per-message path. Admins keep their slash commands.
