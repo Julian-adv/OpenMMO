@@ -1450,13 +1450,7 @@ impl super::GameState {
         inventory: &PlayerInventory,
     ) -> VisibleEquipment {
         let mut gear = inventory.visible_equipment();
-        let emblem = self.family_emblem_of(player_id).await;
-        (gear.back_color, gear.back_texture) = super::family::shown_cape(
-            gear.back.as_deref(),
-            gear.back_color.take(),
-            gear.back_texture.take(),
-            emblem.as_ref(),
-        );
+        gear.cover_cape(self.family_emblem_of(player_id).await);
         gear
     }
 

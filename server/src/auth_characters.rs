@@ -1,7 +1,7 @@
 use super::starter_items::{class_starter_items, starter_items};
 use super::titles::read_titles;
 use super::valid_character_name;
-use super::{family, AuthError, AuthService, NPC_ACCOUNT_PREFIX};
+use super::{family, AuthError, AuthService, FamilyEmblem, NPC_ACCOUNT_PREFIX};
 use crate::types::CharacterAttributes;
 use crate::world_config::world_config;
 use onlinerpg_shared::inventory::EquipSlot;
@@ -185,15 +185,11 @@ fn read_visible_equipment(
     }
 
     let slots = PREVIEW_EQUIP_SLOTS.map(|slot| format!("'{}'", slot.as_str()));
-    // A family emblem covers the worn cape, as in the world.
     let mut stmt = conn.prepare(&format!(
-        "SELECT i.character_id, i.equip_slot, i.item_def_id,
-                CASE WHEN f.emblem_texture IS NULL AND f.emblem_color IS NULL THEN i.cape_color
-                     ELSE COALESCE(f.emblem_color, i.cape_color) END,
-                CASE WHEN f.emblem_texture IS NULL AND f.emblem_color IS NULL THEN i.cape_texture
-                     ELSE f.emblem_texture END
+        "SELECT i.character_id, i.equip_slot, i.item_def_id, i.cape_color, i.cape_texture,
+                f.emblem_texture, f.emblem_color
          FROM character_items i
-         LEFT JOIN family_members m ON m.character_id=i.character_id
+         LEFT JOIN family_members m ON m.character_id=i.character_id AND i.equip_slot='back'
          LEFT JOIN families f ON f.id=m.family_id AND m.cape_emblem=1
          WHERE i.character_id IN ({})
            AND i.equip_slot IN ({})",
@@ -208,12 +204,16 @@ fn read_visible_equipment(
             row.get::<_, String>(2)?,
             row.get::<_, Option<String>>(3)?,
             row.get::<_, Option<String>>(4)?,
+            FamilyEmblem {
+                texture: row.get(5)?,
+                color: row.get(6)?,
+            },
         ))
     })?;
 
     let mut equipment: HashMap<i64, VisibleEquipment> = HashMap::new();
     for row in rows {
-        let (character_id, slot, item_def_id, cape_color, cape_texture) = row?;
+        let (character_id, slot, item_def_id, cape_color, cape_texture, emblem) = row?;
         let entry = equipment.entry(character_id).or_default();
         match slot.parse() {
             Ok(EquipSlot::Head) => entry.armor.head = Some(item_def_id),
@@ -227,6 +227,8 @@ fn read_visible_equipment(
                 entry.back = Some(item_def_id);
                 entry.back_color = cape_color;
                 entry.back_texture = cape_texture;
+                // A family emblem covers the worn cape, as in the world.
+                entry.cover_cape(Some(emblem));
             }
             _ => {}
         }

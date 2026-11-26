@@ -1021,7 +1021,7 @@
   )
 
   /** The family emblem covering my own cape, as the server shows it to
-   *  others (`family::shown_cape`); remote wearers arrive already covered. */
+   *  others (`VisibleEquipment::cover_cape`); remote wearers arrive already covered. */
   const ownEmblem = $derived(
     isCurrentPlayer &&
       $familyInfo?.my_cape_emblem &&

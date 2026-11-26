@@ -166,7 +166,7 @@
 ### 망토
 
 - 가문 문장이 있으면 가문원이 두른 망토는 가문 문장과 색으로 보인다.
-- 아이템 인스턴스의 `cape_texture`/`cape_color`는 바꾸지 않는다. 서버가 `Player.gear`의 `back_texture`/`back_color`와 `PlayerGearChanged`를 만들 때 가문 문장으로 덮어쓴다 (`family::shown_cape`). 문장 색이 없으면 망토 자기 색을 쓰고, 그림은 문장 그림으로 바꾼다(없으면 지운다). 탈퇴하면 원래 그림이 다시 보인다. 캐릭터 선택 화면도 같은 규칙이다.
+- 아이템 인스턴스의 `cape_texture`/`cape_color`는 바꾸지 않는다. 서버가 `Player.gear`의 `back_texture`/`back_color`와 `PlayerGearChanged`를 만들 때 가문 문장으로 덮어쓴다 (`VisibleEquipment::cover_cape`). 문장 색이 없으면 망토 자기 색을 쓰고, 그림은 문장 그림으로 바꾼다(없으면 지운다). 탈퇴하면 원래 그림이 다시 보인다. 캐릭터 선택 화면도 같은 규칙이다.
 - 문장이 없는 가문은 덮어쓰지 않는다.
 - 가문원마다 가문 창의 "내 망토에 가문 문장 표시"로 끌 수 있다. 기본은 켜짐이다. 사서 입힌 개인 그림을 가문에 들어갔다고 잃지 않게 하려는 것이다 (`family_members.cape_emblem`, `SetFamilyCapeEmblem`, `FamilyInfo.my_cape_emblem`).
 

@@ -22,7 +22,7 @@
 - 남에게 보이는 경로는 모두 `VisibleEquipment.back`이다: `Player.gear`,
   `ServerMessage::PlayerGearChanged`, 캐릭터 선택.
 - 가문 문장이 있으면 세 경로 모두 인스턴스 색·그림 대신 문장을 싣는다
-  (`game_state::family::shown_cape`, 캐릭터 선택 쿼리). 인스턴스는 그대로다
+  (`VisibleEquipment::cover_cape`, 게임 안과 캐릭터 선택이 같은 함수). 인스턴스는 그대로다
   (FAMILY_SYSTEM.md 8절).
 
 즉 지금은 **아이템 종류당 색 하나**다. 인스턴스별 색이 들어가려면 저 세 경로가

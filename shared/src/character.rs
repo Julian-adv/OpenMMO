@@ -599,6 +599,17 @@ pub struct VisibleEquipment {
     pub armor: ArmorEquipment,
 }
 
+impl VisibleEquipment {
+    /// A set family emblem covers whatever cape is worn: its colour if it
+    /// has one, and its print (none clears the cape's own).
+    pub fn cover_cape(&mut self, emblem: Option<crate::family::Emblem>) {
+        if let (Some(_), Some(emblem)) = (&self.back, emblem.filter(|e| e.is_set())) {
+            self.back_color = emblem.color.or(self.back_color.take());
+            self.back_texture = emblem.texture;
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Character {
     pub id: i64,
@@ -625,4 +636,51 @@ pub struct Character {
     /// Family name (doc/FAMILY_SYSTEM.md).
     #[serde(default)]
     pub family: Option<String>,
+}
+
+#[cfg(test)]
+mod cover_cape_tests {
+    use super::*;
+    use crate::family::Emblem;
+
+    fn emblem(texture: Option<&str>, color: Option<&str>) -> Option<Emblem> {
+        Some(Emblem {
+            texture: texture.map(Into::into),
+            color: color.map(Into::into),
+        })
+    }
+
+    fn caped() -> VisibleEquipment {
+        VisibleEquipment {
+            back: Some("wool_cape".into()),
+            back_color: Some("#112233".into()),
+            back_texture: Some("own".into()),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn an_emblem_covers_the_worn_cape() {
+        let mut gear = caped();
+        gear.cover_cape(emblem(None, Some("#aa0000")));
+        assert_eq!(gear.back_color.as_deref(), Some("#aa0000"));
+        assert_eq!(gear.back_texture, None);
+
+        let mut gear = caped();
+        gear.cover_cape(emblem(Some("crest"), None));
+        assert_eq!(gear.back_color.as_deref(), Some("#112233"));
+        assert_eq!(gear.back_texture.as_deref(), Some("crest"));
+    }
+
+    #[test]
+    fn no_cape_or_an_unset_emblem_changes_nothing() {
+        let mut gear = caped();
+        gear.cover_cape(emblem(None, None));
+        gear.cover_cape(None);
+        assert_eq!(gear, caped());
+
+        let mut bare = VisibleEquipment::default();
+        bare.cover_cape(emblem(Some("crest"), Some("#aa0000")));
+        assert_eq!(bare, VisibleEquipment::default());
+    }
 }

@@ -83,23 +83,7 @@ impl Families {
         if self.own_capes.contains(player_id) {
             return None;
         }
-        self.family_emblem(player_id)
-            .filter(|e| e.is_set())
-            .cloned()
-    }
-}
-
-/// The cape colour and texture a player shows: their family's emblem
-/// covers whatever cape they wear.
-pub(crate) fn shown_cape(
-    back: Option<&str>,
-    color: Option<String>,
-    texture: Option<String>,
-    emblem: Option<&FamilyEmblem>,
-) -> (Option<String>, Option<String>) {
-    match (back, emblem) {
-        (Some(_), Some(emblem)) => (emblem.color.clone().or(color), emblem.texture.clone()),
-        _ => (color, texture),
+        self.family_emblem(player_id).cloned()
     }
 }
 
