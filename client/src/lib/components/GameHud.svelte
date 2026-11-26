@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { watchMode } from '../stores/watchStore'
   import { t } from '../i18n'
   import type { Writable } from 'svelte/store'
   import ChatPanel from './ChatPanel.svelte'
@@ -288,31 +289,34 @@
       visible={$inventoryVisible}
       onClose={() => inventoryVisible.set(false)}
     />
-    <TradeWindow />
-    <EstateStorageWindow />
-    <PlayerTradeWindow />
-    <StallWindow />
-    <TradeOfferToast />
-    <OutfitOfferToast />
-    <PartyInviteToast />
-    <PlayerTradeRequestToast />
-    <PartySummonToast />
     <PartyPanel />
-    <FriendRequestToast />
     <!-- Always mounted: it drives the presence poll, whose answers feed the
          online notice whether or not the list is on screen. -->
     <FriendPanel />
-    <FamilyInviteToast />
-    <FamilyMergeToast />
     <FamilyPanel />
     <FamilyStorageLogPanel />
     <EmotePanel />
     <InstrumentPanel />
     <NpcContextMenu />
-    <FishingPrompt />
-    <ChargeTargetPrompt />
     <WatchDutyChip />
-    <DanceJoinPrompt />
+    <!-- A watcher can only look. -->
+    {#if !watchMode}
+      <TradeWindow />
+      <EstateStorageWindow />
+      <PlayerTradeWindow />
+      <StallWindow />
+      <TradeOfferToast />
+      <OutfitOfferToast />
+      <PartyInviteToast />
+      <PlayerTradeRequestToast />
+      <PartySummonToast />
+      <FriendRequestToast />
+      <FamilyInviteToast />
+      <FamilyMergeToast />
+      <FishingPrompt />
+      <ChargeTargetPrompt />
+      <DanceJoinPrompt />
+    {/if}
   {/if}
 
   {#if !$mapEditorMode}
@@ -536,7 +540,7 @@
   <LoadingDialog
     message={$t(isSceneCompiling ? 'loading.world' : 'loading.loading')}
   />
-{:else}
+{:else if !watchMode}
   <OperatorNoticeDialog />
 {/if}
 
@@ -548,95 +552,100 @@
   <WorldMapDialog />
 {/if}
 
-{#if $capeDyeDialog}
-  <CapeDyeDialog
-    onConfirm={(color) => {
-      networkManager.sendDyeCape($capeDyeDialog!.instanceId, color)
-      capeDyeDialog.set(null)
-    }}
-    onCancel={() => capeDyeDialog.set(null)}
-  />
-{/if}
+{#if !watchMode}
+  {#if $capeDyeDialog}
+    <CapeDyeDialog
+      onConfirm={(color) => {
+        networkManager.sendDyeCape($capeDyeDialog!.instanceId, color)
+        capeDyeDialog.set(null)
+      }}
+      onCancel={() => capeDyeDialog.set(null)}
+    />
+  {/if}
 
-{#if $landClaimDialog}
-  <LandClaimDialog />
-{/if}
+  {#if $landClaimDialog}
+    <LandClaimDialog />
+  {/if}
 
-{#if $mergerPledgeOpen}
-  <MergerPledgeDialog />
-{/if}
+  {#if $mergerPledgeOpen}
+    <MergerPledgeDialog />
+  {/if}
 
-{#if $impoundSession}
-  <ImpoundDialog />
-{/if}
+  {#if $impoundSession}
+    <ImpoundDialog />
+  {/if}
 
-{#if $bookmarkDialog}
-  <BookmarkDialog />
-{/if}
+  {#if $bookmarkDialog}
+    <BookmarkDialog />
+  {/if}
 
-{#if $summonPicker !== null}
-  <PartySummonDialog />
-{/if}
+  {#if $summonPicker !== null}
+    <PartySummonDialog />
+  {/if}
 
-{#if $seasonalEventsPanel}
-  <SeasonalEventsPanel />
-{/if}
+  {#if $seasonalEventsPanel}
+    <SeasonalEventsPanel />
+  {/if}
 
-{#if $blessSession}
-  <BlessDialog />
-{/if}
+  {#if $blessSession}
+    <BlessDialog />
+  {/if}
 
-<WatchOfferDialog />
-<WatchRackWindow />
+  <WatchOfferDialog />
+  <WatchRackWindow />
 
-{#if $salonSession}
-  <SalonDialog />
-{/if}
+  {#if $salonSession}
+    <SalonDialog />
+  {/if}
 
-{#if $altarOffering}
-  <AltarOfferingDialog
-    offering={$altarOffering}
-    onConfirm={confirmAltarOffering}
-    onCancel={() => altarOffering.set(null)}
-  />
-{/if}
+  {#if $altarOffering}
+    <AltarOfferingDialog
+      offering={$altarOffering}
+      onConfirm={confirmAltarOffering}
+      onCancel={() => altarOffering.set(null)}
+    />
+  {/if}
 
-{#if $noticeBoard}
-  <NoticeBoardPanel session={$noticeBoard} />
-{/if}
+  {#if $noticeBoard}
+    <NoticeBoardPanel session={$noticeBoard} />
+  {/if}
 
-{#if $mailSession}
-  <MailPanel session={$mailSession} />
-{/if}
+  {#if $mailSession}
+    <MailPanel session={$mailSession} />
+  {/if}
 
-{#if $houseDemolitionConfirmation}
-  <HouseDemolitionDialog
-    house={$houseDemolitionConfirmation}
-    onConfirm={confirmHouseDemolition}
-    onCancel={cancelHouseDemolition}
-  />
-{/if}
+  {#if $houseDemolitionConfirmation}
+    <HouseDemolitionDialog
+      house={$houseDemolitionConfirmation}
+      onConfirm={confirmHouseDemolition}
+      onCancel={cancelHouseDemolition}
+    />
+  {/if}
 
-{#if $capeTextureDialog}
-  <CapeTextureDialog
-    onConfirm={(hash) => {
-      networkManager.sendApplyCapeTexture($capeTextureDialog!.instanceId, hash)
-      capeTextureDialog.set(null)
-    }}
-    onCancel={() => capeTextureDialog.set(null)}
-  />
-{/if}
+  {#if $capeTextureDialog}
+    <CapeTextureDialog
+      onConfirm={(hash) => {
+        networkManager.sendApplyCapeTexture(
+          $capeTextureDialog!.instanceId,
+          hash
+        )
+        capeTextureDialog.set(null)
+      }}
+      onCancel={() => capeTextureDialog.set(null)}
+    />
+  {/if}
 
-{#if $tipHatDialog}
-  <TipHatDialog
-    ownerName={$tipHatDialog.ownerName}
-    acceptsSongRequests={$tipHatDialog.acceptsSongRequests}
-    onConfirm={(copper, song) => {
-      networkManager.sendTipHat($tipHatDialog!.hatId, copper, song)
-      tipHatDialog.set(null)
-    }}
-    onCancel={() => tipHatDialog.set(null)}
-  />
+  {#if $tipHatDialog}
+    <TipHatDialog
+      ownerName={$tipHatDialog.ownerName}
+      acceptsSongRequests={$tipHatDialog.acceptsSongRequests}
+      onConfirm={(copper, song) => {
+        networkManager.sendTipHat($tipHatDialog!.hatId, copper, song)
+        tipHatDialog.set(null)
+      }}
+      onCancel={() => tipHatDialog.set(null)}
+    />
+  {/if}
 {/if}
 
 <style>

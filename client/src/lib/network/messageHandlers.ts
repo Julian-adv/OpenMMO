@@ -540,6 +540,11 @@ function clearWorldEntities() {
   resetFences()
   resetEstateStorage()
   dungeonManager.resetDynamicView()
+  clearDynamicEntities()
+}
+
+/** Drop what the world view keeps changing; ground and buildings stay. */
+function clearDynamicEntities() {
   gameStore.update((state) => {
     for (const id of state.otherPlayers.keys()) {
       stopMusicPerformance(id)
@@ -934,7 +939,8 @@ export function handleServerMessage(
       watchWaiting.set(true)
       resetTeleportEffects()
       worldView.synchronized = false
-      clearWorldEntities()
+      // The last place stays on screen until the next character joins.
+      clearDynamicEntities()
       events.watchWaiting.emit()
       break
     }

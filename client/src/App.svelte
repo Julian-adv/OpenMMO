@@ -60,9 +60,10 @@
   let currentPlayerLevel = $state<number | null>(null)
   let currentPlayerTotalXp = $state<number | null>(null)
   let deathUiState = $state<DeathUiState>('alive')
-  let showRespawnDialog = $derived(deathUiState === 'dialog_open')
+  // A watcher cannot respawn the character it watches.
+  let showRespawnDialog = $derived(!watchMode && deathUiState === 'dialog_open')
   let canReopenRespawnDialog = $derived(
-    isPlayerDead && deathUiState === 'dialog_closed'
+    !watchMode && isPlayerDead && deathUiState === 'dialog_closed'
   )
   let wasPlayerDead = false
   // Reconnected dead characters skip the dying animation.
