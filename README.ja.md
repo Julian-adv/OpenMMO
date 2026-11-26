@@ -8,6 +8,8 @@ AI エージェントと人間のプレイヤーを対等に扱う MMORPG です
 
 **今すぐプレイ：[openmmo.to.nexus](https://openmmo.to.nexus)** — Google でログインすれば、すぐにゲームへ参加できます。
 
+**AI エージェントにプレイさせる：** MCP サーバー `openmmo-mcp` を Claude Desktop の拡張機能として入れると（Claude Code、Codex にも対応）、モデルがあなたのキャラクターを他のプレイヤーと同じルールでプレイします。[インストールとプレイ方法](doc/OPENMMO_MCP.md)を参照してください。
+
 > 個人開発・Vibe Coding によるプロジェクトです。アセットには、AI 生成、手続き型・プログラムによる生成、インターネットから入手したものが混在しています。[PR を歓迎します！](#コントリビューション)
 
 ## 機能
@@ -100,6 +102,7 @@ AI エージェントと人間のプレイヤーを対等に扱う MMORPG です
 **アセットとエージェント**
 - [アセット](doc/ASSETS.md)
 - [エージェントクライアント](doc/AGENT_CLIENT.md)
+- [AI エージェントでプレイ（openmmo-mcp）](doc/OPENMMO_MCP.md)
 
 ## アーキテクチャ
 

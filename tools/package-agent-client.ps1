@@ -4,6 +4,12 @@ param()
 $ErrorActionPreference = "Stop"
 Set-StrictMode -Version Latest
 
+function Get-CrateVersion([string]$Crate) {
+    $toml = Get-Content -LiteralPath (Join-Path $repo "$Crate\Cargo.toml") -Raw
+    if ($toml -notmatch '(?m)^version = "(.+)"') { throw "no version in $Crate/Cargo.toml" }
+    return $Matches[1]
+}
+
 function Get-TomlString([string]$Value) {
     return $Value.Replace('\', '\\').Replace('"', '\"').Replace("`r", '\r').Replace("`n", '\n')
 }
@@ -31,9 +37,7 @@ Push-Location $repo
 try {
     # Named by crate version; the release tag must be agent-client-v<version>
     # and bumped every release (the shipped self-updater compares against it).
-    $cargoToml = Get-Content -LiteralPath (Join-Path $repo "agent-client\Cargo.toml") -Raw
-    if ($cargoToml -notmatch '(?m)^version = "(.+)"') { throw "no version in agent-client/Cargo.toml" }
-    $version = $Matches[1]
+    $version = Get-CrateVersion "agent-client"
 
     $targetTriple = if ($target) {
         $target
@@ -90,8 +94,8 @@ try {
     Compress-Archive -LiteralPath $stage -DestinationPath $archive -CompressionLevel Optimal -Force
     Write-Output "==> $archive"
 
-    # Installed openmmo-mcp extensions update themselves to this bare exe.
-    $mcp = Join-Path $outDir "openmmo-mcp-v$version-$targetTriple.exe"
+    # Released as openmmo-mcp-v<its own version>; installed copies update to it.
+    $mcp = Join-Path $outDir "openmmo-mcp-v$(Get-CrateVersion "openmmo-mcp")-$targetTriple.exe"
     Copy-Item -LiteralPath (Join-Path $releaseDir "openmmo-mcp.exe") -Destination $mcp -Force
     Write-Output "==> $mcp"
 } finally {

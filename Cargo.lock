@@ -1429,7 +1429,7 @@ dependencies = [
 
 [[package]]
 name = "openmmo-mcp"
-version = "0.2.0"
+version = "1.0.0"
 dependencies = [
  "agent-client",
  "anyhow",

@@ -15,8 +15,8 @@ fn releases_api_url() -> String {
     let repo = env!("CARGO_PKG_REPOSITORY").trim_start_matches("https://github.com/");
     format!("https://api.github.com/repos/{repo}/releases?per_page=10")
 }
-/// Releases are tagged `agent-client-v<version>`; openmmo-mcp ships in them too.
-pub const TAG_PREFIX: &str = "agent-client-v";
+/// Releases are tagged `agent-client-v<version>`.
+const TAG_PREFIX: &str = "agent-client-v";
 /// Written after a successful install. When the latest tag equals this, the
 /// update already happened — without it, a release whose Cargo version was
 /// not bumped would re-download on every start.

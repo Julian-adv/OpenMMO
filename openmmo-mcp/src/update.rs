@@ -1,13 +1,14 @@
-//! Updates from the agent-client releases, which carry an openmmo-mcp binary
+//! Updates from the `openmmo-mcp-v<version>` releases, which carry a binary
 //! per platform. Newer builds are downloaded into the cache in the background
 //! and the installed copy hands over to the newest one on the next start, so
 //! the folder Claude Desktop installed the extension into is never written to.
 
-use agent_client::update::{download, fetch_releases, parse_version, TAG_PREFIX};
+use agent_client::update::{download, fetch_releases, parse_version};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-/// Set on the handed-over copy so it serves instead of looking again.
+const TAG_PREFIX: &str = "openmmo-mcp-v";
+/// Set on the handed-over copy so it serves instead of handing over again.
 const HANDED_OVER: &str = "OPENMMO_MCP_HANDED_OVER";
 /// Unauthenticated GitHub allows 60 API calls an hour per address.
 const CHECK_INTERVAL: Duration = Duration::from_secs(3600);
@@ -16,7 +17,7 @@ const STAMP: &str = "last-check";
 type Version = (u64, u64, u64);
 
 fn own_version() -> Version {
-    parse_version(agent_client::VERSION).expect("agent-client version is x.y.z")
+    parse_version(env!("CARGO_PKG_VERSION")).expect("openmmo-mcp version is x.y.z")
 }
 
 /// `x86_64-pc-windows-msvc.exe` or `x86_64-unknown-linux-gnu`: the release
@@ -31,7 +32,7 @@ fn platform_suffix() -> String {
 }
 
 fn asset_name(version: &str) -> String {
-    format!("openmmo-mcp-v{version}-{}", platform_suffix())
+    format!("{TAG_PREFIX}{version}-{}", platform_suffix())
 }
 
 fn bin_dir() -> PathBuf {
@@ -47,8 +48,7 @@ fn newest_cached(dir: &Path) -> Option<PathBuf> {
         .filter_map(|entry| entry.ok().map(|e| e.path()))
         .filter_map(|path| {
             let name = path.file_name()?.to_str()?;
-            let version =
-                parse_version(name.strip_prefix("openmmo-mcp-v")?.strip_suffix(&suffix)?)?;
+            let version = parse_version(name.strip_prefix(TAG_PREFIX)?.strip_suffix(&suffix)?)?;
             (version > own).then_some((version, path))
         })
         .max_by_key(|(version, _)| *version)
@@ -110,11 +110,11 @@ fn check_due(dir: &Path) -> bool {
 /// or else look for a newer release in the background for the next start.
 /// `Some(exit code)` when another build served.
 pub fn hand_over() -> Option<i32> {
-    if std::env::var_os(HANDED_OVER).is_some() {
-        return None;
-    }
     let dir = bin_dir();
-    let Some(newer) = newest_cached(&dir) else {
+    let newer = std::env::var_os(HANDED_OVER)
+        .is_none()
+        .then(|| newest_cached(&dir));
+    let Some(newer) = newer.flatten() else {
         if check_due(&dir) {
             tokio::spawn(async {
                 if let Err(e) = download_newer().await {

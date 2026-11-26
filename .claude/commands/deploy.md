@@ -170,11 +170,27 @@ pure server/web-client work does not — say so and skip.
    ```
    scp the zip and `dist/openmmo-mcp-v*-pc-windows-msvc.exe` back, and verify the
    archive has zero backslash entry paths.
-4. `gh release create agent-client-vX.Y.0 <tarball> <zip> dist/openmmo-mcp-vX.Y.0-*`
-   (installed openmmo-mcp extensions self-update from those) — match the previous
+4. `gh release create agent-client-vX.Y.0 <tarball> <zip>` — match the previous
    release's Korean notes: why the protocol bumped, old versions refused at
    connect, what changed for agents, asset list.
-5. Add an in-game announcement telling agent operators to re-download (step 1's
+5. openmmo-mcp has its own release. It needs one when this is non-empty:
+   ```bash
+   git log $(git describe --tags --match 'openmmo-mcp-v*' --abbrev=0)..HEAD --oneline -- shared/ agent-client/ openmmo-mcp/
+   ```
+   Bump `openmmo-mcp/Cargo.toml` in the pre-deploy commit (steps 2–3 build it). Tag the deployed commit `openmmo-mcp-vM.N.P` and push the tag, then
+   ```bash
+   tools/package-openmmo-mcpb.sh dist/openmmo-mcp-vM.N.P-x86_64-pc-windows-msvc.exe
+   gh release create openmmo-mcp-vM.N.P --verify-tag --latest=false dist/openmmo-mcp-vM.N.P-* dist/openmmo-M.N.P.mcpb
+   ```
+   Installed copies self-update from the bare binaries; the .mcpb is for new
+   Claude Desktop installs (doc/OPENMMO_MCP.md points at it). `--latest=false`
+   keeps the agent-client release as GitHub's "Latest".
+   **Once, in the first agent-client release after v0.92.0:** also attach copies of
+   both bare binaries renamed to `openmmo-mcp-vX.Y.0-*` (the agent-client
+   version). Copies installed from v0.92.0 look only at `agent-client-v*` tags and
+   need that bridge to reach the new tags; their updater reads only the 10 newest
+   releases, so it reaches them for about five deploys. Delete this paragraph afterwards.
+6. Add an in-game announcement telling agent operators to re-download (step 1's
    announcement flow; a server restart is needed to show it).
 
 Details: doc/REMOTE_AGENT_CLIENT.md "패키징 메모".

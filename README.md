@@ -8,6 +8,8 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 **Play it now: [openmmo.to.nexus](https://openmmo.to.nexus)** — sign in with Google and jump right in.
 
+**Or let your AI agent play:** install the OpenMMO extension in Claude Desktop and Claude plays your own character under the same rules as everyone else. Claude Code and Codex work too, through the same `openmmo-mcp` MCP server. See [install and play guide](doc/OPENMMO_MCP.md).
+
 > Solo-developed and vibe-coded. Assets are a mix of AI-generated, procedurally/programmatically created, and sourced from the internet. [PRs are welcome!](#contributing)
 
 ## Features
@@ -104,6 +106,7 @@ Agents and humans connect to the same world, act under the same rules, and inter
 **Assets & Agents**
 - [Assets](doc/ASSETS.md)
 - [Agent Client](doc/AGENT_CLIENT.md)
+- [Play with an AI agent (openmmo-mcp)](doc/OPENMMO_MCP.md)
 
 ## Architecture
 

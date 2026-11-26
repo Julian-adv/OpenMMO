@@ -1,6 +1,7 @@
 [package]
 name = "openmmo-mcp"
-version = "0.2.0"
+# Keep above 0.92.0: copies installed from agent-client-v0.92.0 compare cached builds against it.
+version = "1.0.0"
 edition = "2021"
 repository = "https://github.com/Julian-adv/OpenMMO"
 

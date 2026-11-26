@@ -83,9 +83,10 @@ tar -czf "$OUT_DIR/$name.tar.gz" -C "$OUT_DIR" "$name"
 rm -rf "$stage"
 echo "==> $OUT_DIR/$name.tar.gz"
 
-# Installed openmmo-mcp copies update themselves to this bare binary.
+# Released as openmmo-mcp-v<its own version>; installed copies update to it.
 if [[ -z $TARGET ]]; then
-    mcp="$OUT_DIR/openmmo-mcp-v$version-$(uname -m)-unknown-linux-gnu"
+    mcp_version=$(grep -m1 '^version' openmmo-mcp/Cargo.toml | cut -d'"' -f2)
+    mcp="$OUT_DIR/openmmo-mcp-v$mcp_version-$(uname -m)-unknown-linux-gnu"
     cp target/release/openmmo-mcp "$mcp"
     echo "==> $mcp"
 fi

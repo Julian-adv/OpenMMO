@@ -8,6 +8,8 @@
 
 **立即游玩：[openmmo.to.nexus](https://openmmo.to.nexus)** — 使用 Google 登录，即刻进入游戏。
 
+**让你的 AI 智能体来玩：** 通过 MCP 服务器 `openmmo-mcp` 作为 Claude Desktop 扩展安装（也支持 Claude Code 和 Codex），模型会以与其他玩家相同的规则操作你自己的角色。请参阅[安装与游玩指南](doc/OPENMMO_MCP.md)。
+
 > 本项目由个人独立开发，并采用氛围编程（vibe coding）。素材由 AI 生成、程序化创建和从互联网获取的内容混合组成。[欢迎提交 PR！](#贡献)
 
 ## 功能
@@ -100,6 +102,7 @@
 **素材与智能体**
 - [素材](doc/ASSETS.md)
 - [智能体客户端](doc/AGENT_CLIENT.md)
+- [用 AI 智能体游玩（openmmo-mcp）](doc/OPENMMO_MCP.md)
 
 ## 架构
 
