@@ -17,6 +17,42 @@ pub struct StatueRow {
     pub day: u8,
 }
 
+/// Looks saved before protocol 180 kept gear as top-level fields; move them
+/// under `gear` once.
+fn nest_statue_gear(conn: &Connection) -> Result<(), rusqlite::Error> {
+    const GEAR: [&str; 6] = [
+        "main_hand",
+        "off_hand",
+        "back",
+        "back_color",
+        "back_texture",
+        "armor",
+    ];
+    let tx = conn.unchecked_transaction()?;
+    let flat: Vec<(i64, String)> = tx
+        .prepare("SELECT id, look FROM dungeon_statues WHERE json_type(look, '$.gear') IS NULL")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<_, _>>()?;
+    let mut update = tx.prepare("UPDATE dungeon_statues SET look = ?1 WHERE id = ?2")?;
+    for (id, look) in &flat {
+        let Ok(serde_json::Value::Object(mut fields)) = serde_json::from_str(look) else {
+            continue;
+        };
+        let gear: serde_json::Map<_, _> = GEAR
+            .iter()
+            .filter_map(|key| fields.remove_entry(*key))
+            .collect();
+        fields.insert("gear".into(), gear.into());
+        update.execute(params![serde_json::Value::Object(fields).to_string(), id])?;
+    }
+    drop(update);
+    tx.commit()?;
+    if !flat.is_empty() {
+        tracing::info!(migrated = flat.len(), "Nested statue gear");
+    }
+    Ok(())
+}
+
 impl AuthService {
     pub(super) fn ensure_statue_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
         conn.execute_batch(
@@ -32,7 +68,8 @@ impl AuthService {
                 month INTEGER NOT NULL,
                 day INTEGER NOT NULL
             );",
-        )
+        )?;
+        nest_statue_gear(conn)
     }
 
     /// Every statue, oldest first. A deleted character's keeps its look and
@@ -93,5 +130,58 @@ impl AuthService {
         }
         transaction.commit()?;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn statues_saved_with_flat_gear_keep_it() {
+        let conn = Connection::open_in_memory().unwrap();
+        AuthService::ensure_statue_schema(&conn).unwrap();
+        let mut look = serde_json::to_value(crate::types::new_player(
+            "old".into(),
+            1,
+            10,
+            onlinerpg_shared::CharacterClass::Knight,
+            Default::default(),
+            onlinerpg_shared::Position {
+                x: 0.0,
+                y: 0.0,
+                z: 0.0,
+            },
+            0.0,
+            false,
+            Default::default(),
+        ))
+        .unwrap();
+        let fields = look.as_object_mut().unwrap();
+        fields.remove("gear");
+        fields.insert("main_hand".into(), "iron_sword".into());
+        fields.insert("back_color".into(), "#ff0000".into());
+        fields.insert(
+            "armor".into(),
+            serde_json::json!({ "head": "worn_plate_helmet" }),
+        );
+        conn.execute(
+            "INSERT INTO dungeon_statues VALUES (1, 'crypt', 1, NULL, 'old', ?1, 0, 1, 1, 1)",
+            params![look.to_string()],
+        )
+        .unwrap();
+
+        AuthService::ensure_statue_schema(&conn).unwrap();
+        AuthService::ensure_statue_schema(&conn).unwrap();
+
+        let saved: String = conn
+            .query_row("SELECT look FROM dungeon_statues", [], |row| row.get(0))
+            .unwrap();
+        let gear = serde_json::from_str::<onlinerpg_shared::Player>(&saved)
+            .unwrap()
+            .gear;
+        assert_eq!(gear.main_hand.as_deref(), Some("iron_sword"));
+        assert_eq!(gear.back_color.as_deref(), Some("#ff0000"));
+        assert_eq!(gear.armor.head.as_deref(), Some("worn_plate_helmet"));
     }
 }

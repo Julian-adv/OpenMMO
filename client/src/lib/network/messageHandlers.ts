@@ -422,12 +422,7 @@ function toRemotePlayer(sp: ServerPlayer): RemotePlayer {
     title: sp.title ?? null,
     family: sp.family ?? null,
     rank: sp.rank ?? null,
-    mainHand: sp.main_hand ?? null,
-    offHand: sp.off_hand ?? null,
-    armor: sp.armor,
-    back: sp.back ?? null,
-    backColor: sp.back_color ?? null,
-    backTexture: sp.back_texture ?? null,
+    gear: sp.gear,
     floorLevel: sp.floor_level ?? 0,
     isOfficialNpc: sp.is_official_npc ?? false,
   }
@@ -2131,18 +2126,9 @@ export function handleServerMessage(
       break
     }
 
-    case 'PlayerMainHandChanged': {
-      const state = get(gameStore)
-      if (state.currentPlayer?.id === data.player_id) {
-        break
-      }
-      updatePlayer(data.player_id, { mainHand: data.item_def_id ?? null })
-      break
-    }
-
-    case 'PlayerOffHandChanged':
+    case 'PlayerGearChanged':
       if (!isSelfPlayer(data.player_id))
-        updatePlayer(data.player_id, { offHand: data.item_def_id ?? null })
+        updatePlayer(data.player_id, { gear: data.gear })
       break
 
     case 'CapeDyePrompt': {
@@ -2328,21 +2314,6 @@ export function handleServerMessage(
 
     case 'CapeTexturePrompt': {
       capeTextureDialog.set({ instanceId: data.instance_id })
-      break
-    }
-
-    case 'PlayerArmorChanged': {
-      updatePlayer(data.player_id, { armor: data.armor })
-      break
-    }
-
-    case 'PlayerBackChanged': {
-      if (isSelfPlayer(data.player_id)) break
-      updatePlayer(data.player_id, {
-        back: data.item_def_id ?? null,
-        backColor: data.cape_color ?? null,
-        backTexture: data.cape_texture ?? null,
-      })
       break
     }
 

@@ -77,12 +77,7 @@ export type ServerPlayer = {
   object_type?: string
   /** Placement id of the occupied chair/bed (v47); absent for emotes. */
   object_id?: number | null
-  main_hand?: string | null
-  off_hand?: string | null
-  back?: string | null
-  back_color?: string | null
-  back_texture?: string | null
-  armor?: ArmorEquipment
+  gear: VisibleEquipment
   /** Carrying the `wet` soaking — drives the footprint trail (doc/DEBUFF.md). */
   wet?: boolean
   /** Turned to stone by a boss skill (doc/DEBUFF.md `petrifies`). */
@@ -135,7 +130,7 @@ export type ArmorEquipment = Partial<
   Record<(typeof ARMOR_SLOTS)[number], string | null>
 >
 
-/** Equipped item def ids the character-select preview renders. */
+/** Equipped item def ids others see: character select and `Player.gear`. */
 export type VisibleEquipment = {
   armor?: ArmorEquipment
   main_hand?: string | null

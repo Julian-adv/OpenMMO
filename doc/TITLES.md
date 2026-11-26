@@ -96,7 +96,7 @@ sturgeon_angler,Who Landed the Golden Sturgeon,황금 철갑상어를 낚은 자
 - `Player.title: Option<String>` — **구조체 끝에** `#[serde(default)]`로 붙인다.
   `entity.rs`의 경고대로 msgpack이 위치 배열이라 중간에 끼우면 뒤 필드가 밀린다.
 - `ServerMessage::PlayerTitleChanged { player_id, title: Option<String> }` —
-  `PlayerBackChanged`와 같은 AOI 브로드캐스트.
+  `PlayerGearChanged`와 같은 AOI 브로드캐스트.
 - `ServerMessage::TitleEarned { title }` — 본인에게만. 클라이언트는 이걸로 토스트를 띄운다.
 - `ClientMessage::SetActiveTitle { title: Option<String> }` — 서버는 `character_titles`에
   있는지 검사하고 없으면 무시한다.

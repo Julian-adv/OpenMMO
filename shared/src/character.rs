@@ -579,11 +579,15 @@ pub struct ArmorEquipment {
     pub hands: Option<String>,
 }
 
-/// Equipped item def ids shown in character previews.
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+/// Equipped item def ids others see: character previews and `Player.gear`.
+/// `None` main hand renders the class default; `None` back renders no cape.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct VisibleEquipment {
+    #[serde(default)]
     pub main_hand: Option<String>,
+    #[serde(default)]
     pub off_hand: Option<String>,
+    #[serde(default)]
     pub back: Option<String>,
     /// Dye on the worn cape, so a dyed cape looks dyed at character select.
     #[serde(default)]

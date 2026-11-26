@@ -90,8 +90,8 @@ async fn a_recolour_reaches_nearby_players() {
     game_state.dye_cape(&pid("dyer"), DYE_ID, RED).await;
 
     let recoloured = drain(&mut watcher_rx).into_iter().any(|msg| {
-        matches!(msg, ServerMessage::PlayerBackChanged { player_id, cape_color, .. }
-            if player_id == pid("dyer") && cape_color.as_deref() == Some(RED))
+        matches!(msg, ServerMessage::PlayerGearChanged { player_id, gear }
+            if player_id == pid("dyer") && gear.back_color.as_deref() == Some(RED))
     });
     assert!(recoloured, "nearby players must see the new colour");
 }
@@ -114,8 +114,8 @@ async fn taking_a_dyed_cape_off_and_on_keeps_the_dye() {
         Some(RED)
     );
     let redressed = drain(&mut watcher_rx).into_iter().any(|msg| {
-        matches!(msg, ServerMessage::PlayerBackChanged { cape_color, item_def_id, .. }
-            if item_def_id.is_some() && cape_color.as_deref() == Some(RED))
+        matches!(msg, ServerMessage::PlayerGearChanged { gear, .. }
+            if gear.back.is_some() && gear.back_color.as_deref() == Some(RED))
     });
     assert!(redressed, "putting it back on must broadcast the dye again");
 }

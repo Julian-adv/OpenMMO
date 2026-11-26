@@ -74,10 +74,12 @@ static NAMELESS: std::sync::LazyLock<Vec<Player>> = std::sync::LazyLock::new(|| 
                 "class": class,
                 "gender": if i % 2 == 0 { "male" } else { "female" },
                 "petrified": true,
-                "armor": {
-                    "chest": "leather_armor",
-                    "pants": "leather_pants",
-                    "boots": "leather_boots",
+                "gear": {
+                    "armor": {
+                        "chest": "leather_armor",
+                        "pants": "leather_pants",
+                        "boots": "leather_boots",
+                    },
                 },
             }))
             .ok()
@@ -155,7 +157,8 @@ impl GameState {
         look.object_type = None;
         look.object_id = None;
         look.mount = None;
-        look.off_hand
+        look.gear
+            .off_hand
             .take_if(|id| onlinerpg_shared::inventory::TORCH_ITEM_IDS.contains(&id.as_str()));
         look.radiance_on = false;
         look.raging = false;
@@ -293,6 +296,19 @@ impl GameState {
             let mut book = self.statues.lock().unwrap_or_else(|e| e.into_inner());
             book.unsaved.splice(0..0, added);
             book.removed.splice(0..0, removed);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nameless_statues_wear_leather() {
+        assert!(!NAMELESS.is_empty());
+        for look in NAMELESS.iter() {
+            assert_eq!(look.gear.armor.chest.as_deref(), Some("leather_armor"));
         }
     }
 }

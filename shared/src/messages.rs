@@ -2357,31 +2357,11 @@ pub enum ServerMessage {
     CapeTexturePrompt {
         instance_id: u64,
     },
-    /// A player's equipped main-hand item changed; `None` reverts remote
-    /// rendering to the class default weapon.
-    PlayerMainHandChanged {
+    /// A player's visible gear changed: weapons, armor, or the cape and its
+    /// dye or print (a re-dye keeps the same `back`).
+    PlayerGearChanged {
         player_id: PlayerId,
-        item_def_id: Option<String>,
-    },
-    /// A player's off-hand item changed, so others draw the shield or torch.
-    PlayerOffHandChanged {
-        player_id: PlayerId,
-        item_def_id: Option<String>,
-    },
-    /// A player's equipped back item changed; `None` removes the cape from
-    /// remote rendering. `cape_color` is the dye on that instance, if any —
-    /// re-dyeing sends this with an unchanged `item_def_id`.
-    PlayerBackChanged {
-        player_id: PlayerId,
-        item_def_id: Option<String>,
-        #[serde(default)]
-        cape_color: Option<String>,
-        #[serde(default)]
-        cape_texture: Option<String>,
-    },
-    PlayerArmorChanged {
-        player_id: PlayerId,
-        armor: crate::character::ArmorEquipment,
+        gear: crate::character::VisibleEquipment,
     },
     PlayerInteractionChanged {
         player_id: PlayerId,
@@ -3123,10 +3103,7 @@ impl ServerMessage {
             | Self::PlayerFamilyChanged { .. }
             | Self::FenceVisibility { .. }
             | Self::EstateChestVisibility { .. }
-            | Self::PlayerMainHandChanged { .. }
-            | Self::PlayerOffHandChanged { .. }
-            | Self::PlayerBackChanged { .. }
-            | Self::PlayerArmorChanged { .. }
+            | Self::PlayerGearChanged { .. }
             | Self::PlayerInteractionChanged { .. }
             | Self::PlayerMusicStarted { .. }
             | Self::PlayerInstrumentStarted { .. }

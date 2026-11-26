@@ -19,8 +19,8 @@
 - 천은 모델이 아니라 절차적 스킨드 메시다
   ([client/src/lib/effects/cape-rig.ts](../client/src/lib/effects/cape-rig.ts)).
   머티리얼은 색 문자열을 키로 한 전역 캐시에 공유된다.
-- 남에게 보이는 경로는 def id 하나뿐이다: `Player.back`,
-  `ServerMessage::PlayerBackChanged`, 캐릭터 선택의 `VisibleEquipment.back`.
+- 남에게 보이는 경로는 모두 `VisibleEquipment.back`이다: `Player.gear`,
+  `ServerMessage::PlayerGearChanged`, 캐릭터 선택.
 - 가문 문장이 있으면 세 경로 모두 인스턴스 색·그림 대신 문장을 싣는다
   (`game_state::family::shown_cape`, 캐릭터 선택 쿼리). 인스턴스는 그대로다
   (FAMILY_SYSTEM.md 8절).
@@ -59,7 +59,7 @@ pub struct ItemInstance {
 | 저장 | [server/src/auth_migrations.rs](../server/src/auth_migrations.rs) `ensure_character_item_columns` | 컬럼 2개 (`enchant` 추가 방식 그대로) |
 | 바닥 | `GroundItem` | 드랍/줍기가 색을 지우지 않게 |
 | 거래·상점 | `player_trade.rs`, `trading.rs` | 인챈트가 지나가는 자리마다 색도 함께 — 유저 거래, 상인 판매, 되사기(`BuybackEntry`), 주민 재고 |
-| 방송 | `Player.back`, `PlayerBackChanged` | def id 옆에 색/텍스처 |
+| 방송 | `Player.gear`, `PlayerGearChanged` | def id 옆에 색/텍스처 |
 | 방송 비교 | `set_player_gear` ([player.rs](../server/src/game_state/player.rs)) | **def id만 비교하면 염색이 방송되지 않는다** — 염색은 def id를 바꾸지 않으므로 색/텍스처도 비교에 넣는다 |
 | 선택 화면 | `VisibleEquipment`, `read_visible_equipment` | SELECT에 컬럼 추가 |
 
@@ -115,7 +115,7 @@ ENCHANT와 같은 뼈대다.
    back 슬롯에 망토 착용, `color`가 `#rrggbb` 형식. 창을 띄워 둔 시간은
    무한하고 그 사이에 망토를 벗거나 염색약을 넘길 수 있다.
 5. 통과하면 망토 인스턴스의 `cape_color`를 바꾸고 염색약 1개를 소모한다.
-   인벤토리 스냅샷과 `PlayerBackChanged`가 나간다.
+   인벤토리 스냅샷과 `PlayerGearChanged`가 나간다.
 
 `instance_id`는 염색약 쪽이다 — 대상 망토는 서버가 착용 슬롯에서 찾는다.
 색은 저장 전에 소문자 `#rrggbb`로 정규화한다. `#FF0000`과 `#ff0000`이 따로
@@ -201,7 +201,7 @@ ENCHANT와 같은 뼈대다.
    소모한 뒤 망토 인스턴스의 `cape_texture`를 설정한다. 이 확인이 없으면
    클라이언트가 아무 문자열이나 실어 보내고 주변 클라이언트가 그것을 URL로
    만든다.
-5. 주변 클라이언트는 `PlayerBackChanged`의 해시로 `/api/cape-texture/<hash>`를
+5. 주변 클라이언트는 `PlayerGearChanged`의 해시로 `/api/cape-texture/<hash>`를
    받아 캐시한다.
 
 파일은 하우징·터레인과 같은 디스크 경로(`<state_dir>/cape-textures`)에 두고

@@ -2254,7 +2254,7 @@
         action: () => networkManager.sendPartyInvite(player.name),
       })
     }
-    if (player.backTexture) {
+    if (player.gear.back_texture) {
       entries.push({
         label: translate('menu.reportCape'),
         action: () => networkManager.sendReportCapeTexture(playerId),

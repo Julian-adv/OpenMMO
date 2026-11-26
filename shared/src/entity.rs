@@ -71,18 +71,10 @@ pub struct Player {
     // every later field into the wrong slot on the wire.
     #[serde(default)]
     pub object_type: Option<String>,
-    /// Equipped main-hand item def id; `None` renders the class default.
+    /// What others see worn: weapons, cape as shown (family emblem applied)
+    /// and armor.
     #[serde(default)]
-    pub main_hand: Option<String>,
-    /// Equipped back item def id; `None` renders no cape.
-    #[serde(default)]
-    pub back: Option<String>,
-    /// Dye on that cape (`#rrggbb`); `None` uses the def's own colour.
-    #[serde(default)]
-    pub back_color: Option<String>,
-    /// Texture hash on that cape; `None` leaves the cloth plain.
-    #[serde(default)]
-    pub back_texture: Option<String>,
+    pub gear: crate::character::VisibleEquipment,
     /// Carrying the `wet` soaking (doc/DEBUFF.md). Only the flag travels, not
     /// the remaining time: it exists so nearby clients can draw wet
     /// footprints, and the owner's own countdown rides `DebuffUpdate`.
@@ -107,8 +99,6 @@ pub struct Player {
     #[serde(default)]
     pub raging: bool,
     #[serde(default)]
-    pub armor: crate::character::ArmorEquipment,
-    #[serde(default)]
     pub appearance: crate::character::CharacterAppearance,
     /// Family name shown after `name` (doc/FAMILY_SYSTEM.md).
     #[serde(default)]
@@ -116,9 +106,6 @@ pub struct Player {
     /// An official NPC's rank id, shown where a family name would be.
     #[serde(default)]
     pub rank: Option<String>,
-    /// Equipped off-hand item def id (shield, torch, ...); `None` holds nothing.
-    #[serde(default)]
-    pub off_hand: Option<String>,
     #[serde(skip)]
     pub last_combat_at: u64,
     /// Unix ms of the last healing potion drunk; raid bosses notice it.
@@ -351,9 +338,7 @@ mod tests {
             raging: false,
             floor_level: 0,
             object_type: None,
-            main_hand: None,
-            off_hand: None,
-            back: None,
+            gear: Default::default(),
             object_id: None,
             last_combat_at: 0,
             drank_at: 0,
@@ -365,9 +350,6 @@ mod tests {
             max_health_bonus: 0,
             max_health_per_level: 1,
             temp_health: 0,
-            back_color: None,
-            back_texture: None,
-            armor: Default::default(),
             wet: false,
             petrified: false,
             title: None,
@@ -411,9 +393,7 @@ mod tests {
             raging: false,
             floor_level: 0,
             object_type: None,
-            main_hand: None,
-            off_hand: None,
-            back: None,
+            gear: Default::default(),
             object_id: None,
             last_combat_at: 0,
             drank_at: 0,
@@ -425,9 +405,6 @@ mod tests {
             max_health_bonus: 0,
             max_health_per_level: 0,
             temp_health: 0,
-            back_color: None,
-            back_texture: None,
-            armor: Default::default(),
             wet: false,
             petrified: false,
             title: None,
@@ -478,9 +455,7 @@ mod tests {
             raging: false,
             floor_level: 0,
             object_type: None,
-            main_hand: None,
-            off_hand: None,
-            back: None,
+            gear: Default::default(),
             object_id: Some(52),
             last_combat_at: 0,
             drank_at: 0,
@@ -492,9 +467,6 @@ mod tests {
             max_health_bonus: 0,
             max_health_per_level: 0,
             temp_health: 0,
-            back_color: None,
-            back_texture: None,
-            armor: Default::default(),
             wet: false,
             petrified: false,
             title: None,

@@ -179,7 +179,7 @@ class PlayerStateManager {
       const other = otherPlayers.get(playerId)
       const mount = other?.mount ?? null
       const floor = other?.floorLevel ?? 0
-      const hasTorch = isTorchItemDefId(other?.offHand)
+      const hasTorch = isTorchItemDefId(other?.gear.off_hand)
       const movementConfig = movementConfigFor(mount, sprinting)
 
       const trail = this.trails.get(playerId)

@@ -622,7 +622,10 @@ async fn wear_cape(game: &GameState, name: &str, color: &str) {
 }
 
 async fn shown_cape_color(game: &GameState, name: &str) -> Option<String> {
-    game.players.read().await[&pid(name)].back_color.clone()
+    game.players.read().await[&pid(name)]
+        .gear
+        .back_color
+        .clone()
 }
 
 #[tokio::test]

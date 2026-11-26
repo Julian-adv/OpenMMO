@@ -1398,7 +1398,7 @@ impl super::GameState {
         let (hash, target_name) = {
             let players = self.players.read().await;
             match players.get(target_id) {
-                Some(target) => (target.back_texture.clone(), target.name.clone()),
+                Some(target) => (target.gear.back_texture.clone(), target.name.clone()),
                 None => (None, String::new()),
             }
         };

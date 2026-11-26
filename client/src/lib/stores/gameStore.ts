@@ -12,7 +12,7 @@ import { WATCHER_SELF_ID, watchedPlayerId } from './watchStore'
 import { SvelteMap } from 'svelte/reactivity'
 import type { Vector3 } from 'three'
 import type {
-  ArmorEquipment,
+  VisibleEquipment,
   CharacterClass,
   CharacterAppearance,
   Gender,
@@ -81,13 +81,6 @@ interface PlayerBase {
   /** Family name drawn after the name (doc/FAMILY_SYSTEM.md). */
   family?: string | null
   rank?: string | null
-  mainHand?: string | null
-  offHand?: string | null
-  armor?: ArmorEquipment
-  back?: string | null
-  /** Dye on that cape, as broadcast with it. */
-  backColor?: string | null
-  backTexture?: string | null
   lastDamageInfo?: PlayerDamageInfo
   lastRegenInfo?: PlayerDamageInfo
   lastGoldInfo?: PlayerGoldInfo
@@ -102,6 +95,8 @@ export interface LocalPlayer extends PlayerBase {
 }
 
 export interface RemotePlayer extends PlayerBase {
+  /** What others see worn, as broadcast. */
+  gear: VisibleEquipment
   floorLevel: number
   isOfficialNpc: boolean
 }

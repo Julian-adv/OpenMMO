@@ -365,7 +365,7 @@ class MonsterManager {
     const isLocalPlayerAttack = playerId === state.currentPlayer?.id
     const weaponItemDefId = isLocalPlayerAttack
       ? get(inventoryStore).equipped.main_hand?.item_def_id
-      : (state.otherPlayers.get(playerId)?.mainHand ?? undefined)
+      : (state.otherPlayers.get(playerId)?.gear.main_hand ?? undefined)
     const ranged = isRangedWeapon(weaponItemDefId)
 
     if (daggerSkill) {

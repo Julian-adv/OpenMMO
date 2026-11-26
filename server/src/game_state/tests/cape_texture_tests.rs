@@ -131,8 +131,8 @@ async fn a_print_reaches_nearby_players() {
         .await;
 
     let printed = drain(&mut watcher_rx).into_iter().any(|msg| {
-        matches!(msg, ServerMessage::PlayerBackChanged { player_id, cape_texture, .. }
-            if player_id == pid("printer") && cape_texture.as_deref() == Some(HASH))
+        matches!(msg, ServerMessage::PlayerGearChanged { player_id, gear }
+            if player_id == pid("printer") && gear.back_texture.as_deref() == Some(HASH))
     });
     assert!(printed, "nearby players must see the new print");
 }

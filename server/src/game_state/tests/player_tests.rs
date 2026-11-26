@@ -210,21 +210,21 @@ async fn armor_changes_reach_live_and_late_join_players() {
     game.equip_item(&wearer, 1).await;
     game.equip_item(&wearer, 2).await;
     assert!(drain(&mut observer).iter().any(|message| matches!(message,
-        ServerMessage::PlayerArmorChanged { player_id, armor }
-        if *player_id == wearer && armor.chest.as_deref() == Some("worn_breastplate")
-            && armor.head.as_deref() == Some("worn_plate_helmet")
+        ServerMessage::PlayerGearChanged { player_id, gear }
+        if *player_id == wearer && gear.armor.chest.as_deref() == Some("worn_breastplate")
+            && gear.armor.head.as_deref() == Some("worn_plate_helmet")
     )));
     game.unequip_item(&wearer, EquipSlot::Head).await;
-    let expected = game.get_all_players().await[&wearer].armor.clone();
+    let expected = game.get_all_players().await[&wearer].gear.armor.clone();
     assert!(expected.head.is_none());
     assert_eq!(expected.chest.as_deref(), Some("worn_breastplate"));
     assert!(drain(&mut observer).iter().any(|message| matches!(message,
-        ServerMessage::PlayerArmorChanged { player_id, armor }
-        if *player_id == wearer && *armor == expected
+        ServerMessage::PlayerGearChanged { player_id, gear }
+        if *player_id == wearer && gear.armor == expected
     )));
     let snapshot = join_snapshot(&game, make_player("late_armor", 2.0, 0.0)).await;
     assert!(snapshot.iter().any(|message| matches!(message,
-        ServerMessage::PlayerAppeared { player } if player.id == wearer && player.armor == expected
+        ServerMessage::PlayerAppeared { player } if player.id == wearer && player.gear.armor == expected
     )));
     game.drop_items(
         &wearer,
@@ -235,7 +235,7 @@ async fn armor_changes_reach_live_and_late_join_players() {
     )
     .await;
     assert_eq!(
-        game.get_all_players().await[&wearer].armor,
+        game.get_all_players().await[&wearer].gear.armor,
         Default::default()
     );
 }
@@ -260,6 +260,7 @@ async fn equipped_torch_syncs_live_and_late_join_player_state() {
     game_state.equip_item(&torch_holder_id, 1).await;
     assert_eq!(
         game_state.get_all_players().await[&torch_holder_id]
+            .gear
             .off_hand
             .as_deref(),
         Some("torch")
@@ -274,7 +275,10 @@ async fn equipped_torch_syncs_live_and_late_join_player_state() {
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        find_player(&snapshot, torch_holder_id).off_hand.as_deref(),
+        find_player(&snapshot, torch_holder_id)
+            .gear
+            .off_hand
+            .as_deref(),
         Some("torch")
     );
 
@@ -283,6 +287,7 @@ async fn equipped_torch_syncs_live_and_late_join_player_state() {
         .await;
 
     assert!(game_state.get_all_players().await[&torch_holder_id]
+        .gear
         .off_hand
         .is_none());
 }
@@ -304,7 +309,9 @@ async fn equipped_main_hand_syncs_live_and_late_join_player_state() {
 
     game_state.equip_item(&angler_id, 1).await;
     assert_eq!(
-        game_state.get_all_players().await[&angler_id].main_hand,
+        game_state.get_all_players().await[&angler_id]
+            .gear
+            .main_hand,
         Some("fishing_rod".to_string())
     );
 
@@ -317,7 +324,7 @@ async fn equipped_main_hand_syncs_live_and_late_join_player_state() {
         })
         .collect::<Vec<_>>();
     assert_eq!(
-        find_player(&snapshot, angler_id).main_hand.as_deref(),
+        find_player(&snapshot, angler_id).gear.main_hand.as_deref(),
         Some("fishing_rod")
     );
 
@@ -326,7 +333,9 @@ async fn equipped_main_hand_syncs_live_and_late_join_player_state() {
         .await;
 
     assert_eq!(
-        game_state.get_all_players().await[&angler_id].main_hand,
+        game_state.get_all_players().await[&angler_id]
+            .gear
+            .main_hand,
         None
     );
 }

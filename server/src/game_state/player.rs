@@ -8,8 +8,8 @@ use crate::world_config::world_config;
 use bytes::Bytes;
 use onlinerpg_shared::estate_storage::is_estate_storage_item;
 use onlinerpg_shared::housing::MAX_FLOOR_LEVEL;
-use onlinerpg_shared::inventory::{EquipSlot, PlayerInventory};
-use onlinerpg_shared::wrap_world_x;
+use onlinerpg_shared::inventory::PlayerInventory;
+use onlinerpg_shared::{wrap_world_x, VisibleEquipment};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
@@ -1443,19 +1443,26 @@ impl super::GameState {
             .set_health_viewer(*player_id, Self::wears_stethoscope(inventory));
     }
 
-    /// Broadcast changed gear, including armor and cape customization.
-    pub async fn set_player_gear(&self, player_id: &PlayerId, inventory: &PlayerInventory) {
-        let main_hand = inventory.equipped_def_id(EquipSlot::MainHand);
-        let off_hand = inventory.equipped_def_id(EquipSlot::OffHand);
-        let back = inventory.equipped_def_id(EquipSlot::Back);
+    /// The gear others see on this player, cape shown with its family emblem.
+    pub async fn shown_gear(
+        &self,
+        player_id: &PlayerId,
+        inventory: &PlayerInventory,
+    ) -> VisibleEquipment {
+        let mut gear = inventory.visible_equipment();
         let emblem = self.family_emblem_of(player_id).await;
-        let (back_color, back_texture) = super::family::shown_cape(
-            back.as_deref(),
-            inventory.equipped_cape_color(),
-            inventory.equipped_cape_texture(),
+        (gear.back_color, gear.back_texture) = super::family::shown_cape(
+            gear.back.as_deref(),
+            gear.back_color.take(),
+            gear.back_texture.take(),
             emblem.as_ref(),
         );
-        let armor = inventory.equipped_armor();
+        gear
+    }
+
+    /// Broadcast changed gear, including armor and cape customization.
+    pub async fn set_player_gear(&self, player_id: &PlayerId, inventory: &PlayerInventory) {
+        let gear = self.shown_gear(player_id, inventory).await;
         let max_hp_per_level = self.equipped_max_health_per_level(inventory);
         let cloaked = self.wears_invisibility(inventory);
         self.sync_health_viewer(player_id, inventory);
@@ -1464,7 +1471,6 @@ impl super::GameState {
             let Some(player) = players.get_mut(player_id) else {
                 return;
             };
-            let mut messages = Vec::new();
             let mut health_changed = false;
             // Equipping never heals; unequipping clamps to the lower max.
             if player.max_health_per_level != max_hp_per_level {
@@ -1483,60 +1489,34 @@ impl super::GameState {
                 });
                 health_changed = true;
             }
-            if player.armor != armor {
-                player.armor = armor.clone();
-                messages.push(ServerMessage::PlayerArmorChanged {
-                    player_id: *player_id,
-                    armor,
-                });
-            }
-            if player.main_hand != main_hand {
-                player.main_hand = main_hand.clone();
-                messages.push(ServerMessage::PlayerMainHandChanged {
-                    player_id: *player_id,
-                    item_def_id: main_hand,
-                });
-            }
-            if player.off_hand != off_hand {
-                player.off_hand = off_hand.clone();
-                messages.push(ServerMessage::PlayerOffHandChanged {
-                    player_id: *player_id,
-                    item_def_id: off_hand,
-                });
-            }
             // Only a new back item re-cloaks: dye and transfer kits keep the id.
-            let invisibility_changed = player.back != back && player.invisible != cloaked;
+            let invisibility_changed = player.gear.back != gear.back && player.invisible != cloaked;
             if invisibility_changed {
                 player.invisible = cloaked;
                 self.interest_lock().set_hidden(*player_id, cloaked);
             }
-            if player.back != back
-                || player.back_color != back_color
-                || player.back_texture != back_texture
-            {
-                player.back = back.clone();
-                player.back_color = back_color.clone();
-                player.back_texture = back_texture.clone();
-                messages.push(ServerMessage::PlayerBackChanged {
+            let gear_changed = if player.gear != gear {
+                player.gear = gear.clone();
+                Some(ServerMessage::PlayerGearChanged {
                     player_id: *player_id,
-                    item_def_id: back,
-                    cape_color: back_color,
-                    cape_texture: back_texture,
-                });
-            }
-            if messages.is_empty() && !health_changed {
+                    gear,
+                })
+            } else {
+                None
+            };
+            if gear_changed.is_none() && !health_changed {
                 return;
             }
             (
                 player.position,
                 player.floor_level,
-                messages,
+                gear_changed,
                 health_changed,
                 invisibility_changed,
             )
         };
 
-        let (position, floor_level, messages, health_changed, invisibility_changed) = changed;
+        let (position, floor_level, gear_changed, health_changed, invisibility_changed) = changed;
         if invisibility_changed {
             self.notify_invisibility(player_id, cloaked).await;
         }
@@ -1544,7 +1524,7 @@ impl super::GameState {
             self.mark_dirty(player_id).await;
             self.mark_party_vitals_dirty(player_id).await;
         }
-        for message in messages {
+        if let Some(message) = gear_changed {
             self.publish_nearby(&position, floor_level, message, Some(player_id))
                 .await;
         }

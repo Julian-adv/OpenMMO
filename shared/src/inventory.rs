@@ -122,6 +122,18 @@ impl PlayerInventory {
         }
     }
 
+    /// Worn gear as others see it, before a family emblem covers the cape.
+    pub fn visible_equipment(&self) -> crate::character::VisibleEquipment {
+        crate::character::VisibleEquipment {
+            main_hand: self.equipped_def_id(EquipSlot::MainHand),
+            off_hand: self.equipped_def_id(EquipSlot::OffHand),
+            back: self.equipped_def_id(EquipSlot::Back),
+            back_color: self.equipped_cape_color(),
+            back_texture: self.equipped_cape_texture(),
+            armor: self.equipped_armor(),
+        }
+    }
+
     pub fn has_equipped_item(&self, slot: EquipSlot, item_def_id: &str) -> bool {
         self.equipped
             .get(&slot)

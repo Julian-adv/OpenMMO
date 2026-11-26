@@ -215,7 +215,7 @@
   import { localPlayerRenderY } from '../managers/entity-ground'
 
   import type {
-    ArmorEquipment,
+    VisibleEquipment,
     CharacterClass,
     Gender,
   } from '../network/networkTypes'
@@ -285,19 +285,9 @@
     lastDamageInfo?: PlayerDamageInfo
     lastRegenInfo?: PlayerDamageInfo
     lastGoldInfo?: PlayerGoldInfo
-    /** Remote players' broadcast main-hand item def id; the local player
-     *  renders from inventory instead. */
-    mainHand?: string | null
-    /** Remote players' broadcast off-hand item def id (shield, torch). */
-    offHand?: string | null
-    armor?: ArmorEquipment
-    /** Dye on that cape, as broadcast with it. */
-    backColor?: string | null
-    /** Content hash of the print on that cape, as broadcast with it. */
-    backTexture?: string | null
-    /** Remote players' broadcast back item def id; the local player renders
-     *  from inventory instead. */
-    back?: string | null
+    /** Remote players' broadcast gear; the local player renders from
+     *  inventory instead. */
+    gear?: VisibleEquipment
     torchEffectsDisabled?: boolean
     /** Set for NPC remote players so canvas clicks can resolve this model
      *  back to its player id (read from userData by the input raycast). */
@@ -351,12 +341,7 @@
     lastDamageInfo,
     lastRegenInfo,
     lastGoldInfo,
-    mainHand = null,
-    offHand = null,
-    armor,
-    back = null,
-    backColor = null,
-    backTexture = null,
+    gear,
     torchEffectsDisabled = false,
     npcPlayerId,
     remotePlayerId,
@@ -765,7 +750,7 @@
     torchTipNode = null
   }
 
-  const visibleArmor = $derived(isCurrentPlayer ? $equippedArmor : armor)
+  const visibleArmor = $derived(isCurrentPlayer ? $equippedArmor : gear?.armor)
   // Player updates while moving hand in equal but new armor/appearance objects.
   let appliedArmor: { root: THREE.Object3D; key: string } | undefined
   $effect(() => {
@@ -779,7 +764,7 @@
   const wornMainHandItemId = $derived(
     isCurrentPlayer
       ? ($inventoryStore.equipped.main_hand?.item_def_id ?? null)
-      : mainHand
+      : (gear?.main_hand ?? null)
   )
   /** Bumped when a bout of shovelling ends, so the shovel leaves the hand. */
   let snowDigEnded = $state(0)
@@ -970,7 +955,7 @@
   const equippedOffHandItemId = $derived.by(() => {
     const itemDefId = isCurrentPlayer
       ? ($inventoryStore.equipped.off_hand?.item_def_id ?? null)
-      : offHand
+      : (gear?.off_hand ?? null)
     return torchEffectsDisabled && isTorchItemDefId(itemDefId)
       ? null
       : itemDefId
@@ -1032,7 +1017,7 @@
   const equippedBackItemId = $derived(
     isCurrentPlayer
       ? ($inventoryStore.equipped.back?.item_def_id ?? null)
-      : back
+      : (gear?.back ?? null)
   )
 
   /** The family emblem covering my own cape, as the server shows it to
@@ -1053,7 +1038,7 @@
           ownEmblem?.emblem_color ??
           $inventoryStore.equipped.back?.cape_color ??
           null)
-      : backColor
+      : (gear?.back_color ?? null)
   )
 
   /** The wearer's cloth colour, or null for no cape. `/cape` forces the
@@ -1075,7 +1060,7 @@
               ? ownEmblem.emblem_texture
               : $inventoryStore.equipped.back?.cape_texture
           ))
-      : capeTextureUrl(backTexture)
+      : capeTextureUrl(gear?.back_texture)
   )
 
   // A tabard takes the cape's dye and print but is a fitted part, not a sheet.

@@ -328,7 +328,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// session in the world until the player enters or edits a character.
 /// v179: `Player.off_hand` and `PlayerOffHandChanged` replace `torch_on` and
 /// `PlayerTorchToggled`, so others see shields as well as torches.
-pub const PROTOCOL_VERSION: u32 = 179;
+/// v180: `Player.gear` and one `PlayerGearChanged` replace the per-slot gear
+/// fields and messages.
+pub const PROTOCOL_VERSION: u32 = 180;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -658,9 +660,7 @@ mod tests {
             raging: false,
             floor_level: 0,
             object_type: None,
-            main_hand: None,
-            off_hand: None,
-            back: None,
+            gear: Default::default(),
             object_id: None,
             last_combat_at: 0,
             drank_at: 0,
@@ -672,9 +672,6 @@ mod tests {
             max_health_bonus: 0,
             max_health_per_level: 0,
             temp_health: 0,
-            back_color: None,
-            back_texture: None,
-            armor: Default::default(),
             wet: false,
             petrified: false,
             title: None,

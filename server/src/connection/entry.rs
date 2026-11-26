@@ -2,7 +2,6 @@ use super::state::ConnectionState;
 use crate::auth::AuthService;
 use crate::game_state::{restored_floor_level, GameState, GOD_ON_MESSAGE};
 use crate::types::{new_player, ClientMessage, PlayerId, Position, ServerMessage};
-use onlinerpg_shared::inventory::EquipSlot;
 use std::sync::Arc;
 use tracing::{info, warn};
 
@@ -438,39 +437,12 @@ pub(super) async fn enter_game(
     let skills = crate::game_state::skills_from_rows(&skill_rows);
     game_state.register_player_skills(&id, skills).await;
 
-    // The equipped off-hand is the authoritative carried-torch state.
-    // Resolve it before add_player builds the late-join GameState snapshot.
-    let inventory = game_state.get_player_inventory(&id).await;
-    player.armor = inventory
-        .as_ref()
-        .map(|inv| inv.equipped_armor())
-        .unwrap_or_default();
-    player.main_hand = inventory
-        .as_ref()
-        .and_then(|inv| inv.equipped_def_id(EquipSlot::MainHand));
-    player.off_hand = inventory
-        .as_ref()
-        .and_then(|inv| inv.equipped_def_id(EquipSlot::OffHand));
-    player.back = inventory
-        .as_ref()
-        .and_then(|inv| inv.equipped_def_id(EquipSlot::Back));
-    let emblem = game_state.family_emblem_of(&id).await;
-    (player.back_color, player.back_texture) = crate::game_state::shown_cape(
-        player.back.as_deref(),
-        inventory.as_ref().and_then(|inv| inv.equipped_cape_color()),
-        inventory
-            .as_ref()
-            .and_then(|inv| inv.equipped_cape_texture()),
-        emblem.as_ref(),
-    );
-    player.max_health_per_level = inventory
-        .as_ref()
-        .map_or(0, |inv| game_state.equipped_max_health_per_level(inv));
-    player.invisible = inventory
-        .as_ref()
-        .is_some_and(|inv| game_state.wears_invisibility(inv));
-    if let Some(inv) = &inventory {
-        game_state.sync_health_viewer(&id, inv);
+    // Worn gear, before add_player builds the late-join GameState snapshot.
+    if let Some(inv) = game_state.get_player_inventory(&id).await {
+        player.gear = game_state.shown_gear(&id, &inv).await;
+        player.max_health_per_level = game_state.equipped_max_health_per_level(&inv);
+        player.invisible = game_state.wears_invisibility(&inv);
+        game_state.sync_health_viewer(&id, &inv);
     }
     player.set_base_max_health(max_hp);
     player.health = selected_character

@@ -230,7 +230,7 @@ async fn dropping_bag_items_and_equipment_updates_gear_and_torch_together() {
     game.equip_item(&id, 21).await;
     game.equip_item(&id, 22).await;
     assert_eq!(
-        game.get_all_players().await[&id].off_hand.as_deref(),
+        game.get_all_players().await[&id].gear.off_hand.as_deref(),
         Some("torch")
     );
     let mut observer = game.register_direct_channel(&pid("observer")).await;
@@ -259,14 +259,12 @@ async fn dropping_bag_items_and_equipment_updates_gear_and_torch_together() {
     assert_eq!(inventory.bag.len(), 1);
     assert_eq!(inventory.bag[0].quantity, 2);
     let players = game.get_all_players().await;
-    assert!(players[&id].main_hand.is_none());
-    assert!(players[&id].off_hand.is_none());
+    assert!(players[&id].gear.main_hand.is_none());
+    assert!(players[&id].gear.off_hand.is_none());
     let messages = drain(&mut observer);
     assert!(messages.iter().any(|message| matches!(message,
-        ServerMessage::PlayerOffHandChanged { player_id, item_def_id: None } if *player_id == id
-    )));
-    assert!(messages.iter().any(|message| matches!(message,
-        ServerMessage::PlayerMainHandChanged { player_id, item_def_id: None } if *player_id == id
+        ServerMessage::PlayerGearChanged { player_id, gear } if *player_id == id
+            && gear.main_hand.is_none() && gear.off_hand.is_none()
     )));
     let ground = game.ground_items.read().await;
     assert_eq!(ground.len(), 3);
@@ -661,9 +659,9 @@ async fn equipping_a_torch_puts_away_two_handers_and_syncs_the_light() {
                 assert!(retained.locked);
             }
             let players = game_state.get_all_players().await;
-            assert_eq!(players[&wielder].off_hand.as_deref(), Some(torch));
+            assert_eq!(players[&wielder].gear.off_hand.as_deref(), Some(torch));
             assert_eq!(
-                players[&wielder].main_hand.as_deref(),
+                players[&wielder].gear.main_hand.as_deref(),
                 (!two_handed).then_some(weapon)
             );
             assert!(drain(&mut owner_rx).iter().any(|message| matches!(
@@ -673,17 +671,15 @@ async fn equipping_a_torch_puts_away_two_handers_and_syncs_the_light() {
             )));
             let messages = drain(&mut observer_rx);
             assert!(messages.iter().any(|message| matches!(message,
-                ServerMessage::PlayerOffHandChanged { player_id, item_def_id: Some(id) }
-                    if *player_id == wielder && id == torch
+                ServerMessage::PlayerGearChanged { player_id, gear }
+                    if *player_id == wielder && gear.off_hand.as_deref() == Some(torch)
+                        && gear.main_hand.is_none() == two_handed
             )));
             if two_handed {
-                assert!(messages.iter().any(|message| matches!(message,
-                    ServerMessage::PlayerMainHandChanged { player_id, item_def_id: None } if *player_id == wielder
-                )));
                 game_state.equip_item(&wielder, 1).await;
                 let players = game_state.get_all_players().await;
-                assert!(players[&wielder].off_hand.is_none());
-                assert_eq!(players[&wielder].main_hand.as_deref(), Some(weapon));
+                assert!(players[&wielder].gear.off_hand.is_none());
+                assert_eq!(players[&wielder].gear.main_hand.as_deref(), Some(weapon));
                 let inventories = game_state.inventories.read().await;
                 let inv = &inventories[&wielder];
                 assert!(!inv.equipped.contains_key(&EquipSlot::OffHand));

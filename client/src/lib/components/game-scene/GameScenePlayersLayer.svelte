@@ -337,7 +337,7 @@
       !!player.radianceOn ||
       (player.id === currentPlayer?.id
         ? $localHeadLight
-        : givesLight(player.armor?.head))
+        : givesLight((player as RemotePlayer).gear.armor?.head))
     )
   }
 
@@ -497,7 +497,7 @@
     for (const [id, player] of otherPlayers) {
       const rp = remotePlayers.get(id)
       const radiance = radianceStrengths.get(id) ?? 0
-      const torch = isTorchItemDefId(player.offHand)
+      const torch = isTorchItemDefId(player.gear.off_hand)
       if ((!torch && radiance <= 0) || !rp || !remoteVisibility.get(id))
         continue
       const dx = shortestWrappedDeltaX(playerPos.x, rp.position.x)
@@ -908,12 +908,7 @@
           maxHealth={player.maxHealth}
           lastRegenInfo={player.lastRegenInfo}
           mount={player.mount}
-          mainHand={player.mainHand}
-          offHand={player.offHand}
-          armor={player.armor}
-          back={player.back}
-          backColor={player.backColor}
-          backTexture={player.backTexture}
+          gear={player.gear}
           {torchEffectsDisabled}
           npcPlayerId={player.isOfficialNpc ? player.id : undefined}
           remotePlayerId={player.id}
@@ -946,12 +941,7 @@
         appearance={statue.player.appearance}
         health={1}
         maxHealth={0}
-        mainHand={statue.player.mainHand}
-        offHand={statue.player.offHand}
-        armor={statue.player.armor}
-        back={statue.player.back}
-        backColor={statue.player.backColor}
-        backTexture={statue.player.backTexture}
+        gear={statue.player.gear}
         {torchEffectsDisabled}
         floorLevel={statue.player.floorLevel}
         {heightManager}
