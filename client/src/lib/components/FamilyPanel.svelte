@@ -832,6 +832,12 @@
     border-color: rgba(255, 255, 255, 0.4);
   }
 
+  .text-btn:focus-visible,
+  .row-btn:focus-visible {
+    outline: 1px solid rgba(200, 184, 138, 0.6);
+    outline-offset: -2px;
+  }
+
   .text-btn:disabled,
   .row-btn:disabled {
     opacity: 0.35;

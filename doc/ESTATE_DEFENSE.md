@@ -325,6 +325,8 @@
 
 부는 동작은 애니메이션 팩 `war_horn.glb`에 구웠다(`tools/bake-war-horn.mjs`). `client/src/lib/utils/warHornPose.ts`의 동작을 공용 골격에서 30fps로 샘플링해 공용 팩을 만들고, `prepare-modular-character`·`prepare-female-knight --pack war_horn`으로 남·여 팩을 만든 뒤 `--rigs`가 리그마다 팔을 뿔 손잡이에 다시 맞춘다(재타깃만 하면 손이 약 9cm 어긋난다). 뿔나팔은 오른손에 들리고 자리는 `handFits.json`의 `model:objects/war_horn.glb`(리그별, 같은 도구가 잰다). 클라이언트는 `WarHornBlown`을 받으면 이 클립을 짐 나르기·눈 치우기와 같은 방식으로 한 번 재생하고, 0.6초 뒤 소리를 낸다.
 
+깃발 문장 (2026-11-28, 프로토콜 188): `EstateDefenseState.emblem`에 가문 영지면 그 가문 문장을 싣고, 깃발 천(`emblem_cloth`)에 가문 깃발 가구와 같은 재질(`emblemClothMaterial`)을 입힌다. 문장은 뿔나팔을 불 때 한 번 읽는다. 가문 없는 영지는 무지 깃발, 관리자 연습(`/warhorn`)은 관리자 가문의 문장이다.
+
 우두머리 등장 (2026-11-28, 프로토콜 187): `EstateDefenseWave.leader`가 우두머리 자리를 알려 주고, 그 빛기둥에서 테라클래시의 땅 울림(`effects/earth-roar.ts`, 반경 5m)이 함께 일어난다. 원래 4초 모으는 효과라 앞부분을 건너뛰고 시작해, 땅이 터지는 순간이 우두머리가 드러나는 순간(2초)과 맞는다.
 
 ## 결정 기록

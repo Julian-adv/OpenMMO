@@ -8,6 +8,7 @@ use crate::auth::{unix_now, AuthService, DefenseSite, Disgraces, TrophySite};
 use crate::estate_defense_defs::{grade_for_horn, DefenseGrade};
 use crate::types::{MonsterLifecycle, PlayerId, Position};
 use onlinerpg_shared::celestial::is_night;
+use onlinerpg_shared::family::Emblem;
 use onlinerpg_shared::messages::{EstateDefenseOutcome, EstateDefenseState, EstateTrophyRecord};
 use onlinerpg_shared::pathfinding::{get_floor_y_base, is_circle_blocked_on_floor};
 use onlinerpg_shared::{MonsterState, ServerMessage, Siege};
@@ -86,6 +87,7 @@ pub(crate) struct EstateDefense {
     grade: &'static DefenseGrade,
     banner: Position,
     family_id: Option<i64>,
+    emblem: Option<Emblem>,
     summoner: i64,
     summoner_name: String,
     /// An admin's `/warhorn`: no title, no disgrace.
@@ -148,6 +150,7 @@ impl EstateDefense {
             banner_max: BANNER_DURABILITY,
             ends_in_ms: TIME_LIMIT.saturating_sub(self.elapsed) * 1000,
             monsters: self.grade.monsters.clone(),
+            emblem: self.emblem.clone(),
         }
     }
 
@@ -474,6 +477,12 @@ impl GameState {
             return Err("noRoom");
         }
         let summoner_name = self.player_name_of(player_id).await;
+        // A family estate's head blows the horn; practice flies the admin's family.
+        let emblem = if site.family_id.is_some() || practice {
+            self.own_family_emblem(player_id).await
+        } else {
+            None
+        };
         let party: Vec<PlayerId> = self
             .parties
             .read()
@@ -496,6 +505,7 @@ impl GameState {
             grade,
             banner,
             family_id: site.family_id,
+            emblem,
             summoner: character_id,
             summoner_name,
             practice,

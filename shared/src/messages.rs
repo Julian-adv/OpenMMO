@@ -291,6 +291,8 @@ pub struct EstateDefenseState {
     pub ends_in_ms: u32,
     /// Monster types it can bring, to load ahead of the first wave.
     pub monsters: Vec<String>,
+    /// The family emblem on the banner; `None` flies it plain.
+    pub emblem: Option<crate::family::Emblem>,
 }
 
 /// The defense behind one wall trophy (doc/ESTATE_DEFENSE.md#트로피).

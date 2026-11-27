@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store'
 import type { Position } from '../network/networkTypes'
+import type { Emblem } from '../utils/familyEmblem'
 import { createEvent } from '../network/networkEvents'
 
 export const warHornBlown =
@@ -18,6 +19,7 @@ export type EstateDefenseState = {
   banner_max: number
   ends_in_ms: number
   monsters: string[]
+  emblem?: Emblem | null
 }
 
 export type EstateDefenseOutcome =

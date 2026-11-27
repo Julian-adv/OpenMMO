@@ -1,6 +1,7 @@
 <script lang="ts">
   import { T, useLoader, useThrelte } from '@threlte/core'
   import { onDestroy } from 'svelte'
+  import { get } from 'svelte/store'
   import * as THREE from 'three'
   import type { WebGPURenderer } from 'three/webgpu'
   import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
@@ -27,6 +28,7 @@
   import { playPropSound } from '../../managers/sfxManager'
   import { unwrapWorldXNear } from '../../terrain/world-wrap'
   import { EarthRoarEffect } from '../../effects/earth-roar'
+  import { emblemClothMaterial, type Emblem } from '../../utils/familyEmblem'
   import { EARTH_ROAR_STRIKE_MS } from '../../data/monsterSkills'
 
   let { currentPlayer }: { currentPlayer: LocalPlayer | null } = $props()
@@ -48,6 +50,9 @@
   const slots: { system: TeleportEffectSystem; event: DefensePillar | null }[] =
     []
   let leaderRoar: EarthRoarEffect | null = null
+  let bannerCloth: THREE.Mesh | null = null
+  let bannerMaterial: THREE.Material | null = null
+  let bannerKey: string | null = null
   let chestModel: THREE.Object3D | null = null
   let chestOpenClip: THREE.AnimationClip | null = null
   const chests: {
@@ -79,7 +84,12 @@
         if (leaderRoar) leaderRoar.group.visible = false
       })
     loadGLB('/models/objects/family_banner.glb')
-      .then((gltf) => banner.add(gltf.scene.clone(true)))
+      .then((gltf) => {
+        const model = gltf.scene.clone(true)
+        bannerCloth = model.getObjectByName('emblem_cloth') as THREE.Mesh | null
+        dressBanner(get(estateDefense)?.state.emblem)
+        banner.add(model)
+      })
       .catch((error) => console.error('Banner model failed to load', error))
     loadGLB('/models/objects/chest_animated.glb')
       .then((gltf) => {
@@ -91,6 +101,7 @@
   }
 
   const unsubscribe = estateDefense.subscribe((current) => {
+    if (current) dressBanner(current.state.emblem)
     if (!current || preloadedFor === current.state.estate_id) return
     preloadedFor = current.state.estate_id
     if (!ready) prepare()
@@ -102,7 +113,17 @@
     unsubscribe()
     slots.forEach(({ system }) => system.dispose())
     leaderRoar?.dispose()
+    bannerMaterial?.dispose()
   })
+
+  /** The estate's family emblem on the banner, plain without a family. */
+  function dressBanner(emblem: Emblem | null | undefined) {
+    const key = emblem ? `${emblem.texture}/${emblem.color}` : ''
+    if (!bannerCloth || key === bannerKey) return
+    bannerMaterial?.dispose()
+    bannerCloth.material = bannerMaterial = emblemClothMaterial(emblem)
+    bannerKey = key
+  }
 
   function place(object: THREE.Object3D, at: Position) {
     if (currentPlayer)
