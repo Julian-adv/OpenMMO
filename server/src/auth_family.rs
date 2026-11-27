@@ -9,8 +9,8 @@ use super::{
 };
 use onlinerpg_shared::character::CharacterClass;
 use onlinerpg_shared::family::{
-    default_rank_label, default_rank_permissions, permission, FamilyMergeTerms, FamilyRank,
-    MergeSide, FAMILY_HEAD_INACTIVE_SECS, FAMILY_MAX_MEMBERS, FAMILY_NAME_RETIRE_SECS,
+    default_rank_label, default_rank_permissions, permission, FamilyDefenseEntry, FamilyMergeTerms,
+    FamilyRank, MergeSide, FAMILY_HEAD_INACTIVE_SECS, FAMILY_MAX_MEMBERS, FAMILY_NAME_RETIRE_SECS,
     FAMILY_RANK_COUNT, FAMILY_RANK_ELDER, FAMILY_RANK_HEAD, FAMILY_RANK_LABEL_MAX_CHARS,
     FAMILY_RANK_MEMBER, FAMILY_REJOIN_COOLDOWN_SECS, FAMILY_RENAME_INTERVAL_SECS,
 };
@@ -49,6 +49,7 @@ pub struct FamilyRoster {
     pub renamed_at: Option<i64>,
     pub emblem: FamilyEmblem,
     pub seat_estate_id: Option<i64>,
+    pub defenses: Vec<FamilyDefenseEntry>,
 }
 
 impl FamilyRoster {
@@ -656,6 +657,7 @@ impl AuthService {
             renamed_at,
             emblem,
             seat_estate_id: family_seat(&conn, family_id)?,
+            defenses: super::estate_defense::family_defenses(&conn, family_id)?,
         }))
     }
 

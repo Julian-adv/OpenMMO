@@ -157,6 +157,7 @@ impl MonsterBrain {
             "chase_target" => {
                 self.bt_chase_target(params, delta_ms, nearby_players, commands, path_provider)
             }
+            "attack_home" => self.bt_attack_home(params, commands),
             _ => BehaviorStatus::Failure,
         }
     }
@@ -187,6 +188,32 @@ impl MonsterBrain {
         } else {
             BehaviorStatus::Failure
         }
+    }
+
+    /// Swing at its home on the attack cooldown while standing by it.
+    fn bt_attack_home(
+        &mut self,
+        params: &HashMap<String, f32>,
+        commands: &mut Vec<AiCommand>,
+    ) -> BehaviorStatus {
+        let range = param(params, "range", self.attack_range);
+        if self.position.dist_xz_sq(&self.spawn_position) > range * range {
+            return BehaviorStatus::Failure;
+        }
+        self.set_facing(self.position.bearing_xz_to(&self.spawn_position));
+        if self.state != AiState::Attack {
+            self.state = AiState::Attack;
+            self.state_timer_ms = 0.0;
+            self.target_position = None;
+            self.waypoints.clear();
+            commands.push(self.make_move_cmd());
+        }
+        if self.attack_cooldown_left_ms <= 0.0 {
+            self.attack_cooldown_left_ms = self.attack_cooldown_ms;
+            commands.push(self.make_move_cmd());
+            commands.push(AiCommand::StrikeHome);
+        }
+        BehaviorStatus::Running
     }
 
     fn bt_return_to_spawn(

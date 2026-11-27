@@ -1,4 +1,4 @@
-import { writable } from 'svelte/store'
+import { get, writable } from 'svelte/store'
 import type { Position } from '../network/networkTypes'
 import type { Emblem } from '../utils/familyEmblem'
 import { createEvent } from '../network/networkEvents'
@@ -57,8 +57,17 @@ export function takeDefensePillars(): readonly DefensePillar[] {
   return pending.length ? pending.splice(0) : NONE
 }
 
-export function handleEstateDefenseStatus(state: EstateDefenseState) {
+/** When the banner last took a blow, by `Date.now()`. */
+export let bannerStruckAt = 0
+
+/** True when the banner just took a blow. */
+export function handleEstateDefenseStatus(state: EstateDefenseState): boolean {
+  const before = get(estateDefense)?.state
+  const struck =
+    before?.estate_id === state.estate_id && state.banner_hp < before.banner_hp
+  if (struck) bannerStruckAt = Date.now()
   estateDefense.set({ state, receivedAt: Date.now() })
+  return struck
 }
 
 export function handleEstateDefenseWave(
@@ -77,25 +86,44 @@ export function handleEstateDefenseWave(
   )
 }
 
+/** How long the pillars that take the last raiders rise before they go. */
+const VANISH_RISE_MS = 700
+
+/** A lost banner falling where it stood, from `at` (`Date.now()`). */
+export let bannerFall: { position: Position; at: number } | null = null
+
 export function handleEstateDefenseEnded(
   estateId: number,
   banner: Position,
   outcome: EstateDefenseOutcome,
-  openInMs: number
+  openInMs: number,
+  vanished: Position[],
+  vanishInMs: number
 ) {
   estateDefense.update((current) =>
     current?.state.estate_id === estateId ? null : current
   )
+  const now = Date.now()
+  pending.push(
+    ...vanished.map((position) => ({
+      position,
+      startedAt: now + vanishInMs - VANISH_RISE_MS,
+      riseMs: VANISH_RISE_MS,
+    }))
+  )
   if (outcome === 'held')
     pending.push({
       position: banner,
-      startedAt: Date.now(),
+      startedAt: now,
       riseMs: openInMs,
       chest: true,
     })
+  else bannerFall = { position: banner, at: now }
 }
 
 export function resetEstateDefense() {
   estateDefense.set(null)
   pending = []
+  bannerStruckAt = 0
+  bannerFall = null
 }

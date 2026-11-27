@@ -416,7 +416,7 @@
       }
     },
     "raider": {
-      "description": "Estate-defense raider: marches on its banner at a walk, fights its picked targets (or whoever strikes it) within 5m, and gives up a chase that drags it 40m off the banner.",
+      "description": "Estate-defense raider: marches on its banner at a walk, fights its picked targets (or whoever strikes it) within 5m, gives up a chase that drags it 40m off the banner, and strikes the banner when it stands by it with nobody to fight.",
       "root": {
         "type": "selector",
         "children": [
@@ -470,6 +470,13 @@
                 "name": "chase_target"
               }
             ]
+          },
+          {
+            "type": "action",
+            "name": "attack_home",
+            "params": {
+              "range": 2.0
+            }
           },
           {
             "type": "action",

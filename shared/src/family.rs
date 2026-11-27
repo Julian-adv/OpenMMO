@@ -186,6 +186,20 @@ pub struct FamilyStorageEntry {
     pub at: i64,
 }
 
+/// One estate defense the family fought, newest first in `FamilyInfo`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FamilyDefenseEntry {
+    /// The war horn blown.
+    pub horn: String,
+    pub summoner: String,
+    pub outcome: crate::messages::EstateDefenseOutcome,
+    /// The game day it was fought; hour and minute are 0.
+    pub on: crate::world::GameDateTime,
+}
+
+/// How many past defenses the family window lists.
+pub const FAMILY_DEFENSE_LOG: u32 = 10;
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FamilyInfo {
     pub name: String,
@@ -208,4 +222,5 @@ pub struct FamilyInfo {
     pub my_cape_emblem: bool,
     /// Where a Scroll of Family Return lands.
     pub seat_estate_id: Option<i64>,
+    pub defenses: Vec<FamilyDefenseEntry>,
 }

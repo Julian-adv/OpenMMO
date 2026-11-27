@@ -4,7 +4,7 @@
 use super::inventory::consume_one;
 use super::localization::{localized, PlayerMessage};
 use super::{auth_db, GameState};
-use crate::auth::{unix_now, AuthService, DefenseSite, Disgraces, TrophySite};
+use crate::auth::{unix_now, AuthService, DefenseRun, DefenseSite, Disgraces, TrophySite};
 use crate::estate_defense_defs::{grade_for_horn, DefenseGrade};
 use crate::types::{MonsterLifecycle, PlayerId, Position};
 use onlinerpg_shared::celestial::is_night;
@@ -35,10 +35,9 @@ const FINAL_WAVE_PER_SIDE: usize = 3;
 /// No success is judged before this, so a defense always takes as long.
 const EARLIEST_SUCCESS: u32 = 420;
 const TIME_LIMIT: u32 = 600;
-const BANNER_DURABILITY: u8 = 5;
-const LEADER_BREACH: u8 = 3;
-const BREACH_RADIUS_M: f32 = 2.0;
-const BREACH_SECS: u32 = 3;
+/// Blows the banner takes: one per raider swing, `LEADER_BLOW` per leader's.
+const BANNER_DURABILITY: u8 = 30;
+const LEADER_BLOW: u8 = 3;
 /// Seconds with no living defender in the zone before the defense is lost.
 const WIPE_SECS: u32 = 10;
 /// Ten game days.
@@ -64,6 +63,8 @@ const RISE_SECS: u32 = 2;
 /// spill as dungeon chests spill theirs, a lid swing later.
 const CHEST_OPEN_LEAD: Duration = Duration::from_millis(1200);
 const LEADER_SCALE: f32 = 1.3;
+/// Raiders left at the end stand through the defeat sting, then vanish.
+const VANISH_LEAD: Duration = Duration::from_millis(3400);
 
 fn outcome_notice(outcome: EstateDefenseOutcome) -> PlayerMessage {
     let (code, message) = match outcome {
@@ -80,13 +81,14 @@ fn outcome_notice(outcome: EstateDefenseOutcome) -> PlayerMessage {
 
 struct Raider {
     leader: bool,
-    near_secs: u32,
 }
 
 pub(crate) struct EstateDefense {
     grade: &'static DefenseGrade,
     banner: Position,
     family_id: Option<i64>,
+    /// The admin's family, whose window lists a practice run.
+    practice_family: Option<i64>,
     emblem: Option<Emblem>,
     summoner: i64,
     summoner_name: String,
@@ -253,13 +255,6 @@ impl GameState {
         for id in ids {
             self.send_system_message(id, notice.clone()).await;
         }
-    }
-
-    async fn notify_zone(&self, banner: &Position, notice: &PlayerMessage) {
-        let ids = self
-            .player_ids_within_position(banner, 0, ZONE_RADIUS_M)
-            .await;
-        self.notify(&ids, notice).await;
     }
 
     /// Show the defense's state to its family and everyone in the zone.
@@ -478,11 +473,12 @@ impl GameState {
         }
         let summoner_name = self.player_name_of(player_id).await;
         // A family estate's head blows the horn; practice flies the admin's family.
-        let emblem = if site.family_id.is_some() || practice {
-            self.own_family_emblem(player_id).await
+        let own_family = if site.family_id.is_some() || practice {
+            self.own_family(player_id).await
         } else {
             None
         };
+        let emblem = own_family.as_ref().and_then(|(_, emblem)| emblem.clone());
         let party: Vec<PlayerId> = self
             .parties
             .read()
@@ -505,6 +501,7 @@ impl GameState {
             grade,
             banner,
             family_id: site.family_id,
+            practice_family: own_family.filter(|_| practice).map(|(id, _)| id),
             emblem,
             summoner: character_id,
             summoner_name,
@@ -746,49 +743,21 @@ impl GameState {
             .keys()
             .cloned()
             .collect();
-        // A raider held up fighting by the banner has not taken it: only one
-        // standing or walking there unopposed counts.
-        let positions: Vec<(String, Option<(Position, bool)>)> = {
+        let fallen: Vec<String> = {
             let monsters = self.monsters.read().await;
             raider_ids
                 .into_iter()
-                .map(|id| {
-                    let alive = monsters
-                        .get(&id)
-                        .filter(|m| m.state != MonsterState::Dead)
-                        .map(|m| {
-                            let unopposed =
-                                matches!(m.state, MonsterState::Idle | MonsterState::Walk);
-                            (m.position, unopposed)
-                        });
-                    (id, alive)
+                .filter(|id| {
+                    monsters
+                        .get(id)
+                        .is_none_or(|m| m.state == MonsterState::Dead)
                 })
                 .collect()
         };
-        let mut breached = Vec::new();
         let (banner_hp, waves_done, raiders_left, empty_secs) = {
             let mut defenses = self.defenses();
             let defense = defenses.get_mut(&estate_id)?;
-            for (id, raider_at) in positions {
-                let Some((position, unopposed)) = raider_at else {
-                    defense.raiders.remove(&id);
-                    continue;
-                };
-                let Some(raider) = defense.raiders.get_mut(&id) else {
-                    continue;
-                };
-                if unopposed && position.dist_xz_sq(&banner) <= BREACH_RADIUS_M * BREACH_RADIUS_M {
-                    raider.near_secs += 1;
-                    if raider.near_secs >= BREACH_SECS {
-                        let blow = if raider.leader { LEADER_BREACH } else { 1 };
-                        defense.banner_hp = defense.banner_hp.saturating_sub(blow);
-                        breached.push(id);
-                    }
-                } else {
-                    raider.near_secs = 0;
-                }
-            }
-            for id in &breached {
+            for id in &fallen {
                 defense.raiders.remove(id);
             }
             if elapsed >= WAVE_AT[0] && living.is_empty() {
@@ -803,17 +772,6 @@ impl GameState {
                 defense.empty_secs,
             )
         };
-        if !breached.is_empty() {
-            self.despawn_monsters(breached).await;
-            let notice = localized(
-                "server.estateDefense.breach",
-                format!("An enemy reached the banner. Banner {banner_hp}/{BANNER_DURABILITY}."),
-            )
-            .with_param("hp", banner_hp.to_string())
-            .with_param("max", BANNER_DURABILITY.to_string());
-            self.notify_zone(&banner, &notice).await;
-            self.publish_defense_state(estate_id).await;
-        }
         if banner_hp == 0 {
             Some(EstateDefenseOutcome::BannerFell)
         } else if empty_secs >= WIPE_SECS {
@@ -825,6 +783,114 @@ impl GameState {
         } else {
             None
         }
+    }
+
+    /// Stop the raiders left at the end where they stand; their positions.
+    async fn withdraw_raiders(&self, ids: &[String]) -> Vec<Position> {
+        let mut monsters = self.monsters.write().await;
+        let mut positions = Vec::with_capacity(ids.len());
+        for id in ids {
+            let Some(m) = monsters
+                .get_mut(id)
+                .filter(|m| m.state != MonsterState::Dead)
+            else {
+                continue;
+            };
+            if let Some(siege) = m.siege.as_mut() {
+                siege.withdrawn = true;
+            }
+            m.state = MonsterState::Idle;
+            positions.push(m.position);
+            self.interest_lock().publish_monster_movement(
+                m,
+                ServerMessage::MonsterMoved {
+                    monster_id: id.clone(),
+                    position: m.position,
+                    rotation: m.rotation,
+                    state: MonsterState::Idle,
+                    target_position: m.position,
+                    chasing: None,
+                },
+            );
+        }
+        positions
+    }
+
+    /// A raider with nobody to fight swings at its banner; the blow lands at
+    /// its attack's impact frame, as a swing at a player shows.
+    pub(super) async fn raider_strikes_banner(&self, monster_id: &str) {
+        let Some((estate_id, banner, position, floor_level, impact)) =
+            self.monsters.read().await.get(monster_id).and_then(|m| {
+                let siege = m.siege.as_ref()?;
+                let impact = self
+                    .monster_defs
+                    .get(&m.monster_type)
+                    .map_or(0, |d| d.attack_impact_delay);
+                Some((
+                    siege.estate_id,
+                    siege.banner,
+                    m.position,
+                    m.floor_level,
+                    impact,
+                ))
+            })
+        else {
+            return;
+        };
+        self.publish_nearby(
+            &position,
+            floor_level,
+            ServerMessage::MonsterSwung {
+                monster_id: monster_id.to_string(),
+                at: banner,
+            },
+            None,
+        )
+        .await;
+        let game = self.clone();
+        let monster_id = monster_id.to_string();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(u64::from(impact))).await;
+            game.land_banner_blow(estate_id, &monster_id).await;
+        });
+    }
+
+    /// Land a living raider's blow on its banner.
+    async fn land_banner_blow(&self, estate_id: i64, monster_id: &str) {
+        let alive = self
+            .monsters
+            .read()
+            .await
+            .get(monster_id)
+            .is_some_and(|m| m.state != MonsterState::Dead);
+        let (banner, banner_hp) = {
+            let mut defenses = self.defenses();
+            let Some(defense) = defenses.get_mut(&estate_id) else {
+                return;
+            };
+            if !alive || defense.banner_hp == 0 {
+                return;
+            }
+            let Some(raider) = defense.raiders.get(monster_id) else {
+                return;
+            };
+            let blow = if raider.leader { LEADER_BLOW } else { 1 };
+            defense.banner_hp = defense.banner_hp.saturating_sub(blow);
+            (defense.banner, defense.banner_hp)
+        };
+        if banner_hp % 5 == 0 || banner_hp < 5 {
+            let notice = localized(
+                "server.estateDefense.bannerAttacked",
+                format!("The banner is under attack. Banner {banner_hp}/{BANNER_DURABILITY}."),
+            )
+            .with_param("hp", banner_hp.to_string())
+            .with_param("max", BANNER_DURABILITY.to_string());
+            let zone = self
+                .player_ids_within_position(&banner, 0, ZONE_RADIUS_M)
+                .await;
+            self.notify(&zone, &notice).await;
+        }
+        self.publish_defense_state(estate_id).await;
     }
 
     /// Eligible characters standing alive in the zone.
@@ -927,9 +993,11 @@ impl GameState {
                     Some(level),
                     false,
                     Some(Siege {
+                        estate_id,
                         banner,
                         place_bonus: grade.place_bonus,
                         targets: targets.clone(),
+                        withdrawn: false,
                     }),
                     leader.then_some(LEADER_SCALE),
                 )
@@ -942,13 +1010,7 @@ impl GameState {
             for (id, max_health, leader) in spawned {
                 defense.spawned += 1;
                 defense.spawned_health += u64::from(max_health);
-                defense.raiders.insert(
-                    id,
-                    Raider {
-                        leader,
-                        near_secs: 0,
-                    },
-                );
+                defense.raiders.insert(id, Raider { leader });
             }
         }
     }
@@ -963,8 +1025,13 @@ impl GameState {
             return;
         };
         let leftover: Vec<String> = defense.raiders.keys().cloned().collect();
+        let vanished = self.withdraw_raiders(&leftover).await;
         if !leftover.is_empty() {
-            self.despawn_monsters(leftover).await;
+            let game = self.clone();
+            tokio::spawn(async move {
+                tokio::time::sleep(VANISH_LEAD).await;
+                game.despawn_monsters(leftover).await;
+            });
         }
         info!(
             "Estate defense {} on estate {estate_id} ended: {outcome:?} after {}s, banner {}/{BANNER_DURABILITY}, {} raiders",
@@ -985,13 +1052,55 @@ impl GameState {
                 banner: defense.banner,
                 outcome,
                 open_in_ms: CHEST_OPEN_LEAD.as_millis() as u32,
+                vanished,
+                vanish_in_ms: VANISH_LEAD.as_millis() as u32,
             },
         )
         .await;
         self.notify(&audience, &outcome_notice(outcome)).await;
-        if outcome != EstateDefenseOutcome::Held && !defense.practice {
-            self.disgrace(defense.family_id, defense.summoner, auth)
+        let family_id = defense.family_id.or(defense.practice_family);
+        let now = unix_now();
+        let run = DefenseRun {
+            estate_id,
+            family_id,
+            summoner_id: defense.summoner,
+            summoner_name: defense.summoner_name.clone(),
+            horn: defense.grade.horn.clone(),
+            outcome,
+            started_at: now - i64::from(defense.elapsed),
+            ended_at: now,
+            on: self.current_game_datetime(),
+            practice: defense.practice,
+        };
+        let store = auth.clone();
+        if let Err(error) = auth_db(move || store.record_estate_defense_run(&run)).await {
+            warn!(%error, "Failed to record estate defense on estate {estate_id}");
+        }
+        if let Some(family_id) = family_id {
+            self.refresh_family(family_id, auth).await;
+        }
+        if defense.practice {
+            return;
+        }
+        if outcome != EstateDefenseOutcome::Held {
+            self.set_disgrace(
+                defense.family_id,
+                defense.summoner,
+                Some(now + DISGRACE_SECS),
+                auth,
+            )
+            .await;
+        } else if self.is_disgraced(defense.family_id, defense.summoner) {
+            self.set_disgrace(defense.family_id, defense.summoner, None, auth)
                 .await;
+            self.notify(
+                &audience,
+                &localized(
+                    "server.estateDefense.disgraceLifted",
+                    "The banner held: the disgrace is washed away.",
+                ),
+            )
+            .await;
         }
     }
 
@@ -1110,21 +1219,39 @@ impl GameState {
         .await;
     }
 
-    async fn disgrace(&self, family_id: Option<i64>, summoner: i64, auth: &AuthService) {
-        let until = unix_now() + DISGRACE_SECS;
+    fn is_disgraced(&self, family_id: Option<i64>, summoner: i64) -> bool {
+        let state = self.disgrace_state();
+        match family_id {
+            Some(id) => state.active.families.contains_key(&id),
+            None => state.active.characters.contains_key(&summoner),
+        }
+    }
+
+    /// Disgrace a family, or a lone summoner, until `until`; `None` lifts it.
+    async fn set_disgrace(
+        &self,
+        family_id: Option<i64>,
+        summoner: i64,
+        until: Option<i64>,
+        auth: &AuthService,
+    ) {
         let store = auth.clone();
         if let Err(error) = auth_db(move || store.set_disgrace(family_id, summoner, until)).await {
             warn!(%error, "Failed to store estate defense disgrace");
         }
         {
             let mut state = self.disgrace_state();
-            match family_id {
-                Some(id) => state.active.families.insert(id, until),
-                None => state.active.characters.insert(summoner, until),
+            let (active, id) = match family_id {
+                Some(id) => (&mut state.active.families, id),
+                None => (&mut state.active.characters, summoner),
+            };
+            match until {
+                Some(until) => active.insert(id, until),
+                None => active.remove(&id),
             };
         }
         info!(
-            "Estate defense disgrace for family {family_id:?} / character {summoner} until {until}"
+            "Estate defense disgrace for family {family_id:?} / character {summoner} until {until:?}"
         );
         self.tick_disgraces(true).await;
     }

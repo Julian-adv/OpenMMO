@@ -2,8 +2,8 @@
 //! horn where, and the disgrace a lost defense leaves.
 
 use super::{AuthError, AuthService};
-use onlinerpg_shared::family::FAMILY_RANK_HEAD;
-use onlinerpg_shared::messages::EstateTrophyRecord;
+use onlinerpg_shared::family::{FamilyDefenseEntry, FAMILY_DEFENSE_LOG, FAMILY_RANK_HEAD};
+use onlinerpg_shared::messages::{EstateDefenseOutcome, EstateTrophyRecord};
 use onlinerpg_shared::world::GameDateTime;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
@@ -24,6 +24,67 @@ pub struct TrophySite {
     pub estate_id: i64,
     pub summoner_id: i64,
     pub horn: String,
+}
+
+/// One fought defense, as `estate_defense_runs` keeps it.
+pub struct DefenseRun {
+    pub estate_id: i64,
+    pub family_id: Option<i64>,
+    pub summoner_id: i64,
+    pub summoner_name: String,
+    pub horn: String,
+    pub outcome: EstateDefenseOutcome,
+    pub started_at: i64,
+    pub ended_at: i64,
+    /// The game day it ended.
+    pub on: GameDateTime,
+    /// An admin's `/warhorn`, listed under the admin's family.
+    pub practice: bool,
+}
+
+fn outcome_code(outcome: EstateDefenseOutcome) -> &'static str {
+    match outcome {
+        EstateDefenseOutcome::Held => "held",
+        EstateDefenseOutcome::BannerFell => "banner_fell",
+        EstateDefenseOutcome::Wiped => "wiped",
+        EstateDefenseOutcome::TimedOut => "timed_out",
+    }
+}
+
+fn outcome_from_code(code: &str) -> Option<EstateDefenseOutcome> {
+    use serde::de::{value::Error, IntoDeserializer};
+    use serde::Deserialize;
+    EstateDefenseOutcome::deserialize(IntoDeserializer::<Error>::into_deserializer(code)).ok()
+}
+
+/// The family's latest defenses for its window.
+pub(super) fn family_defenses(
+    conn: &Connection,
+    family_id: i64,
+) -> Result<Vec<FamilyDefenseEntry>, rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "SELECT horn, summoner_name, outcome, year, month, day FROM estate_defense_runs
+         WHERE family_id=?1 ORDER BY id DESC LIMIT ?2",
+    )?;
+    let rows = stmt.query_map(params![family_id, FAMILY_DEFENSE_LOG], |row| {
+        let outcome: String = row.get(2)?;
+        let Some(outcome) = outcome_from_code(&outcome) else {
+            return Ok(None);
+        };
+        Ok(Some(FamilyDefenseEntry {
+            horn: row.get(0)?,
+            summoner: row.get(1)?,
+            outcome,
+            on: GameDateTime {
+                year: row.get(3)?,
+                month: row.get(4)?,
+                day: row.get(5)?,
+                hour: 0,
+                minute: 0,
+            },
+        }))
+    })?;
+    rows.filter_map(Result::transpose).collect()
 }
 
 /// Active disgraces: until when, by family and by character.
@@ -57,6 +118,25 @@ impl AuthService {
                 created_at INTEGER NOT NULL
             )",
             [],
+        )?;
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS estate_defense_runs (
+                id INTEGER PRIMARY KEY,
+                estate_id INTEGER NOT NULL,
+                family_id INTEGER,
+                summoner_id INTEGER NOT NULL,
+                summoner_name TEXT NOT NULL,
+                horn TEXT NOT NULL,
+                outcome TEXT NOT NULL,
+                started_at INTEGER NOT NULL,
+                ended_at INTEGER NOT NULL,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                day INTEGER NOT NULL,
+                practice INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX IF NOT EXISTS idx_estate_defense_runs_family
+                ON estate_defense_runs(family_id, id);",
         )?;
         Ok(())
     }
@@ -175,12 +255,12 @@ impl AuthService {
         }))
     }
 
-    /// Disgrace a family, or a lone horn-blower, until `until`.
+    /// Disgrace a family, or a lone horn-blower, until `until`; `None` lifts it.
     pub fn set_disgrace(
         &self,
         family_id: Option<i64>,
         character_id: i64,
-        until: i64,
+        until: Option<i64>,
     ) -> Result<(), AuthError> {
         let conn = self.open_connection()?;
         match family_id {
@@ -193,6 +273,31 @@ impl AuthService {
                 params![character_id, until],
             )?,
         };
+        Ok(())
+    }
+
+    pub fn record_estate_defense_run(&self, run: &DefenseRun) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT INTO estate_defense_runs
+             (estate_id, family_id, summoner_id, summoner_name, horn, outcome, started_at, ended_at,
+              year, month, day, practice)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
+            params![
+                run.estate_id,
+                run.family_id,
+                run.summoner_id,
+                run.summoner_name,
+                run.horn,
+                outcome_code(run.outcome),
+                run.started_at,
+                run.ended_at,
+                run.on.year,
+                run.on.month,
+                run.on.day,
+                run.practice
+            ],
+        )?;
         Ok(())
     }
 

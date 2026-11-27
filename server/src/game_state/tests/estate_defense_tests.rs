@@ -217,11 +217,24 @@ async fn holding_the_banner_through_five_waves_pays_the_defender() {
         .contains(&"estate_defender_1".to_string()));
 }
 
+fn banner_hp(messages: &[ServerMessage]) -> Option<u8> {
+    messages.iter().rev().find_map(|m| match m {
+        ServerMessage::EstateDefenseStatus { state } => Some(state.banner_hp),
+        _ => None,
+    })
+}
+
 #[tokio::test]
-async fn a_raider_on_the_banner_wears_it_down() {
-    let (game, auth, mut rx) = lord("defense_breach").await;
+async fn a_raider_by_the_banner_with_nobody_to_fight_strikes_it() {
+    let (game, auth, mut rx) = lord("defense_banner_struck").await;
     game.blow_war_horn(&pid("Lord"), 2, &auth).await;
     tick(&game, &auth, 32).await;
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Lord"))
+        .unwrap()
+        .position = pos3(BANNER.0 + 20.0, 5.0, BANNER.1);
     let raider = raiders(&game).await.remove(0);
     game.monsters
         .write()
@@ -229,27 +242,27 @@ async fn a_raider_on_the_banner_wears_it_down() {
         .get_mut(&raider.id)
         .unwrap()
         .position = pos3(BANNER.0 + 1.0, 5.0, BANNER.1);
-    game.monsters
-        .write()
-        .await
-        .get_mut(&raider.id)
-        .unwrap()
-        .state = MonsterState::Attack;
-    tick(&game, &auth, 3).await;
+    drain(&mut rx);
+    for _ in 0..10 {
+        game.tick_monster_ai_by(200.0).await;
+    }
+    let swung = drain(&mut rx);
+    assert!(swung.iter().any(|m| matches!(m,
+        ServerMessage::MonsterSwung { monster_id, .. } if *monster_id == raider.id
+    )));
     assert_eq!(
-        raiders(&game).await.len(),
-        6,
-        "fighting by the banner is not taking it"
+        banner_hp(&swung),
+        None,
+        "the blow lands at the impact frame"
     );
-    game.monsters
-        .write()
-        .await
-        .get_mut(&raider.id)
-        .unwrap()
-        .state = MonsterState::Idle;
-    tick(&game, &auth, 3).await;
-    assert_eq!(raiders(&game).await.len(), 5);
-    assert!(notices(&mut rx).contains(&"server.estateDefense.breach".to_string()));
+    assert_eq!(
+        game.monsters.read().await.get(&raider.id).map(|m| m.state),
+        Some(MonsterState::Attack)
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    let hp = banner_hp(&drain(&mut rx)).expect("the blow landed");
+    assert!(hp < 30, "{hp}");
+    assert_eq!(raiders(&game).await.len(), 6, "it stays to strike again");
 }
 
 #[tokio::test]
@@ -264,6 +277,7 @@ async fn a_wiped_defense_disgraces_the_lord() {
         .unwrap()
         .health = 0;
     tick(&game, &auth, 10).await;
+    tokio::time::sleep(std::time::Duration::from_millis(3500)).await;
     assert!(raiders(&game).await.is_empty());
     assert!(!game.in_estate_defense_circle(BANNER.0, BANNER.1));
     let codes = notices(&mut rx);
@@ -286,6 +300,57 @@ async fn a_wiped_defense_disgraces_the_lord() {
         .unwrap()
         .characters
         .contains_key(&character));
+}
+
+#[tokio::test]
+async fn holding_the_banner_washes_a_disgrace_away() {
+    let (game, auth, mut rx) = lord("defense_redeemed").await;
+    game.blow_war_horn(&pid("Lord"), 2, &auth).await;
+    tick(&game, &auth, 32).await;
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Lord"))
+        .unwrap()
+        .health = 0;
+    tick(&game, &auth, 10).await;
+    let character = game.character_id_of(&pid("Lord")).await.unwrap();
+    let disgraced = |auth: &crate::auth::AuthService| {
+        auth.active_disgraces(crate::auth::unix_now())
+            .unwrap()
+            .characters
+            .contains_key(&character)
+    };
+    assert!(disgraced(&auth));
+    drain(&mut rx);
+
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Lord"))
+        .unwrap()
+        .health = 100;
+    game.blow_war_horn(&pid("Lord"), 2, &auth).await;
+    for _ in 0..600 {
+        slay_raiders(&game, &auth).await;
+        tick(&game, &auth, 1).await;
+        if !game.in_estate_defense_circle(BANNER.0, BANNER.1) {
+            break;
+        }
+    }
+    let codes = notices(&mut rx);
+    assert!(
+        codes.contains(&"server.estateDefense.disgraceLifted".to_string()),
+        "{codes:?}"
+    );
+    assert!(!disgraced(&auth));
+    let shown = game
+        .players
+        .read()
+        .await
+        .get(&pid("Lord"))
+        .and_then(|p| p.title.clone());
+    assert_ne!(shown.as_deref(), Some("estate_disgrace"));
 }
 
 #[tokio::test]
@@ -337,6 +402,19 @@ async fn a_practice_defense_needs_no_horn_and_leaves_no_disgrace() {
         .unwrap()
         .health = 0;
     tick(&game, &auth, 10).await;
+    let vanished = drain(&mut rx).into_iter().find_map(|m| match m {
+        ServerMessage::EstateDefenseEnded { vanished, .. } => Some(vanished.len()),
+        _ => None,
+    });
+    assert_eq!(vanished, Some(6), "the survivors fade in pillars");
+    assert!(
+        raiders(&game)
+            .await
+            .iter()
+            .all(|m| m.state == MonsterState::Idle && m.siege.as_ref().is_some_and(|s| s.withdrawn)),
+        "they stand still through the defeat"
+    );
+    tokio::time::sleep(std::time::Duration::from_millis(3500)).await;
     assert!(raiders(&game).await.is_empty());
     let character = game.character_id_of(&pid("Lord")).await.unwrap();
     assert!(!auth

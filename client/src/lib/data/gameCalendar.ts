@@ -20,11 +20,23 @@ export function formatCalendarDate(
   t: (key: MessageKey, values?: MessageValues) => string,
   { year, month, day }: { year: number; month: number; day: number }
 ): string {
+  return t('calendar.date', { year, monthName: monthName(t, month), day })
+}
+
+/** "{month name} {day}" in the viewer's language. */
+export function formatCalendarMonthDay(
+  t: (key: MessageKey, values?: MessageValues) => string,
+  { month, day }: { month: number; day: number }
+): string {
+  return t('calendar.monthDay', { monthName: monthName(t, month), day })
+}
+
+function monthName(
+  t: (key: MessageKey, values?: MessageValues) => string,
+  month: number
+): string {
   const monthKey = MONTH_NAME_KEYS[month - 1]
-  const monthName = monthKey
-    ? t(monthKey)
-    : t('calendar.monthNumber', { month })
-  return t('calendar.date', { year, monthName, day })
+  return monthKey ? t(monthKey) : t('calendar.monthNumber', { month })
 }
 
 const pad2 = (n: number) => String(n).padStart(2, '0')

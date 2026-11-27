@@ -519,7 +519,9 @@ impl super::GameState {
                         .entries
                         .insert(m.id.clone(), Entry::new(self.new_brain(m), started));
                 }
-                if m.dormant && !self.ambusher_woken(m, &players) {
+                if (m.dormant && !self.ambusher_woken(m, &players))
+                    || m.siege.as_ref().is_some_and(|s| s.withdrawn)
+                {
                     continue;
                 }
                 active.push(Active {
@@ -797,6 +799,7 @@ impl super::GameState {
                 .await
             }
             AiCommand::Dormant { dormant } => self.set_monster_dormant(monster_id, dormant).await,
+            AiCommand::StrikeHome => self.raider_strikes_banner(monster_id).await,
         }
     }
 

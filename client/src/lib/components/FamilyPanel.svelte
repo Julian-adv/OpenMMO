@@ -1,5 +1,7 @@
 <script lang="ts">
-  import { t } from '../i18n'
+  import { t, locale } from '../i18n'
+  import { formatCalendarMonthDay } from '../data/gameCalendar'
+  import { itemDisplayName } from '../data/itemDefs'
   import {
     familyInfo,
     familyStorageLogVisible,
@@ -137,6 +139,7 @@
   }
 
   let ranksOpen = $state(false)
+  let defensesOpen = $state(false)
   let drafts = $state<{ label: string; permissions: number }[]>([])
   const ranksKey = $derived(JSON.stringify(family?.ranks ?? []))
   $effect(() => {
@@ -446,6 +449,34 @@
           >
         {/if}
 
+        {#if family.defenses.length > 0}
+          <button
+            class="section-title toggle"
+            aria-expanded={defensesOpen}
+            onclick={() => (defensesOpen = !defensesOpen)}
+            >{defensesOpen ? '▾' : '▸'} {$t('family.defenses')}</button
+          >
+          {#if defensesOpen}
+            {#each family.defenses as entry, index (index)}
+              <div class="line">
+                <span class="dim small"
+                  >{formatCalendarMonthDay($t, entry.on)}</span
+                >
+                <span class="member-name"
+                  >{itemDisplayName(entry.horn, 0, $locale)}</span
+                >
+                <span class="dim small">{entry.summoner}</span>
+                <span
+                  class="small"
+                  class:held={entry.outcome === 'held'}
+                  class:warn={entry.outcome !== 'held'}
+                  >{$t(`family.defense.${entry.outcome}`)}</span
+                >
+              </div>
+            {/each}
+          {/if}
+        {/if}
+
         <div class="section-title">{$t('family.emblem')}</div>
         <div class="line">
           {#if family.emblem_texture}
@@ -614,6 +645,10 @@
     color: #efae87;
   }
 
+  .held {
+    color: #9fdc95;
+  }
+
   .close-btn {
     background: none;
     border: none;
@@ -697,10 +732,6 @@
 
   .section-title.toggle {
     cursor: pointer;
-  }
-
-  .section-title.toggle:focus {
-    outline: none;
   }
 
   /* Keyboard focus only, drawn inside so the scroll area does not clip it. */

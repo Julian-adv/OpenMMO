@@ -1,5 +1,5 @@
 repo jake-song-openmmo/onlinerpg-assets
-revision 3509787da6a26c4ed6d431b30cb1108f07609ed9
+revision 9dce46202e4889367b05fe2b5de482f8d5b1155f
 file 74b7a9f450eb4c14e99f037b1cfe735eabdc64b3a94023418dabb24b6889e6f7 assets/all_animation.blend
 file 1043a18aae65ebfcca9aeb7ba70acd97be2886d2b9f51c608624372f2417ba86 assets/animations/Annoyed Head Shake.fbx
 file 5edac6dfec09f450747fa2d9ad9dc64b10e717f2fa5a01729f0d4ebc00396cdd assets/animations/Clapping.fbx
@@ -2403,6 +2403,8 @@ file 2e8eacfb4157b3efbd30a0029bb448c2f3ac7b6df888312d3726669b91ecc5b3 assets/sfx
 file 85ed3dea736c898d4f423fe964050ecc5fa8878f1d3374e1861ed8d882a91911 assets/sfx/battle-hymn-2026-10-30/battle-hymn-march_take4_2026-10-30.mp3
 file 7b5ffedb9668fccaa92d10d6085ce8781a2e96c74124a7ca25baf2a330521d78 assets/sfx/cart-2026-11-06/cart_roll-take2_2026-11-06.json
 file 3efadc9bccb0bfd1207e14fd093e321e40d070a51aef2055c1ff712c09d3ad65 assets/sfx/cart-2026-11-06/cart_roll-take2_2026-11-06.mp3
+file 77f49842f9c25f176b3e08144356a9160b206c1369ebe0914cdc512a12172c99 assets/sfx/defense-lost-2026-11-28/defense_lost_dark-2.mp3
+file c4da82f1eea144f7031c6397e212b4854f9e1e9b1d66ce0f273fe2831558468f assets/sfx/defense-lost-2026-11-28/generation.json
 file 2abb530b73da677fc86e205e8eab1b4555678ed4807548b90971ff6312645f6e assets/sfx/dungeon-drip-ocons-2026-09-18/ocons_6gEs_tJpkIY_158.556-158.796.json
 file 4cbe13615927f5ad414617403d5265bc9d007333c66fa30ceec270777ef04ccf assets/sfx/dungeon-drip-ocons-2026-09-18/ocons_6gEs_tJpkIY_158.556-158.796.wav
 file 3337aa679a60eab163fc5b07922e759f40a1e4a5f4ed8c2df10845cc014c207f assets/sfx/dungeon-drip-ocons-2026-09-18/ocons_6gEs_tJpkIY_68.932-69.332.json
@@ -2445,6 +2447,8 @@ file 9517a9b86d3612fadde069e4ad9cb83337210f6d13181319d6e3f332eb06a294 assets/sfx
 file b061056b622b6e77a1cf707c8d3434d558b7dd376900f929da8d6d58458740a4 assets/sfx/terraclash-2026-10-22/terraclash-smash_take3_2026-10-22.json
 file e43fddf83bb6a9a75c1b016fcca04972cbbb96fecf8e661e1ea63758d2102141 assets/sfx/terraclash-2026-10-22/terraclash-smash_take3_2026-10-22.mp3
 file 92823fcfa2ddb1966eccd41d14ee1ab993391eeae5ea1e28a824e2ee4130ccb0 assets/sfx/terraclash-2026-10-22/terraclash-wake_composed_2026-10-22.json
+file 20a323b6fb89f34f5536c8cdb75b1e07d43d2669c2128d17f36a58ee4fb851bd assets/sfx/war-horn-2026-11-28/generation.json
+file 6210f64808807d14ea7393f47fbdbdd48bc5bde88ce88f24fe87815b87f8151f assets/sfx/war-horn-2026-11-28/war_horn-1.mp3
 file 2191080a3118fa6fb9ae2c9e830d6a1ccf4789b517840256f9a1910925b7b217 assets/sfx/wood-step-2026-11-22/wood-footsteps-take2_2026-11-22.json
 file 9cf790a5ac26218f9398b4bfd117612e3e477fa8f52905de5a684d0d654c534d assets/sfx/wood-step-2026-11-22/wood-footsteps-take2_2026-11-22.mp3
 file 0e5b81171a9e7393df5d055104a238ce426061b8044c276d834fc200c97d5b91 assets/textures-src/cliff_side_1k.glb

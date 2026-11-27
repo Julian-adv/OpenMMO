@@ -3,6 +3,7 @@ import { bagItemCount } from './inventoryStore'
 import { pickupKeyCode } from './pickupSettings'
 import type { CharacterClass } from '../network/networkTypes'
 import type { Emblem } from '../utils/familyEmblem'
+import type { EstateDefenseOutcome } from './estateDefenseStore'
 
 // Limits, ranks and permission bits mirror shared/src/family.rs.
 export const FAMILY_MAX_MEMBERS = 30
@@ -82,6 +83,15 @@ export interface FamilyEstate {
   mine: boolean
 }
 
+export interface FamilyDefenseEntry {
+  /** The war horn blown. */
+  horn: string
+  summoner: string
+  outcome: EstateDefenseOutcome
+  /** The game day it was fought. */
+  on: { year: number; month: number; day: number }
+}
+
 export interface FamilyInfo {
   name: string
   ranks: FamilyRank[]
@@ -100,6 +110,8 @@ export interface FamilyInfo {
   my_cape_emblem: boolean
   /** Where a Scroll of Family Return lands. */
   seat_estate_id: number | null
+  /** Newest first. */
+  defenses: FamilyDefenseEntry[]
 }
 
 export type MergeSide = 'proposer' | 'target'

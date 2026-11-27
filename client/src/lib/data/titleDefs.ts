@@ -6,6 +6,7 @@ interface TitleDef {
   id: string
   name: string
   nameKo: string
+  source: string
   order: number
 }
 
@@ -30,4 +31,9 @@ export const titleName = derived(
 /** Non-reactive lookup for one-off text (chat lines). */
 export function titleNameNow(id: string): string {
   return get(titleName)(id)
+}
+
+/** Disgraces show in red above the name. */
+export function titleColor(id: string): string {
+  return defs[id]?.source === 'disgrace' ? '#fc8181' : '#d6bcfa'
 }

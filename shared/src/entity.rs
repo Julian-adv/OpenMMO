@@ -275,9 +275,12 @@ pub enum MonsterLifecycle {
 /// What an estate-defense raider marches on and whom it picks fights with.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Siege {
+    pub estate_id: i64,
     pub banner: Position,
     pub place_bonus: i32,
     pub targets: std::sync::Arc<std::collections::HashSet<PlayerId>>,
+    /// The defense is over: it stands still until it vanishes.
+    pub withdrawn: bool,
 }
 
 impl MonsterLifecycle {

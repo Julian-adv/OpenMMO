@@ -1241,3 +1241,50 @@ async fn members_wake_at_the_family_seat_once_the_head_opens_it_to_them() {
     assert_eq!(member.position, cot.position);
     assert_eq!(member.object_id, Some(cot.id as u32));
 }
+
+#[tokio::test]
+async fn the_family_window_lists_its_latest_defenses() {
+    use crate::auth::DefenseRun;
+    use onlinerpg_shared::family::FAMILY_DEFENSE_LOG;
+    use onlinerpg_shared::messages::EstateDefenseOutcome;
+    let (game, auth, registrar) = setup("family_defenses").await;
+    let (owner, _rx) = enter(&game, &auth, "Owner", FAMILY_FOUND_STAMPS).await;
+    claim(&game, &auth, "Owner", 0).await;
+    found(&game, &auth, &registrar, "Owner", "Ironwood").await;
+    let (family_id, _) = auth.family_of(owner).unwrap().unwrap();
+    let run = |family_id: Option<i64>, outcome, at: i64| DefenseRun {
+        estate_id: 1,
+        family_id,
+        summoner_id: owner,
+        summoner_name: "Owner".into(),
+        horn: "war_horn_1".into(),
+        outcome,
+        started_at: at - 420,
+        ended_at: at,
+        on: onlinerpg_shared::world::GameDateTime {
+            year: 217,
+            month: 3,
+            day: at as u8 + 1,
+            hour: 0,
+            minute: 0,
+        },
+        practice: false,
+    };
+    for at in 0..=i64::from(FAMILY_DEFENSE_LOG) {
+        let outcome = if at % 2 == 0 {
+            EstateDefenseOutcome::Held
+        } else {
+            EstateDefenseOutcome::TimedOut
+        };
+        auth.record_estate_defense_run(&run(Some(family_id), outcome, at))
+            .unwrap();
+    }
+    auth.record_estate_defense_run(&run(None, EstateDefenseOutcome::Wiped, 99))
+        .unwrap();
+    let defenses = auth.family_roster(family_id).unwrap().unwrap().defenses;
+    assert_eq!(defenses.len(), FAMILY_DEFENSE_LOG as usize);
+    assert_eq!(defenses[0].on.day, FAMILY_DEFENSE_LOG as u8 + 1);
+    assert_eq!(defenses[0].outcome, EstateDefenseOutcome::Held);
+    assert_eq!(defenses[1].outcome, EstateDefenseOutcome::TimedOut);
+    assert_eq!(defenses[0].horn, "war_horn_1");
+}

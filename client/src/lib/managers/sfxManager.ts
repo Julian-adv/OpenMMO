@@ -50,6 +50,7 @@ const PROP_SOUNDS = {
   keyDrop: { url: '/sounds/key-drop.ogg', volume: 0.5, pool: 1 },
   pickaxe: { url: '/sounds/pickaxe-ore.ogg', volume: 0.5, pool: 3 },
   warHorn: { url: '/sounds/war-horn.ogg', volume: 0.65, pool: 2 },
+  defenseLost: { url: '/sounds/defense-lost.ogg', volume: 0.55, pool: 1 },
 } as const
 export type PropSound = keyof typeof PROP_SOUNDS
 

@@ -137,6 +137,7 @@ fn family_info(
         emblem_color: roster.emblem.color.clone(),
         my_cape_emblem: me.cape_emblem,
         seat_estate_id: roster.seat_estate_id,
+        defenses: roster.defenses.clone(),
     })
 }
 
@@ -175,9 +176,14 @@ impl super::GameState {
         self.families.read().await.emblem_of(player_id)
     }
 
-    /// The emblem of the player's family, whatever cape they wear.
-    pub(super) async fn own_family_emblem(&self, player_id: &PlayerId) -> Option<FamilyEmblem> {
-        self.families.read().await.family_emblem(player_id).cloned()
+    /// The player's family and its emblem, whatever cape they wear.
+    pub(super) async fn own_family(
+        &self,
+        player_id: &PlayerId,
+    ) -> Option<(i64, Option<FamilyEmblem>)> {
+        let families = self.families.read().await;
+        let family_id = *families.of_player.get(player_id)?;
+        Some((family_id, families.family_emblem(player_id).cloned()))
     }
 
     /// Re-send the players' worn capes after their family emblem changed.

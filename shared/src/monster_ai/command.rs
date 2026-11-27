@@ -135,4 +135,6 @@ pub enum AiCommand {
     },
     /// An ambusher woke (`false`) or settled back into stone (`true`).
     Dormant { dormant: bool },
+    /// A swing at its home: an estate-defense raider striking its banner.
+    StrikeHome,
 }

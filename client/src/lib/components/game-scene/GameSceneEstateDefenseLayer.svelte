@@ -9,6 +9,8 @@
   import type { LocalPlayer } from '../../stores/gameStore'
   import type { Position } from '../../network/networkTypes'
   import {
+    bannerFall,
+    bannerStruckAt,
     estateDefense,
     incomingAngles,
     takeDefensePillars,
@@ -43,6 +45,11 @@
   /** A leader's rising shakes the ground this far around it. */
   const LEADER_ROAR_REACH = 5
   const LEADER_FOOTPRINT = { halfWidth: 0.8, front: 0.8, back: 0.8 }
+  const BANNER_SHAKE_MS = 500
+  /** A lost banner tips over, then sinks out of sight. */
+  const BANNER_TIP_MS = 600
+  const BANNER_SINK_MS = 900
+  const BANNER_SINK_M = 1.5
   const group = new THREE.Group()
   const banner = new THREE.Group()
   /** Scratch for placing a server position near the player. */
@@ -173,8 +180,23 @@
     if (!ready || !$camera || !currentPlayer) return
     group.visible = $currentDungeonDepth < 1 && $playerVisualFloorLevel <= 0
     const state = $estateDefense?.state
-    banner.visible = !!state
-    if (state) place(banner, state.banner)
+    const sinceFall = bannerFall ? now - bannerFall.at : Infinity
+    banner.visible = !!state || sinceFall < BANNER_TIP_MS + BANNER_SINK_MS
+    if (state) {
+      place(banner, state.banner)
+      const sinceBlow = now - bannerStruckAt
+      banner.rotation.z =
+        sinceBlow >= 0 && sinceBlow < BANNER_SHAKE_MS
+          ? Math.sin(sinceBlow / 25) * 0.1 * (1 - sinceBlow / BANNER_SHAKE_MS)
+          : 0
+    } else if (bannerFall && banner.visible) {
+      place(banner, bannerFall.position)
+      const tip = Math.min(1, sinceFall / BANNER_TIP_MS)
+      banner.rotation.z = (Math.PI / 2) * 0.9 * tip * tip
+      banner.position.y -=
+        BANNER_SINK_M *
+        Math.max(0, (sinceFall - BANNER_TIP_MS) / BANNER_SINK_MS)
+    }
     updateIncomingAngles(state)
 
     for (const pillar of takeDefensePillars()) {

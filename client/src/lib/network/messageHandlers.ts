@@ -112,6 +112,7 @@ import {
   playPlayerDeathSound,
   playPlayerHurtSound,
   playPropSound,
+  playSwordHitSound,
   playSwordMissSound,
   playBattleHymn,
   stopBattleHymn,
@@ -1807,6 +1808,10 @@ export function handleServerMessage(
       )
       break
 
+    case 'MonsterSwung':
+      monsterManager.handleMonsterAttackStarted(data.monster_id, 0, data.at)
+      break
+
     case 'MonsterGroundStrike': {
       monsterManager.handleMonsterAttackStarted(
         data.monster_id,
@@ -2503,7 +2508,7 @@ export function handleServerMessage(
       break
 
     case 'EstateDefenseStatus':
-      handleEstateDefenseStatus(data.state)
+      if (handleEstateDefenseStatus(data.state)) playSwordHitSound()
       break
 
     case 'EstateDefenseWave':
@@ -2515,8 +2520,11 @@ export function handleServerMessage(
         data.estate_id,
         data.banner,
         data.outcome,
-        data.open_in_ms
+        data.open_in_ms,
+        data.vanished,
+        data.vanish_in_ms
       )
+      if (data.outcome !== 'held') playPropSound('defenseLost')
       break
 
     case 'InteractionRejected': {

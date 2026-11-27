@@ -289,6 +289,21 @@ PROMPTS = {
         "Mysterious, magical, attention-grabbing but subtle game sound. No "
         "voice, no drums, no bass, no horror scream."
     ),
+    "defense_lost_dark": (
+        "Bleak fantasy RPG defeat sting: a slow, heavy descending phrase in a dark "
+        "minor key played on a low cello and a deep muffled funeral horn, over a "
+        "soft ominous low drone, sinking to one very low dissonant note that "
+        "lingers and dies into silence. Grim, hopeless, mournful, like a battle "
+        "lost and a banner fallen, about three seconds. No voice, no drums, no "
+        "bright harp, no bells, no whoosh, no comedic tone."
+    ),
+    "defense_lost": (
+        "Short sad fantasy RPG defeat jingle: a slow descending minor-key phrase "
+        "of four soft notes, 'dee-ree-ree-rung', on a muted harp and a low "
+        "mournful horn, ending on one low unresolved note that fades away. "
+        "Gloomy, deflated game-over sting, about two seconds. No voice, no drums, "
+        "no explosion, no comedic trombone, no whoosh."
+    ),
 }
 
 # --length sets music_length_ms; a 180 s music_v2_5 take was cut off mid-phrase at that mark.

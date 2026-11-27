@@ -88,12 +88,12 @@
   }
   .banner {
     display: flex;
-    gap: 3px;
+    gap: 2px;
   }
   .banner i {
-    width: 10px;
+    width: 4px;
     height: 12px;
-    border-radius: 2px;
+    border-radius: 1px;
     background: #d6606e;
   }
   .banner i.lost {

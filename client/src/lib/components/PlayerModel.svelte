@@ -80,7 +80,7 @@
     HORSE_MODEL_PATH,
     RIDING_ANIMATION_PATH,
   } from '../utils/horseMount'
-  import { titleName } from '../data/titleDefs'
+  import { titleColor, titleName } from '../data/titleDefs'
   import { T, useThrelte } from '@threlte/core'
   import TextLabel from './TextLabel.svelte'
   import ResourceBar, { RESOURCE_BAR_HEIGHT } from './ResourceBar.svelte'
@@ -2467,7 +2467,7 @@
       <TextLabel
         text={$titleName(title)}
         fontSize={0.19}
-        color="#d6bcfa"
+        color={titleColor(title)}
         outlineColor="#000000"
         outlineWidth={7}
         anchorX="center"

@@ -2151,6 +2151,11 @@ pub enum ServerMessage {
         monster_id: String,
         player_id: PlayerId,
     },
+    /// A swing at something other than a player, such as a raider's banner.
+    MonsterSwung {
+        monster_id: String,
+        at: Position,
+    },
     /// A plain swing at a distant target: the ground where it stood erupts
     /// after `impact_ms`, striking whoever is still within `radius`.
     MonsterGroundStrike {
@@ -2606,6 +2611,10 @@ pub enum ServerMessage {
         outcome: EstateDefenseOutcome,
         /// A held banner's chest opens this long after it shows.
         open_in_ms: u32,
+        /// Raiders left standing; they stand still and are gone `vanish_in_ms`
+        /// later, into pillars of light.
+        vanished: Vec<Position>,
+        vanish_in_ms: u32,
     },
     /// The raid failed and the boss at `position` sinks back into its
     /// dormant stand-in; its removal follows.
@@ -3295,6 +3304,7 @@ impl ServerMessage {
             | Self::MonsterSkillStruck { .. }
             | Self::MonsterSkillReflected { .. }
             | Self::MonsterStared { .. }
+            | Self::MonsterSwung { .. }
             | Self::MonsterGroundStrike { .. }
             | Self::MonsterAttackedPlayer { .. }
             | Self::PlayerInstrumentNotes { .. }

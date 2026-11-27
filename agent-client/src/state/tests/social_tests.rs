@@ -325,6 +325,7 @@ pub(crate) fn family_info(my_rank: u8) -> onlinerpg_shared::family::FamilyInfo {
         emblem_color: Some("#aa2233".to_string()),
         my_cape_emblem: true,
         seat_estate_id: None,
+        defenses: Vec::new(),
     }
 }
 

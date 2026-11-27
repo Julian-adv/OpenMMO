@@ -52,7 +52,7 @@ mod field_raids;
 mod seasonal;
 #[path = "auth_statues.rs"]
 mod statues;
-pub(crate) use estate_defense::{DefenseSite, Disgraces, TrophySite};
+pub(crate) use estate_defense::{DefenseRun, DefenseSite, Disgraces, TrophySite};
 pub(crate) use estate_storage::EstateDeposit;
 pub(crate) use family::{FamilyDeparture, FamilyEmblem, FamilyRoster};
 pub(crate) use statues::StatueRow;
