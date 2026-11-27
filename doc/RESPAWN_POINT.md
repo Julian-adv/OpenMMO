@@ -1,6 +1,6 @@
 # 구호소 부활
 
-상태: 구현됨 (2026-11-27, 프로토콜 185), 미배포. ORKEA 판매는 전시품 배치 후. 영지 수호전([ESTATE_DEFENSE.md](ESTATE_DEFENSE.md)) 논의 중 나온 아이디어.
+상태: 구현됨 (2026-11-27, 프로토콜 185), 미배포. 영지 수호전([ESTATE_DEFENSE.md](ESTATE_DEFENSE.md)) 논의 중 나온 아이디어.
 
 영지 주인이 영지에 **구호 침상**(가칭)을 놓으면 그 영지가 구호소가 된다. 죽은 사람은 부활 대화상자에서 어디서 깨어날지 고른다. 마을 여관 병실, 자기 영지, 본가, 그리고 주인이 공개한 가까운 구호소 중에서 고른다. 공개 구호소는 근처에서 죽은 누구나 쓸 수 있다.
 
@@ -23,7 +23,7 @@
 
 ## 구호 침상
 
-- ORKEA 가구로 판다(`furniture_aid_cot`, 8,000c). 판매 목록은 전시품 id로 결제하므로 매장에 `aid_cot` 전시품을 놓고 그 id를 `data/furniture_shop.json`에 넣어야 팔린다. 다른 가구와 같은 배치·이동·회수 경로(`estate_chests`, `estate_storage.csv`)를 쓴다. 모델은 기존 Rustic Bed(`rustic_bed.glb`)의 담요 색만 바꾼 변형이다(예: 흰 담요에 붉은 줄). 새 형태를 만들지 않고 텍스처만 바꿔 별도 GLB·아이콘으로 낸다. 적십자 모양은 쓰지 않는다(국제 보호 표장이라 게임에서 쓰면 안 된다).
+- ORKEA 가구로 판다(`furniture_aid_cot`, 8,000c). 전시품은 매장 2층 165번이다(`data/furniture_shop.json`). 다른 가구와 같은 배치·이동·회수 경로(`estate_chests`, `estate_storage.csv`)를 쓴다. 모델은 기존 Rustic Bed(`rustic_bed.glb`)의 담요 색만 바꾼 변형이다(예: 흰 담요에 붉은 줄). 새 형태를 만들지 않고 텍스처만 바꿔 별도 GLB·아이콘으로 낸다. 적십자 모양은 쓰지 않는다(국제 보호 표장이라 게임에서 쓰면 안 된다).
 - 부활 지점이 되는 것은 구호 침상뿐이다(결정 2026-11-26). 일반 침대(Bed·Rustic Bed)는 지금처럼 눕기와 회복 2배만 한다. 어느 가구가 부활 지점인지 헷갈리지 않고, 공개 설정을 둘 곳이 하나로 정해진다.
 - 구호 침상에서도 눕기와 회복 2배는 일반 침대와 같다.
 - 한 영지에 여러 개 놓을 수 있다. 공개 설정은 영지 단위로 하나다(침상마다 따로 두지 않는다).
@@ -135,7 +135,7 @@
 - `openmmo-mcp/src/instructions.md`, agent-client `respawn` 액션 설명.
 - [doc/assets/props.md](assets/props.md): 구호 침상 모델·아이콘 출처.
 
-남은 일: ORKEA 전시품 배치와 판매 목록 등록, 코콜리 병실 대사(`agent-client/data/npcs/cocoly/instance.txt`)에 구호 침상 언급을 넣을지.
+남은 일: 코콜리 병실 대사(`agent-client/data/npcs/cocoly/instance.txt`)에 구호 침상 언급을 넣을지.
 
 ## 테스트
 

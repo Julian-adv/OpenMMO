@@ -112,6 +112,14 @@
       ]
     },
     {
+      "objectType": "aid_cot",
+      "itemDefId": "furniture_aid_cot",
+      "price": 8000,
+      "displayIds": [
+        165
+      ]
+    },
+    {
       "objectType": "stone_hearth",
       "itemDefId": "furniture_stone_hearth",
       "price": 12000,
