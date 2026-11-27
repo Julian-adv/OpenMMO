@@ -416,7 +416,7 @@ async fn failed_inventory_save_restores_removed_fence() {
     game.edit_fence(&pid("Builder"), EDGE, true, &auth, false)
         .await;
     let db = rusqlite::Connection::open(path).unwrap();
-    db.execute_batch("CREATE TRIGGER fail_fence_inventory BEFORE DELETE ON character_items BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
+    db.execute_batch("CREATE TRIGGER fail_fence_inventory BEFORE DELETE ON items BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
     game.edit_fence(&pid("Builder"), EDGE, false, &auth, false)
         .await;
     assert_eq!(quantity(&game, "Builder").await, 99);

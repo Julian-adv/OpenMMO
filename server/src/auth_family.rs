@@ -1170,7 +1170,7 @@ impl AuthService {
             let stocked: bool = tx.query_row(
                 "SELECT EXISTS(SELECT 1 FROM estate_chests c
                     JOIN land_estates e ON e.id=c.estate_id
-                    JOIN estate_chest_items i ON i.chest_id=c.id
+                    JOIN items i ON i.chest_id=c.id
                     WHERE e.account_name=?1 AND c.family_id=?2)",
                 params![account, member.family_id],
                 |row| row.get(0),

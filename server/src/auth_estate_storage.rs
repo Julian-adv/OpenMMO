@@ -325,7 +325,7 @@ type StoredItems = (Vec<ItemInstance>, Vec<Option<u64>>);
 fn read_items(conn: &Connection, chest_id: i64) -> Result<StoredItems, rusqlite::Error> {
     let mut stmt = conn.prepare(
         "SELECT id,item_def_id,quantity,enchant,cape_color,cape_texture,locked,item_id
-         FROM estate_chest_items WHERE chest_id=?1 ORDER BY id",
+         FROM items WHERE chest_id=?1 ORDER BY id",
     )?;
     let rows = stmt.query_map([chest_id], |row| {
         Ok((
@@ -367,18 +367,7 @@ impl AuthService {
                 floor_level INTEGER NOT NULL,
                 revision INTEGER NOT NULL DEFAULT 0,
                 FOREIGN KEY (owner_id) REFERENCES characters(id) ON DELETE CASCADE
-            );
-            CREATE TABLE IF NOT EXISTS estate_chest_items (
-                id INTEGER PRIMARY KEY,
-                chest_id INTEGER NOT NULL REFERENCES estate_chests(id) ON DELETE CASCADE,
-                item_def_id TEXT NOT NULL,
-                quantity INTEGER NOT NULL CHECK (quantity > 0),
-                enchant INTEGER NOT NULL DEFAULT 0,
-                cape_color TEXT,
-                cape_texture TEXT
-            );
-            CREATE INDEX IF NOT EXISTS idx_estate_chest_items_chest
-                ON estate_chest_items(chest_id);",
+            );",
         )?;
         if !Self::table_columns(conn, "estate_chests")?.contains("item_def_id") {
             conn.execute(
@@ -439,23 +428,11 @@ impl AuthService {
             conn.pragma_update(None, "foreign_keys", foreign_keys)?;
             migration?;
         }
-        if !Self::table_columns(conn, "estate_chest_items")?.contains("locked") {
-            conn.execute(
-                "ALTER TABLE estate_chest_items ADD COLUMN locked INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
         if !Self::table_columns(conn, "estate_chests")?.contains("text") {
             conn.execute("ALTER TABLE estate_chests ADD COLUMN text TEXT", [])?;
         }
         if !Self::table_columns(conn, "estate_chests")?.contains("family_id") {
             conn.execute("ALTER TABLE estate_chests ADD COLUMN family_id INTEGER", [])?;
-        }
-        if !Self::table_columns(conn, "estate_chest_items")?.contains("item_id") {
-            conn.execute(
-                "ALTER TABLE estate_chest_items ADD COLUMN item_id INTEGER",
-                [],
-            )?;
         }
         if !Self::table_columns(conn, "estate_chests")?.contains("item_id") {
             conn.execute("ALTER TABLE estate_chests ADD COLUMN item_id INTEGER", [])?;
@@ -849,7 +826,7 @@ impl AuthService {
         for withdrawal in withdrawals {
             let stored: Option<(u32, String)> = tx
                 .query_row(
-                    "SELECT quantity, item_def_id FROM estate_chest_items WHERE id=?1 AND chest_id=?2",
+                    "SELECT quantity, item_def_id FROM items WHERE id=?1 AND chest_id=?2",
                     params![withdrawal.instance_id as i64, chest_id],
                     |row| Ok((row.get::<_, i64>(0)? as u32, row.get(1)?)),
                 )
@@ -863,12 +840,12 @@ impl AuthService {
             }
             if withdrawal.qty == stored {
                 tx.execute(
-                    "DELETE FROM estate_chest_items WHERE id=?1",
+                    "DELETE FROM items WHERE id=?1",
                     [withdrawal.instance_id as i64],
                 )?;
             } else {
                 tx.execute(
-                    "UPDATE estate_chest_items SET quantity=quantity-?2 WHERE id=?1",
+                    "UPDATE items SET quantity=quantity-?2 WHERE id=?1",
                     params![withdrawal.instance_id as i64, withdrawal.qty],
                 )?;
             }
@@ -878,7 +855,7 @@ impl AuthService {
             log.push((item.item_def_id.clone(), i64::from(deposit.quantity)));
             let matching: Option<i64> = if deposit.stackable {
                 tx.query_row(
-                    "SELECT id FROM estate_chest_items WHERE chest_id=?1 AND item_def_id=?2
+                    "SELECT id FROM items WHERE chest_id=?1 AND item_def_id=?2
                      AND enchant=?3 AND cape_color IS ?4 AND cape_texture IS ?5 AND locked=?6 LIMIT 1",
                     params![
                         chest_id,
@@ -896,7 +873,7 @@ impl AuthService {
             };
             if let Some(id) = matching {
                 let changed = tx.execute(
-                    "UPDATE estate_chest_items SET quantity=quantity+?2
+                    "UPDATE items SET quantity=quantity+?2
                      WHERE id=?1 AND quantity<=?3",
                     params![id, deposit.quantity, i64::from(u32::MAX - deposit.quantity)],
                 )?;
@@ -904,20 +881,20 @@ impl AuthService {
                     return Ok(Err("A stored stack is full."));
                 }
             } else {
-                tx.execute(
-                    "INSERT INTO estate_chest_items
-                     (chest_id,item_def_id,quantity,enchant,cape_color,cape_texture,locked,item_id)
-                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
-                    params![
-                        chest_id,
-                        item.item_def_id,
-                        deposit.quantity,
-                        item.enchant,
-                        item.cape_color,
-                        item.cape_texture,
-                        item.locked,
-                        (!deposit.stackable).then_some(item.instance_id as i64)
-                    ],
+                super::persistence::put_item(
+                    &tx,
+                    super::persistence::ItemOwner::Chest(chest_id),
+                    &super::persistence::HeldItem {
+                        item_def_id: &item.item_def_id,
+                        quantity: deposit.quantity,
+                        equip_slot: None,
+                        enchant: item.enchant,
+                        cape_color: item.cape_color.as_deref(),
+                        cape_texture: item.cape_texture.as_deref(),
+                        locked: item.locked,
+                        charged: false,
+                        item_id: (!deposit.stackable).then_some(item.instance_id),
+                    },
                 )?;
             }
         }
@@ -950,7 +927,7 @@ impl AuthService {
             ));
         }
         let count: i64 = tx.query_row(
-            "SELECT COUNT(*) FROM estate_chest_items WHERE chest_id=?1",
+            "SELECT COUNT(*) FROM items WHERE chest_id=?1",
             [chest_id],
             |row| row.get(0),
         )?;

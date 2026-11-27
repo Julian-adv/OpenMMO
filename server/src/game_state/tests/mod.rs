@@ -693,7 +693,7 @@ fn make_game_state_with_zones(
     let world_drop_defs = crate::world_drop_defs::WorldDropDefs::load(&item_defs);
     let monster_defs = MonsterDefs::load();
     let dungeon_defs = crate::dungeon_defs::DungeonDefs::load(&item_defs, &monster_defs);
-    GameState::new(
+    let game = GameState::new(
         monster_defs,
         item_defs,
         world_drop_defs,
@@ -717,7 +717,10 @@ fn make_game_state_with_zones(
             )))
             .expect("cape texture store"),
         ),
-    )
+    );
+    // Fixtures hand out small item ids by hand; new ones start clear of them.
+    *game.next_item_instance_id.try_write().unwrap() = 1_000_000;
+    game
 }
 
 pub(crate) fn make_test_game_state(test_name: &str) -> GameState {

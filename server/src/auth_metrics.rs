@@ -252,7 +252,7 @@ impl AuthService {
             .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
         transaction.execute(
             "UPDATE characters SET weapon_enchant = MAX(0, COALESCE((
-                SELECT MAX(enchant) FROM character_items WHERE character_id = characters.id
+                SELECT MAX(enchant) FROM items WHERE character_id = characters.id
                     AND quantity > 0 AND item_def_id IN (SELECT value FROM json_each(?1))
              ), 0))",
             [weapon_ids],
@@ -287,7 +287,7 @@ impl AuthService {
             "UPDATE characters SET armor_enchant = COALESCE((
                 SELECT SUM(enchant) FROM (
                     SELECT MAX(0, MAX(items.enchant)) AS enchant
-                    FROM character_items items
+                    FROM items
                     JOIN json_each(?1) definitions ON items.item_def_id = definitions.key
                     WHERE items.character_id = characters.id AND items.quantity > 0
                     GROUP BY definitions.value
@@ -1741,7 +1741,7 @@ mod tests {
              INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
              INSERT INTO characters (id, account_name, character_name, created_at)
              VALUES (1, 'player', 'Hero', 100), (2, 'npc_test', 'Npc', 100), (3, 'npcxplayer', 'NoWeapon', 100);
-             INSERT INTO character_items (character_id, item_def_id, quantity, enchant, equip_slot)
+             INSERT INTO items (character_id, item_def_id, quantity, enchant, equip_slot)
              VALUES (1, 'iron_sword', 1, 7, NULL), (1, 'worn_iron_sword', 1, 3, 'main_hand'),
                     (1, 'wooden_shield', 1, 20, 'off_hand'), (1, 'missing_item', 1, 99, NULL),
                     (1, 'iron_sword', 0, 50, NULL), (2, 'iron_sword', 1, 99, NULL),
@@ -1862,7 +1862,7 @@ mod tests {
              INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test'), ('npcxplayer');
              INSERT INTO characters (id, account_name, character_name, created_at)
              VALUES (1, 'player', 'Hero', 100), (2, 'npc_test', 'Npc', 100), (3, 'npcxplayer', 'NoArmor', 100);
-             INSERT INTO character_items (character_id, item_def_id, quantity, enchant, equip_slot)
+             INSERT INTO items (character_id, item_def_id, quantity, enchant, equip_slot)
              VALUES (1, 'leather_helmet', 1, 2, NULL), (1, 'iron_helmet', 1, 1, 'head'),
                     (1, 'breastplate', 1, 3, 'chest'), (1, 'wooden_shield', 1, 4, 'off_hand'),
                     (1, 'leather_gloves', 1, 5, NULL), (1, 'leather_pants', 1, 6, NULL),

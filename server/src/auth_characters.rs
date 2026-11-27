@@ -190,7 +190,7 @@ fn read_visible_equipment(
     let mut stmt = conn.prepare(&format!(
         "SELECT i.character_id, i.equip_slot, i.item_def_id, i.cape_color, i.cape_texture,
                 f.emblem_texture, f.emblem_color
-         FROM character_items i
+         FROM items i
          LEFT JOIN family_members m ON m.character_id=i.character_id AND i.equip_slot='back'
          LEFT JOIN families f ON f.id=m.family_id AND m.cape_emblem=1
          WHERE i.character_id IN ({})
@@ -474,7 +474,7 @@ impl AuthService {
                 .is_some();
         if !registry_npc {
             let mut stmt = conn.prepare(
-                "INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) \
+                "INSERT INTO items (character_id, item_def_id, quantity, equip_slot) \
                  VALUES (?1, ?2, ?3, ?4)",
             )?;
             for (item_def_id, quantity, equip_slot) in starter_items(&class)

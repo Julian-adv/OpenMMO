@@ -134,16 +134,16 @@ impl AuthService {
             }
             for (item, quantity, slot) in class_starter_items(&class, gender) {
                 tx.execute(
-                    "INSERT INTO character_items (character_id, item_def_id, quantity) \
+                    "INSERT INTO items (character_id, item_def_id, quantity) \
                      SELECT ?1, ?2, ?3 WHERE NOT EXISTS \
-                     (SELECT 1 FROM character_items WHERE character_id = ?1 AND item_def_id = ?2)",
+                     (SELECT 1 FROM items WHERE character_id = ?1 AND item_def_id = ?2)",
                     params![id, item, quantity],
                 )?;
                 tx.execute(
-                    "UPDATE character_items SET equip_slot = ?3 WHERE id = \
-                     (SELECT id FROM character_items WHERE character_id = ?1 AND item_def_id = ?2 \
+                    "UPDATE items SET equip_slot = ?3 WHERE id = \
+                     (SELECT id FROM items WHERE character_id = ?1 AND item_def_id = ?2 \
                       AND equip_slot IS NULL ORDER BY id LIMIT 1) \
-                     AND NOT EXISTS (SELECT 1 FROM character_items WHERE character_id = ?1 AND equip_slot = ?3)",
+                     AND NOT EXISTS (SELECT 1 FROM items WHERE character_id = ?1 AND equip_slot = ?3)",
                     params![id, item, slot],
                 )?;
             }
@@ -186,21 +186,21 @@ impl AuthService {
                 continue;
             }
             tx.execute(
-                "INSERT INTO character_items (character_id, item_def_id, quantity) \
+                "INSERT INTO items (character_id, item_def_id, quantity) \
                  SELECT ?1, ?2, 1 WHERE NOT EXISTS \
-                 (SELECT 1 FROM character_items WHERE character_id = ?1 AND item_def_id = ?2)",
+                 (SELECT 1 FROM items WHERE character_id = ?1 AND item_def_id = ?2)",
                 params![id, weapon],
             )?;
             let Some(old) = replaces else { continue };
             tx.execute(
-                "UPDATE character_items SET equip_slot = NULL \
+                "UPDATE items SET equip_slot = NULL \
                  WHERE character_id = ?1 AND item_def_id = ?2 AND equip_slot = 'main_hand'",
                 params![id, old],
             )?;
             tx.execute(
-                "UPDATE character_items SET equip_slot = 'main_hand' WHERE id = \
-                 (SELECT id FROM character_items WHERE character_id = ?1 AND item_def_id = ?2 ORDER BY id LIMIT 1) \
-                 AND NOT EXISTS (SELECT 1 FROM character_items WHERE character_id = ?1 AND equip_slot = 'main_hand')",
+                "UPDATE items SET equip_slot = 'main_hand' WHERE id = \
+                 (SELECT id FROM items WHERE character_id = ?1 AND item_def_id = ?2 ORDER BY id LIMIT 1) \
+                 AND NOT EXISTS (SELECT 1 FROM items WHERE character_id = ?1 AND equip_slot = 'main_hand')",
                 params![id, weapon],
             )?;
         }
@@ -216,7 +216,7 @@ impl AuthService {
     /// keeps its starter weapon.
     pub(super) fn strip_npc_starter_weapons(conn: &Connection) -> Result<(), rusqlite::Error> {
         let mut stmt = conn.prepare(
-            "DELETE FROM character_items WHERE item_def_id = 'worn_iron_sword' \
+            "DELETE FROM items WHERE item_def_id = 'worn_iron_sword' \
              AND character_id IN \
              (SELECT id FROM characters WHERE character_name = ?1 \
               AND account_name GLOB ?2)",
@@ -405,10 +405,10 @@ mod tests {
             [],
         )
         .unwrap();
-        conn.execute("DELETE FROM character_items WHERE character_id = ?1 AND item_def_id IN ('worn_rogue_pants', 'worn_rogue_boots')", [female.id]).unwrap();
-        conn.execute("UPDATE character_items SET equip_slot = NULL WHERE character_id = ?1 AND item_def_id = 'worn_rogue_gloves'", [female.id]).unwrap();
-        conn.execute("UPDATE character_items SET equip_slot = 'chest', enchant = 3 WHERE character_id = ?1 AND item_def_id = 'worn_rogue_top'", [female.id]).unwrap();
-        conn.execute("INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) VALUES (?1, 'leather_pants', 1, 'pants')", [female.id]).unwrap();
+        conn.execute("DELETE FROM items WHERE character_id = ?1 AND item_def_id IN ('worn_rogue_pants', 'worn_rogue_boots')", [female.id]).unwrap();
+        conn.execute("UPDATE items SET equip_slot = NULL WHERE character_id = ?1 AND item_def_id = 'worn_rogue_gloves'", [female.id]).unwrap();
+        conn.execute("UPDATE items SET equip_slot = 'chest', enchant = 3 WHERE character_id = ?1 AND item_def_id = 'worn_rogue_top'", [female.id]).unwrap();
+        conn.execute("INSERT INTO items (character_id, item_def_id, quantity, equip_slot) VALUES (?1, 'leather_pants', 1, 'pants')", [female.id]).unwrap();
         let male_before = auth.load_inventory(male.id).unwrap().len();
         drop(conn);
         drop(auth);
@@ -436,7 +436,11 @@ mod tests {
         assert_eq!(armor.boots.as_deref(), Some("worn_rogue_boots"));
         assert_eq!(auth.load_inventory(male.id).unwrap().len(), male_before);
         let conn = auth.open_connection().unwrap();
-        conn.execute("DELETE FROM character_items WHERE character_id = ?1 AND item_def_id = 'worn_rogue_boots'", [female.id]).unwrap();
+        conn.execute(
+            "DELETE FROM items WHERE character_id = ?1 AND item_def_id = 'worn_rogue_boots'",
+            [female.id],
+        )
+        .unwrap();
         drop(conn);
         drop(auth);
         let auth = AuthService::new(path).unwrap();
@@ -467,8 +471,12 @@ mod tests {
             [],
         )
         .unwrap();
-        conn.execute("DELETE FROM character_items WHERE character_id = ?1 AND item_def_id LIKE 'worn_valkyrie_%'", [valkyrie.id]).unwrap();
-        conn.execute("INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) VALUES (?1, 'chain_mail', 1, 'chest')", [valkyrie.id]).unwrap();
+        conn.execute(
+            "DELETE FROM items WHERE character_id = ?1 AND item_def_id LIKE 'worn_valkyrie_%'",
+            [valkyrie.id],
+        )
+        .unwrap();
+        conn.execute("INSERT INTO items (character_id, item_def_id, quantity, equip_slot) VALUES (?1, 'chain_mail', 1, 'chest')", [valkyrie.id]).unwrap();
         drop(conn);
         drop(auth);
         let auth = AuthService::new(path.clone()).unwrap();
@@ -487,7 +495,11 @@ mod tests {
         assert_eq!(armor.hands.as_deref(), Some("worn_valkyrie_gloves"));
         assert_eq!(armor.boots.as_deref(), Some("worn_valkyrie_boots"));
         let conn = auth.open_connection().unwrap();
-        conn.execute("DELETE FROM character_items WHERE character_id = ?1 AND item_def_id = 'worn_valkyrie_boots'", [valkyrie.id]).unwrap();
+        conn.execute(
+            "DELETE FROM items WHERE character_id = ?1 AND item_def_id = 'worn_valkyrie_boots'",
+            [valkyrie.id],
+        )
+        .unwrap();
         drop(conn);
         drop(auth);
         let auth = AuthService::new(path).unwrap();
@@ -547,15 +559,15 @@ mod tests {
                 .unwrap();
             for id in &ids {
                 conn.execute(
-                    "DELETE FROM character_items WHERE character_id = ?1 AND item_def_id = ?2",
+                    "DELETE FROM items WHERE character_id = ?1 AND item_def_id = ?2",
                     params![id, weapon],
                 )
                 .unwrap();
             }
-            conn.execute("INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot, enchant) VALUES (?1, 'worn_iron_sword', 1, 'main_hand', 2)", [ids[0]]).unwrap();
-            conn.execute("INSERT INTO character_items (character_id, item_def_id, quantity, enchant) VALUES (?1, 'worn_iron_sword', 1, 1)", [ids[1]]).unwrap();
-            conn.execute("INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) VALUES (?1, 'steel_longsword', 1, 'main_hand')", [ids[1]]).unwrap();
-            conn.execute("INSERT INTO character_items (character_id, item_def_id, quantity, enchant) VALUES (?1, 'worn_iron_sword', 1, 3)", [ids[2]]).unwrap();
+            conn.execute("INSERT INTO items (character_id, item_def_id, quantity, equip_slot, enchant) VALUES (?1, 'worn_iron_sword', 1, 'main_hand', 2)", [ids[0]]).unwrap();
+            conn.execute("INSERT INTO items (character_id, item_def_id, quantity, enchant) VALUES (?1, 'worn_iron_sword', 1, 1)", [ids[1]]).unwrap();
+            conn.execute("INSERT INTO items (character_id, item_def_id, quantity, equip_slot) VALUES (?1, 'steel_longsword', 1, 'main_hand')", [ids[1]]).unwrap();
+            conn.execute("INSERT INTO items (character_id, item_def_id, quantity, enchant) VALUES (?1, 'worn_iron_sword', 1, 3)", [ids[2]]).unwrap();
             drop(conn);
             drop(auth);
             let auth = AuthService::new(path.clone()).unwrap();
@@ -591,7 +603,7 @@ mod tests {
             }
             let conn = auth.open_connection().unwrap();
             conn.execute(
-                "DELETE FROM character_items WHERE character_id = ?1 AND item_def_id = ?2",
+                "DELETE FROM items WHERE character_id = ?1 AND item_def_id = ?2",
                 params![ids[0], weapon],
             )
             .unwrap();
@@ -949,7 +961,7 @@ mod tests {
         auth.open_connection()
             .unwrap()
             .execute(
-                "INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot) \
+                "INSERT INTO items (character_id, item_def_id, quantity, equip_slot) \
                  VALUES (?1, 'worn_iron_sword', 1, 'main_hand')",
                 params![rica.id],
             )

@@ -127,7 +127,7 @@ fn forfeit_unclaimed_impounds(conn: &Connection) -> Result<(), rusqlite::Error> 
     let overdue = "SELECT account_name FROM guard_impound_since WHERE seized_at <= ?1";
     let cutoff = [unix_now() - IMPOUND_HOLD_SECONDS];
     let mut lines = 0;
-    for table in ["guard_impounds", "guard_impound_goods"] {
+    for table in ["guard_impounds", "items"] {
         lines += conn.execute(
             &format!("DELETE FROM {table} WHERE account_name IN ({overdue})"),
             cutoff,
@@ -159,20 +159,6 @@ impl AuthService {
                 quantity INTEGER NOT NULL CHECK (quantity > 0),
                 PRIMARY KEY (account_name, item_def_id)
             );
-            CREATE TABLE IF NOT EXISTS guard_impound_goods (
-                id INTEGER PRIMARY KEY,
-                account_name TEXT NOT NULL
-                    REFERENCES accounts(player_name) ON DELETE CASCADE,
-                item_def_id TEXT NOT NULL,
-                quantity INTEGER NOT NULL CHECK (quantity > 0),
-                enchant INTEGER NOT NULL DEFAULT 0,
-                cape_color TEXT,
-                cape_texture TEXT,
-                locked INTEGER NOT NULL DEFAULT 0,
-                charged INTEGER NOT NULL DEFAULT 0
-            );
-            CREATE INDEX IF NOT EXISTS idx_guard_impound_goods_account
-                ON guard_impound_goods(account_name);
             CREATE TABLE IF NOT EXISTS guard_impound_since (
                 account_name TEXT PRIMARY KEY
                     REFERENCES accounts(player_name) ON DELETE CASCADE,
@@ -180,12 +166,6 @@ impl AuthService {
             );
             DROP TABLE IF EXISTS road_patrol_state;",
         )?;
-        if !Self::table_columns(conn, "guard_impound_goods")?.contains("item_id") {
-            conn.execute(
-                "ALTER TABLE guard_impound_goods ADD COLUMN item_id INTEGER",
-                [],
-            )?;
-        }
         conn.execute(
             "INSERT OR IGNORE INTO guard_impound_since (account_name, seized_at)
              SELECT DISTINCT account_name, ?1 FROM guard_impounds",
@@ -246,7 +226,7 @@ impl AuthService {
             {
                 let mut stmt = tx.prepare(
                     "SELECT item_def_id, quantity, enchant, cape_color, cape_texture, locked, item_id
-                     FROM estate_chest_items WHERE chest_id=?1 ORDER BY id",
+                     FROM items WHERE chest_id=?1 ORDER BY id",
                 )?;
                 let held = stmt.query_map([id], |row| {
                     Ok(ImpoundedStack {
@@ -265,7 +245,7 @@ impl AuthService {
                     goods.push(stack?);
                 }
             }
-            tx.execute("DELETE FROM estate_chest_items WHERE chest_id=?1", [id])?;
+            tx.execute("DELETE FROM items WHERE chest_id=?1", [id])?;
             tx.execute("DELETE FROM estate_chests WHERE id=?1", [id])?;
             let seizure = entry(&mut by_account, owner, obstruction);
             seizure.furniture.push(*id);
@@ -324,7 +304,7 @@ impl AuthService {
                         stack.item_id.map(|id| id as i64)
                     ];
                     let merged = tx.execute(
-                        "UPDATE guard_impound_goods SET quantity = quantity + ?3
+                        "UPDATE items SET quantity = quantity + ?3
                          WHERE ?9 IS NULL AND item_id IS NULL
                            AND account_name=?1 AND item_def_id=?2 AND enchant=?4
                            AND cape_color IS ?5 AND cape_texture IS ?6
@@ -332,12 +312,20 @@ impl AuthService {
                         fields,
                     )?;
                     if merged == 0 {
-                        tx.execute(
-                            "INSERT INTO guard_impound_goods (account_name, item_def_id,
-                                quantity, enchant, cape_color, cape_texture, locked, charged,
-                                item_id)
-                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-                            fields,
+                        super::persistence::put_item(
+                            &tx,
+                            super::persistence::ItemOwner::Impound(account),
+                            &super::persistence::HeldItem {
+                                item_def_id: &stack.item_def_id,
+                                quantity: stack.quantity,
+                                equip_slot: None,
+                                enchant: stack.enchant,
+                                cape_color: stack.cape_color.as_deref(),
+                                cape_texture: stack.cape_texture.as_deref(),
+                                locked: stack.locked,
+                                charged: stack.charged,
+                                item_id: stack.item_id,
+                            },
                         )?;
                     }
                 }
@@ -357,10 +345,10 @@ impl AuthService {
              FROM guard_impounds i
              JOIN characters c ON c.account_name=i.account_name WHERE c.id=?1
              UNION ALL
-             SELECT g.id, g.item_def_id, g.quantity, g.enchant, g.cape_color, g.cape_texture,
-                    g.locked, g.charged, 2 - g.charged, g.id, g.item_id
-             FROM guard_impound_goods g
-             JOIN characters c ON c.account_name=g.account_name WHERE c.id=?1
+             SELECT i.id, i.item_def_id, i.quantity, i.enchant, i.cape_color, i.cape_texture,
+                    i.locked, i.charged, 2 - i.charged, i.id, i.item_id
+             FROM items i
+             JOIN characters c ON c.account_name=i.account_name WHERE c.id=?1
              ORDER BY tier, id, 2",
         )?;
         let stacks = stmt
@@ -393,7 +381,7 @@ impl AuthService {
         let tx = conn.transaction_with_behavior(TransactionBehavior::Immediate)?;
         for (stack, units) in taken {
             let (table, key, id): (_, _, rusqlite::types::Value) = match stack.goods_id {
-                Some(id) => ("guard_impound_goods", "id=?1", id.into()),
+                Some(id) => ("items", "id=?1 AND account_name IS NOT NULL", id.into()),
                 None => (
                     "guard_impounds",
                     "account_name=(SELECT account_name FROM characters WHERE id=?1)",

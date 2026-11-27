@@ -105,21 +105,35 @@ impl AuthService {
             [],
         )?;
 
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS character_items (
+        // Every held item, wherever it lies (doc/ITEM_IDS.md): exactly one
+        // of a bag, an estate chest or the guard's impound owns each row.
+        conn.execute_batch(
+            "CREATE TABLE IF NOT EXISTS items (
                 id INTEGER PRIMARY KEY,
-                character_id INTEGER NOT NULL,
+                item_id INTEGER,
+                character_id INTEGER REFERENCES characters(id) ON DELETE CASCADE,
+                chest_id INTEGER REFERENCES estate_chests(id) ON DELETE CASCADE,
+                account_name TEXT REFERENCES accounts(player_name) ON DELETE CASCADE,
                 item_def_id TEXT NOT NULL,
                 quantity INTEGER NOT NULL DEFAULT 1,
                 equip_slot TEXT,
                 enchant INTEGER NOT NULL DEFAULT 0,
                 cape_color TEXT,
                 cape_texture TEXT,
-                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
-            )",
-            [],
+                locked INTEGER NOT NULL DEFAULT 0,
+                charged INTEGER NOT NULL DEFAULT 0,
+                CHECK ((character_id IS NOT NULL) + (chest_id IS NOT NULL)
+                    + (account_name IS NOT NULL) = 1)
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_items_item_id
+                ON items(item_id) WHERE item_id IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_items_character
+                ON items(character_id) WHERE character_id IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_items_chest
+                ON items(chest_id) WHERE chest_id IS NOT NULL;
+            CREATE INDEX IF NOT EXISTS idx_items_account
+                ON items(account_name) WHERE account_name IS NOT NULL;",
         )?;
-        Self::ensure_character_item_columns(conn)?;
         Self::ensure_land_schema(conn)?;
         Self::ensure_fence_schema(conn)?;
         Self::ensure_landscaping_schema(conn)?;
@@ -133,48 +147,42 @@ impl AuthService {
         Self::ensure_mail_schema(conn)?;
         Self::ensure_road_patrol_schema(conn)?;
         Self::ensure_watch_shift_schema(conn)?;
-
-        // Every inventory read and every save's DELETE filters on character_id;
-        // without this SQLite full-scans the table once per character.
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_character_items_character_id \
-             ON character_items(character_id)",
-            [],
-        )?;
+        Self::merge_item_tables(conn)?;
 
         Ok(())
     }
 
-    /// Columns added to character_items after release; mirrors
-    /// `ensure_character_attribute_columns` for the characters table.
-    fn ensure_character_item_columns(conn: &Connection) -> Result<(), rusqlite::Error> {
-        let columns = Self::table_columns(conn, "character_items")?;
-        if !columns.contains("locked") {
-            conn.execute(
-                "ALTER TABLE character_items ADD COLUMN locked INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
+    /// Move bags, chest contents and impounded goods out of their old tables
+    /// into `items` (2026-11-27). Dropping the old table marks it done.
+    fn merge_item_tables(conn: &Connection) -> Result<(), rusqlite::Error> {
+        const OLD: [(&str, &str); 3] = [
+            ("character_items", "character_id, NULL, NULL, equip_slot, 0"),
+            ("estate_chest_items", "NULL, chest_id, NULL, NULL, 0"),
+            (
+                "guard_impound_goods",
+                "NULL, NULL, account_name, NULL, charged",
+            ),
+        ];
+        let tx = conn.unchecked_transaction()?;
+        for (table, owner) in OLD {
+            let columns = Self::table_columns(&tx, table)?;
+            if columns.is_empty() {
+                continue;
+            }
+            let item_id = if columns.contains("item_id") {
+                "item_id"
+            } else {
+                "NULL"
+            };
+            tx.execute_batch(&format!(
+                "INSERT INTO items (item_id, character_id, chest_id, account_name, equip_slot,
+                    charged, item_def_id, quantity, enchant, cape_color, cape_texture, locked)
+                 SELECT {item_id}, {owner}, item_def_id, quantity, enchant, cape_color,
+                    cape_texture, locked FROM {table} ORDER BY id;
+                 DROP TABLE {table};"
+            ))?;
         }
-        if !columns.contains("enchant") {
-            conn.execute(
-                "ALTER TABLE character_items ADD COLUMN enchant INTEGER NOT NULL DEFAULT 0",
-                [],
-            )?;
-        }
-        if !columns.contains("cape_color") {
-            conn.execute("ALTER TABLE character_items ADD COLUMN cape_color TEXT", [])?;
-        }
-        if !columns.contains("cape_texture") {
-            conn.execute(
-                "ALTER TABLE character_items ADD COLUMN cape_texture TEXT",
-                [],
-            )?;
-        }
-        if !columns.contains("item_id") {
-            conn.execute("ALTER TABLE character_items ADD COLUMN item_id INTEGER", [])?;
-        }
-
-        Ok(())
+        tx.commit()
     }
 
     /// One-off data migrations that must not run twice, keyed by name.
@@ -220,8 +228,7 @@ impl AuthService {
     }
 
     pub(super) fn migrate_item_definition_ids(conn: &Connection) -> Result<(), rusqlite::Error> {
-        let mut stmt =
-            conn.prepare("UPDATE character_items SET item_def_id = ?1 WHERE item_def_id = ?2")?;
+        let mut stmt = conn.prepare("UPDATE items SET item_def_id = ?1 WHERE item_def_id = ?2")?;
         let mut migrated = 0;
         for &(old, new) in RENAMED_ITEM_IDS {
             migrated += stmt.execute(params![new, old])?;
@@ -325,6 +332,94 @@ mod tests {
     }
 
     #[test]
+    fn startup_merges_bags_chests_and_impounds_into_items() {
+        let (auth, db_path) = temp_auth("merge_item_tables");
+        drop(auth);
+        let conn = Connection::open(&db_path).unwrap();
+        conn.execute_batch(
+            "INSERT INTO accounts (player_name) VALUES ('keeper');
+             INSERT INTO characters (id, account_name, character_name)
+             VALUES (1, 'keeper', 'Keeper');
+             INSERT INTO estate_chests (id, estate_id, owner_id, x, y, z, rotation_deg, floor_level)
+             VALUES (5, 1, 1, 0, 0, 0, 0, 0);
+             DROP TABLE items;
+             CREATE TABLE character_items (
+                id INTEGER PRIMARY KEY, character_id INTEGER NOT NULL,
+                item_def_id TEXT NOT NULL, quantity INTEGER NOT NULL DEFAULT 1,
+                equip_slot TEXT, enchant INTEGER NOT NULL DEFAULT 0, cape_color TEXT,
+                cape_texture TEXT, locked INTEGER NOT NULL DEFAULT 0);
+             CREATE TABLE estate_chest_items (
+                id INTEGER PRIMARY KEY, chest_id INTEGER NOT NULL, item_def_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL, enchant INTEGER NOT NULL DEFAULT 0,
+                cape_color TEXT, cape_texture TEXT, locked INTEGER NOT NULL DEFAULT 0);
+             CREATE TABLE guard_impound_goods (
+                id INTEGER PRIMARY KEY, account_name TEXT NOT NULL, item_def_id TEXT NOT NULL,
+                quantity INTEGER NOT NULL, enchant INTEGER NOT NULL DEFAULT 0,
+                cape_color TEXT, cape_texture TEXT, locked INTEGER NOT NULL DEFAULT 0,
+                charged INTEGER NOT NULL DEFAULT 0);
+             INSERT INTO character_items (character_id, item_def_id, quantity, equip_slot, enchant)
+             VALUES (1, 'dagger', 1, 'main_hand', 2), (1, 'apple', 4, NULL, 0);
+             INSERT INTO estate_chest_items (chest_id, item_def_id, quantity)
+             VALUES (5, 'iron_sword', 1);
+             INSERT INTO guard_impound_goods (account_name, item_def_id, quantity, charged)
+             VALUES ('keeper', 'storage_chest', 1, 1);",
+        )
+        .unwrap();
+        drop(conn);
+
+        let auth = AuthService::new(db_path.clone()).unwrap();
+        let bag = auth.load_inventory(1).unwrap();
+        assert_eq!(bag.len(), 2);
+        assert!(bag
+            .iter()
+            .any(|row| row.item_def_id == "dagger" && row.enchant == 2));
+        let conn = Connection::open(&db_path).unwrap();
+        let owners: Vec<(String, Option<i64>, Option<i64>, Option<String>, bool)> = conn
+            .prepare(
+                "SELECT item_def_id, character_id, chest_id, account_name, charged
+                 FROM items ORDER BY id",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            owners,
+            vec![
+                ("dagger".into(), Some(1), None, None, false),
+                ("apple".into(), Some(1), None, None, false),
+                ("iron_sword".into(), None, Some(5), None, false),
+                (
+                    "storage_chest".into(),
+                    None,
+                    None,
+                    Some("keeper".into()),
+                    true
+                ),
+            ]
+        );
+        for old in [
+            "character_items",
+            "estate_chest_items",
+            "guard_impound_goods",
+        ] {
+            assert!(
+                AuthService::table_columns(&conn, old).unwrap().is_empty(),
+                "{old}"
+            );
+        }
+    }
+
+    #[test]
     fn startup_migrates_legacy_item_definition_ids() {
         for (old, new, slot, enchant) in [
             ("leather_cap", "leather_helmet", "head", 2),
@@ -341,7 +436,7 @@ mod tests {
             )
             .unwrap();
             conn.execute(
-                "INSERT INTO character_items
+                "INSERT INTO items
                  (character_id, item_def_id, quantity, equip_slot, enchant)
                  VALUES (1, ?1, 1, ?2, ?3)",
                 params![old, slot, enchant],

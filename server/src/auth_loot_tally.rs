@@ -102,7 +102,7 @@ impl AuthService {
             "SELECT i.item_def_id,
                     COALESCE(SUM(i.quantity) FILTER (WHERE NOT c.account_name GLOB ?1), 0),
                     COALESCE(SUM(i.quantity) FILTER (WHERE c.account_name GLOB ?1), 0)
-             FROM character_items i JOIN characters c ON c.id = i.character_id
+             FROM items i NOT INDEXED JOIN characters c ON c.id = i.character_id
              WHERE i.item_def_id IN ({ids}) GROUP BY i.item_def_id"
         ))?;
         let mut rows = statement.query(params_from_iter(
@@ -113,8 +113,8 @@ impl AuthService {
             (held.0, held.1) = (row.get(1)?, row.get(2)?);
         }
         let mut statement = transaction.prepare(&format!(
-            "SELECT item_def_id, SUM(quantity) FROM estate_chest_items
-             WHERE item_def_id IN ({ids}) GROUP BY item_def_id"
+            "SELECT item_def_id, SUM(quantity) FROM items
+             WHERE chest_id IS NOT NULL AND item_def_id IN ({ids}) GROUP BY item_def_id"
         ))?;
         let mut rows = statement.query(params_from_iter(item_def_ids))?;
         while let Some(row) = rows.next()? {
@@ -152,11 +152,11 @@ mod tests {
                 "INSERT INTO accounts (player_name) VALUES ('player'), ('npc_test');
                  INSERT INTO characters (id, account_name, character_name) VALUES
                     (1, 'player', 'Hero'), (2, 'npc_test', 'Npc');
-                 INSERT INTO character_items (character_id, item_def_id, quantity) VALUES
+                 INSERT INTO items (character_id, item_def_id, quantity) VALUES
                     (1, 'stethoscope', 1), (1, 'stethoscope', 2), (2, 'stethoscope', 4);
                  INSERT INTO estate_chests (id, estate_id, owner_id, x, y, z, rotation_deg, floor_level)
                     VALUES (10, 7, 1, 0, 0, 0, 0, 0);
-                 INSERT INTO estate_chest_items (chest_id, item_def_id, quantity)
+                 INSERT INTO items (chest_id, item_def_id, quantity)
                     VALUES (10, 'stethoscope', 5);",
             )
             .unwrap();

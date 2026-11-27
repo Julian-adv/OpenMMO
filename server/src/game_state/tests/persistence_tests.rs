@@ -503,3 +503,32 @@ async fn item_ids_count_on_from_the_last_one_after_a_restart() {
     restarted.load_item_ids(&auth).await.unwrap();
     assert_eq!(restarted.next_instance_id().await, 43);
 }
+
+#[tokio::test]
+async fn a_unit_saved_by_its_new_holder_first_moves_rather_than_clashing() {
+    let (auth, _db) = super::make_test_auth_with_path("item_id_moves");
+    let account = auth.login_npc("npc_item_id_moves").unwrap();
+    let dropper = super::create_test_character(&auth, &account, "Dropper");
+    let finder = super::create_test_character(&auth, &account, "Finder");
+    let sword = crate::auth::ItemRow {
+        item_id: Some(7),
+        ..item_row("dagger", 1, None, 0)
+    };
+    let has_sword = |id| {
+        auth.load_inventory(id)
+            .unwrap()
+            .iter()
+            .any(|row| row.item_id == Some(7))
+    };
+    auth.save_batch(&[], &[(dropper.id, vec![sword.clone()])], &[], &[], None)
+        .unwrap();
+    auth.save_batch(&[], &[(finder.id, vec![sword])], &[], &[], None)
+        .unwrap();
+    assert!(has_sword(finder.id) && !has_sword(dropper.id));
+    auth.save_batch(&[], &[(dropper.id, vec![])], &[], &[], None)
+        .unwrap();
+    assert!(
+        has_sword(finder.id),
+        "the dropper's later save leaves it be"
+    );
+}

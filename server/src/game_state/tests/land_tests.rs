@@ -1151,7 +1151,7 @@ async fn land_db_failure_rolls_back_ownership_and_keeps_deed() {
     let (character, mut rx) = land_owner(&game, &auth, &account, "Settler").await;
     let initial = auth.load_inventory(character).unwrap();
     let conn = rusqlite::Connection::open(path).unwrap();
-    conn.execute_batch("CREATE TRIGGER fail_land_inventory BEFORE INSERT ON character_items BEGIN SELECT RAISE(FAIL, 'test failure'); END;").unwrap();
+    conn.execute_batch("CREATE TRIGGER fail_land_inventory BEFORE INSERT ON items BEGIN SELECT RAISE(FAIL, 'test failure'); END;").unwrap();
     claim_at(&game, &auth, "Settler", 1, 1.0, 1.0).await;
     rejected(&mut rx, "could not be saved");
     assert_eq!(
@@ -1347,7 +1347,7 @@ async fn land_tax_account_transfers_persist_and_reject_invalid_requests() {
         .unwrap()
         .position
         .x = 1.0;
-    conn.execute_batch("CREATE TRIGGER fail_tax_inventory BEFORE INSERT ON character_items BEGIN SELECT RAISE(FAIL, 'test failure'); END;").unwrap();
+    conn.execute_batch("CREATE TRIGGER fail_tax_inventory BEFORE INSERT ON items BEGIN SELECT RAISE(FAIL, 'test failure'); END;").unwrap();
     game.land_account_action(&owner, &steward, Some((100, true)), &auth)
         .await;
     assert_eq!(game.player_gold.read().await[&owner], 5_000);
@@ -1411,7 +1411,7 @@ async fn land_tax_rollover_exemption_recovery_and_restart_are_consistent() {
     assert_eq!((gold, state.treasury, state.missed), (6000, 4000, 2));
     let mut failed_save = game.get_player_save_data(&pid("Settler")).await.unwrap();
     failed_save.gold = gold;
-    conn.execute_batch("CREATE TRIGGER reject_recovery_inventory BEFORE INSERT ON character_items BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
+    conn.execute_batch("CREATE TRIGGER reject_recovery_inventory BEFORE INSERT ON items BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
     assert!(auth
         .transfer_land_gold(failed_save, &rows, 2000, true)
         .is_err());

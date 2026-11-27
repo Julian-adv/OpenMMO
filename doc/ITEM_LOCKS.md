@@ -15,7 +15,7 @@
 - 거래에 제시했거나 노점에 진열한 아이템은 먼저 회수해야 잠금을 변경할 수 있다. 거래·노점 판매의 최종 처리 시점에도 잠금을 다시 검사한다.
 - 재접속 후에도 잠금이 유지된다. 기존 아이템은 잠금 해제 상태로 시작한다.
 
-`ItemInstance.locked`는 `character_items.locked`, `estate_chest_items.locked`에 저장된다. 잠금 상태가 다른 스택은 합쳐지지 않는다. 메시지 `SetItemLocked { instance_id, locked }`는 본인이 소유한 가방·장비 아이템에만 적용된다. 프로토콜 버전은 69이며 배포 시 원격 agent-client도 함께 갱신해야 한다.
+`ItemInstance.locked`는 `items.locked`(가방·창고·압수품 공용 표)에 저장된다. 잠금 상태가 다른 스택은 합쳐지지 않는다. 메시지 `SetItemLocked { instance_id, locked }`는 본인이 소유한 가방·장비 아이템에만 적용된다. 프로토콜 버전은 69이며 배포 시 원격 agent-client도 함께 갱신해야 한다.
 
 ## 바닥 이동 기록
 

@@ -20,6 +20,71 @@ pub struct ItemRow {
     pub item_id: Option<u64>,
 }
 
+/// Who holds a row of `items`: a bag, an estate chest or the guard's impound.
+#[derive(Clone, Copy)]
+pub(crate) enum ItemOwner<'a> {
+    Bag(i64),
+    Chest(i64),
+    Impound(&'a str),
+}
+
+/// One held unit as `put_item` writes it.
+pub(crate) struct HeldItem<'a> {
+    pub item_def_id: &'a str,
+    pub quantity: u32,
+    pub equip_slot: Option<&'a str>,
+    pub enchant: i32,
+    pub cape_color: Option<&'a str>,
+    pub cape_texture: Option<&'a str>,
+    pub locked: bool,
+    pub charged: bool,
+    pub item_id: Option<u64>,
+}
+
+/// Insert a held unit. A lasting id saved under another owner moves here:
+/// a unit dropped by one player and picked up by another before the first
+/// one's next save, or one going from a bag into a chest in one transaction.
+pub(crate) fn put_item(
+    conn: &Connection,
+    owner: ItemOwner,
+    item: &HeldItem,
+) -> Result<(), rusqlite::Error> {
+    let (character_id, chest_id, account_name) = match owner {
+        ItemOwner::Bag(id) => (Some(id), None, None),
+        ItemOwner::Chest(id) => (None, Some(id), None),
+        ItemOwner::Impound(account) => (None, None, Some(account)),
+    };
+    conn.prepare_cached(
+        "INSERT INTO items
+            (character_id, chest_id, account_name, item_def_id, quantity, equip_slot, enchant,
+             cape_color, cape_texture, locked, charged, item_id)
+         VALUES (:character_id, :chest_id, :account_name, :item_def_id, :quantity, :equip_slot,
+             :enchant, :cape_color, :cape_texture, :locked, :charged, :item_id)
+         ON CONFLICT(item_id) WHERE item_id IS NOT NULL DO UPDATE SET
+            character_id = excluded.character_id, chest_id = excluded.chest_id,
+            account_name = excluded.account_name, item_def_id = excluded.item_def_id,
+            quantity = excluded.quantity, equip_slot = excluded.equip_slot,
+            enchant = excluded.enchant, cape_color = excluded.cape_color,
+            cape_texture = excluded.cape_texture, locked = excluded.locked,
+            charged = excluded.charged",
+    )?
+    .execute(rusqlite::named_params! {
+        ":character_id": character_id,
+        ":chest_id": chest_id,
+        ":account_name": account_name,
+        ":item_def_id": item.item_def_id,
+        ":quantity": item.quantity,
+        ":equip_slot": item.equip_slot,
+        ":enchant": item.enchant,
+        ":cape_color": item.cape_color,
+        ":cape_texture": item.cape_texture,
+        ":locked": item.locked,
+        ":charged": item.charged,
+        ":item_id": item.item_id.map(|id| id as i64),
+    })?;
+    Ok(())
+}
+
 /// A permanently learned skill.
 #[derive(Debug, Clone)]
 pub struct SkillRow {
@@ -122,13 +187,7 @@ impl AuthService {
         conn: &Connection,
         inventories: impl IntoIterator<Item = (i64, &'a [ItemRow])>,
     ) -> Result<(), rusqlite::Error> {
-        let mut delete = conn.prepare("DELETE FROM character_items WHERE character_id = ?1")?;
-        let mut insert = conn.prepare(
-            "INSERT INTO character_items \
-             (character_id, item_def_id, quantity, equip_slot, enchant, cape_color, \
-              cape_texture, locked, item_id) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
-        )?;
+        let mut delete = conn.prepare("DELETE FROM items WHERE character_id = ?1")?;
         let mut update_enchant = conn.prepare(
             "UPDATE characters SET weapon_enchant = ?2, armor_enchant = ?3 WHERE id = ?1",
         )?;
@@ -137,17 +196,21 @@ impl AuthService {
         for (character_id, items) in inventories {
             delete.execute(params![character_id])?;
             for item in items {
-                insert.execute(params![
-                    character_id,
-                    item.item_def_id,
-                    item.quantity,
-                    item.equip_slot,
-                    item.enchant,
-                    item.cape_color,
-                    item.cape_texture,
-                    item.locked,
-                    item.item_id.map(|id| id as i64)
-                ])?;
+                put_item(
+                    conn,
+                    ItemOwner::Bag(character_id),
+                    &HeldItem {
+                        item_def_id: &item.item_def_id,
+                        quantity: item.quantity,
+                        equip_slot: item.equip_slot.as_deref(),
+                        enchant: item.enchant,
+                        cape_color: item.cape_color.as_deref(),
+                        cape_texture: item.cape_texture.as_deref(),
+                        locked: item.locked,
+                        charged: false,
+                        item_id: item.item_id,
+                    },
+                )?;
             }
             let mut weapon_enchant = 0;
             let mut armor_slots = HashMap::new();
@@ -238,10 +301,8 @@ impl AuthService {
         let last: i64 = conn.query_row(
             "SELECT MAX(id) FROM (
                 SELECT last_issued AS id FROM item_id_counter
-                UNION ALL SELECT MAX(item_id) FROM character_items
-                UNION ALL SELECT MAX(item_id) FROM estate_chest_items
+                UNION ALL SELECT MAX(item_id) FROM items WHERE item_id IS NOT NULL
                 UNION ALL SELECT MAX(item_id) FROM estate_chests
-                UNION ALL SELECT MAX(item_id) FROM guard_impound_goods
                 UNION ALL SELECT MAX(item_id) FROM estate_defense_trophies
                 UNION ALL SELECT 0
             )",
@@ -425,7 +486,7 @@ impl AuthService {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(
             "SELECT item_def_id, quantity, equip_slot, enchant, cape_color, cape_texture, locked, \
-             item_id FROM character_items WHERE character_id = ?1",
+             item_id FROM items WHERE character_id = ?1",
         )?;
         let rows = stmt
             .query_map(params![character_id], |row| {

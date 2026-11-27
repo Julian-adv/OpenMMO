@@ -238,7 +238,11 @@ async fn furnished_estate(
         .await;
     let chest = auth.load_estate_chests().unwrap().remove(0);
     let conn = rusqlite::Connection::open(&path).unwrap();
-    conn.execute("INSERT INTO estate_chest_items(chest_id,item_def_id,quantity,enchant) VALUES (?1,'apple',3,0)", [chest.id]).unwrap();
+    conn.execute(
+        "INSERT INTO items(chest_id,item_def_id,quantity,enchant) VALUES (?1,'apple',3,0)",
+        [chest.id],
+    )
+    .unwrap();
     game.edit_fence(
         &pid("Builder"),
         onlinerpg_shared::fence::FenceEdge {
@@ -291,9 +295,12 @@ async fn sixth_missed_tax_removes_estate_buildings_storage_and_runtime_state() {
         .nearby(&pos3(21.0, 5.0, 21.0))
         .is_empty());
     assert_eq!(
-        conn.query_row("SELECT COUNT(*) FROM estate_chest_items", [], |row| row
-            .get::<_, i64>(0))
-            .unwrap(),
+        conn.query_row(
+            "SELECT COUNT(*) FROM items WHERE chest_id IS NOT NULL",
+            [],
+            |row| row.get::<_, i64>(0)
+        )
+        .unwrap(),
         0
     );
     assert!(auth.get_character_for_account(&account, character).is_ok());
@@ -323,12 +330,7 @@ async fn last_character_keeps_estate_while_pending_and_removes_it_when_deleted()
     assert!(game.estate_chests.read().await.get(chest).is_none());
     assert!(!game.passability_read().contains_key(&house));
     let conn = rusqlite::Connection::open(path).unwrap();
-    for table in [
-        "land_estates",
-        "land_plots",
-        "estate_chest_items",
-        "land_fences",
-    ] {
+    for table in ["land_estates", "land_plots", "items", "land_fences"] {
         assert_eq!(
             conn.query_row(&format!("SELECT COUNT(*) FROM {table}"), [], |row| row
                 .get::<_, i64>(0))

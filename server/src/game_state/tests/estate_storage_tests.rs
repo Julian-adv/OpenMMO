@@ -1264,7 +1264,7 @@ async fn failed_furniture_checkout_save_refunds_gold_and_keeps_the_bag() {
     ]})).await.unwrap();
     let original = game.get_player_inventory(&id).await.unwrap();
     let db = rusqlite::Connection::open(path).unwrap();
-    db.execute_batch("CREATE TRIGGER fail_items BEFORE INSERT ON character_items BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
+    db.execute_batch("CREATE TRIGGER fail_items BEFORE INSERT ON items BEGIN SELECT RAISE(ABORT, 'test failure'); END;").unwrap();
     game.checkout_furniture(
         &id,
         vec![FurnitureOrderLine {
