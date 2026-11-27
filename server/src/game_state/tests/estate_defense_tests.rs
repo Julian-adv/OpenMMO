@@ -266,6 +266,36 @@ async fn a_raider_by_the_banner_with_nobody_to_fight_strikes_it() {
 }
 
 #[tokio::test]
+async fn a_raider_marches_with_nobody_near() {
+    let (game, auth, _rx) = lord("defense_far_side").await;
+    game.blow_war_horn(&pid("Lord"), 2, &auth).await;
+    tick(&game, &auth, 32).await;
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Lord"))
+        .unwrap()
+        .position = pos3(BANNER.0 + 40.0, 5.0, BANNER.1);
+    let raider = raiders(&game).await.remove(0);
+    let start = pos3(BANNER.0 - 8.0, 5.0, BANNER.1 + 6.0);
+    game.monsters
+        .write()
+        .await
+        .get_mut(&raider.id)
+        .unwrap()
+        .position = start;
+    for _ in 0..20 {
+        game.tick_monster_ai_by(200.0).await;
+    }
+    let banner = pos3(BANNER.0, 5.0, BANNER.1);
+    let now = game.monsters.read().await.get(&raider.id).unwrap().position;
+    assert!(
+        now.dist_xz_sq(&banner) < start.dist_xz_sq(&banner) - 1.0,
+        "far from everyone, it still walks on the banner: {now:?}"
+    );
+}
+
+#[tokio::test]
 async fn a_wiped_defense_disgraces_the_lord() {
     let (game, auth, mut rx) = lord("defense_wiped").await;
     game.blow_war_horn(&pid("Lord"), 2, &auth).await;

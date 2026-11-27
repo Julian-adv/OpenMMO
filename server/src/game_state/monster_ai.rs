@@ -247,9 +247,10 @@ struct Active {
     floor_level: i8,
     position: Position,
     players: Vec<NearbyPlayer>,
-    /// An invisible player is near: tick even with no one to target, so a
-    /// chase they broke ends on their screen instead of freezing mid-run.
-    ghost_near: bool,
+    /// Tick even with no one to target: an invisible player is near, so a
+    /// chase they broke ends on their screen instead of freezing mid-run, or
+    /// it is a raider marching on its banner.
+    tick_alone: bool,
 }
 
 impl super::GameState {
@@ -498,8 +499,9 @@ impl super::GameState {
                 {
                     players.retain(|p| !sealed.contains(&p.id));
                 }
-                let ghost_near = players.is_empty() && ghost_near(&m.position, m.floor_level);
-                if players.is_empty() && !ghost_near {
+                let tick_alone = players.is_empty()
+                    && (m.siege.is_some() || ghost_near(&m.position, m.floor_level));
+                if players.is_empty() && !tick_alone {
                     continue;
                 }
                 if m.state.is_stationary() {
@@ -529,7 +531,7 @@ impl super::GameState {
                     floor_level: m.floor_level,
                     position: m.position,
                     players,
-                    ghost_near,
+                    tick_alone,
                 });
             }
             (active, standing)
@@ -599,7 +601,7 @@ impl super::GameState {
                     }
                 }
             }
-            active.retain(|a| !a.players.is_empty() || a.ghost_near);
+            active.retain(|a| !a.players.is_empty() || a.tick_alone);
         }
         active.sort_unstable_by(|a, b| a.id.cmp(&b.id));
         brains.tick_gen += 1;

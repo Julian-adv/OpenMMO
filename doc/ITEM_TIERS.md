@@ -132,6 +132,9 @@ amulet_of_life_saving·ring_of_regeneration은 성능이 강력해 확정 파밍
 - [GATHERING.md](GATHERING.md)의 `lumber_axe`는 이 희소·거래템 트랙이 아니라
   기존 전역 보너스 테이블의 **1% 실용품 월드 드랍**이다. 상점에서도 판매하며,
   `chestTier` 정규 풀에는 넣지 않는다.
+- [영지 수호전](ESTATE_DEFENSE.md)의 도발의 뿔나팔 네 등급(`war_horn_1`~`4`)은
+  `data-src/world_drop.csv`의 월드 드랍이다. 잡은 몬스터의 레벨대로 등급이 갈리고
+  확률은 0.025%다. 상점에서는 팔지 않는다.
 
 ### 방패 배치
 
