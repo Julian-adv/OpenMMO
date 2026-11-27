@@ -601,6 +601,7 @@ pub(super) fn make_monster(id: &str, position: Position, floor_level: i8) -> cra
         level_override: None,
         aggressive: false,
         dormant: false,
+        scale: None,
         lifecycle: MonsterLifecycle::Ambient,
         last_attack_at: 0,
         siege: None,

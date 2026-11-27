@@ -234,6 +234,7 @@ class MonsterManager {
       maxHealth: monster.max_health ?? 10,
       floorLevel: monster.floor_level ?? 0,
       dormant: !spawnDead && !!monster.dormant,
+      scale: monster.scale ?? undefined,
     }
     this.monsters.set(monster.id, record)
     const { x, y, z } = monster.position

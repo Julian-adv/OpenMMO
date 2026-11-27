@@ -1279,5 +1279,8 @@
   "server.estateDefense.fell": "깃발이 쓰러졌습니다.",
   "server.estateDefense.wiped": "지키는 사람이 아무도 남지 않아 깃발이 쓰러졌습니다.",
   "server.estateDefense.timedOut": "시간이 다 되어 깃발이 쓰러졌습니다.",
-  "server.estateDefense.disgraced": "깃발을 잃었습니다. 10일 동안 '깃발을 빼앗긴 자'의 오명을 씁니다."
+  "server.estateDefense.disgraced": "깃발을 잃었습니다. 10일 동안 '깃발을 빼앗긴 자'의 오명을 씁니다.",
+  "estateDefense.wave": "웨이브 {{wave}}/{{total}}",
+  "estateDefense.nextWave": "다음 웨이브 {{seconds}}초",
+  "estateDefense.banner": "깃발"
 }

@@ -10,7 +10,7 @@
     takeTeleportEffects,
     type TeleportEffect,
   } from '../../stores/teleportEffectStore'
-  import { TeleportEffectSystem } from '../../effects/teleport'
+  import { freeOrOldest, TeleportEffectSystem } from '../../effects/teleport'
   import { unwrapWorldXNear } from '../../terrain/world-wrap'
 
   let { currentPlayer }: { currentPlayer: LocalPlayer | null } = $props()
@@ -57,12 +57,7 @@
         }
         continue
       }
-      const slot =
-        slots.find((entry) => !entry.event) ??
-        slots.reduce((oldest, entry) =>
-          entry.event!.startedAt < oldest.event!.startedAt ? entry : oldest
-        )
-      slot.event = event
+      freeOrOldest(slots).event = event
     }
     const floor =
       $currentDungeonDepth > 0

@@ -1279,5 +1279,8 @@
   "server.estateDefense.fell": "旗が倒れました。",
   "server.estateDefense.wiped": "守る者が誰も残らず、旗が倒れました。",
   "server.estateDefense.timedOut": "時間切れで旗が倒れました。",
-  "server.estateDefense.disgraced": "旗を失いました。10日間「旗を奪われた者」の汚名を負います。"
+  "server.estateDefense.disgraced": "旗を失いました。10日間「旗を奪われた者」の汚名を負います。",
+  "estateDefense.wave": "ウェーブ {{wave}}/{{total}}",
+  "estateDefense.nextWave": "次のウェーブまで {{seconds}}秒",
+  "estateDefense.banner": "旗"
 }

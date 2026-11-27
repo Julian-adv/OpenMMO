@@ -315,6 +315,9 @@ pub struct Monster {
     /// Stands as stone until a player comes close or strikes it.
     #[serde(default)]
     pub dormant: bool,
+    /// Model scale on top of its type's.
+    #[serde(default)]
+    pub scale: Option<f32>,
     /// Server-only; never on the wire.
     #[serde(skip)]
     pub lifecycle: MonsterLifecycle,

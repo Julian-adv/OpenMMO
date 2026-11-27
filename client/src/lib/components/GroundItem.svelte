@@ -28,6 +28,7 @@
   import { getItemDef } from '../data/itemDefs'
   import { getWeaponModelPath } from '../utils/modelPaths'
   import { loadGLB } from '../utils/gltfCache'
+  import { bindClipOnce } from '../utils/clipOnce'
   import { loadIconTexture } from '../utils/iconTextureCache'
   import { createRng } from '../utils/simplex-noise'
   import { sparkSeed, sparksAt } from '../utils/sparkles'
@@ -151,20 +152,6 @@
    *  return the mixer. The clip is node-based TRS (no skeleton), so the clone's
    *  named nodes bind directly. Pass `holdAtEnd` to jump straight to the settled
    *  pose (used for the glow outline, which we don't animate frame-by-frame). */
-  function bindClipOnce(
-    scene: THREE.Object3D,
-    clip: THREE.AnimationClip,
-    holdAtEnd: boolean
-  ): THREE.AnimationMixer {
-    const mixer = new THREE.AnimationMixer(scene)
-    const action = mixer.clipAction(clip)
-    action.loop = THREE.LoopOnce
-    action.clampWhenFinished = true
-    action.play()
-    if (holdAtEnd) mixer.setTime(clip.duration)
-    return mixer
-  }
-
   function getTerrainAlignmentQuaternion(
     worldX: number,
     worldY: number,

@@ -129,7 +129,7 @@ async fn holding_the_banner_through_five_waves_pays_the_defender() {
     game.blow_war_horn(&pid("Lord"), 2, &auth).await;
     assert_eq!(horns(&game).await, 1, "one defense per estate");
 
-    tick(&game, &auth, 30).await;
+    tick(&game, &auth, 32).await;
     let first = raiders(&game).await;
     assert_eq!(first.len(), 6);
     for raider in &first {
@@ -157,7 +157,7 @@ async fn holding_the_banner_through_five_waves_pays_the_defender() {
     );
     assert!(codes.contains(&"server.estateDefense.waveAll".to_string()));
 
-    tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+    tokio::time::sleep(std::time::Duration::from_millis(1900)).await;
     let potions = game
         .ground_items
         .read()
@@ -182,7 +182,7 @@ async fn holding_the_banner_through_five_waves_pays_the_defender() {
 async fn a_raider_on_the_banner_wears_it_down() {
     let (game, auth, mut rx) = lord("defense_breach").await;
     game.blow_war_horn(&pid("Lord"), 2, &auth).await;
-    tick(&game, &auth, 30).await;
+    tick(&game, &auth, 32).await;
     let raider = raiders(&game).await.remove(0);
     game.monsters
         .write()
@@ -217,7 +217,7 @@ async fn a_raider_on_the_banner_wears_it_down() {
 async fn a_wiped_defense_disgraces_the_lord() {
     let (game, auth, mut rx) = lord("defense_wiped").await;
     game.blow_war_horn(&pid("Lord"), 2, &auth).await;
-    tick(&game, &auth, 30).await;
+    tick(&game, &auth, 32).await;
     game.players
         .write()
         .await
@@ -252,7 +252,7 @@ async fn a_wiped_defense_disgraces_the_lord() {
 async fn raiders_march_on_the_banner() {
     let (game, auth, _rx) = lord("defense_march").await;
     game.blow_war_horn(&pid("Lord"), 2, &auth).await;
-    tick(&game, &auth, 30).await;
+    tick(&game, &auth, 32).await;
     let banner = pos3(BANNER.0, 5.0, BANNER.1);
     for _ in 0..40 {
         game.tick_monster_ai_by(200.0).await;
@@ -284,7 +284,7 @@ async fn a_practice_defense_needs_no_horn_and_leaves_no_disgrace() {
         .unwrap();
     assert!(reply.contains("defense_2"));
     assert_eq!(horns(&game).await, 2);
-    tick(&game, &auth, 30).await;
+    tick(&game, &auth, 32).await;
     assert_eq!(raiders(&game).await.len(), 6);
     game.players
         .write()

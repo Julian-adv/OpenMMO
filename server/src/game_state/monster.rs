@@ -190,11 +190,13 @@ impl super::GameState {
             level_override,
             aggressive,
             None,
+            None,
         )
         .await
     }
 
-    /// `spawn_monster` with the siege an estate-defense raider carries.
+    /// `spawn_monster` with the siege an estate-defense raider carries and a
+    /// model scale on top of its type's.
     #[allow(clippy::too_many_arguments)]
     pub(super) async fn spawn_monster_with(
         &self,
@@ -206,6 +208,7 @@ impl super::GameState {
         level_override: Option<u8>,
         aggressive: bool,
         siege: Option<onlinerpg_shared::Siege>,
+        scale: Option<f32>,
     ) -> Option<crate::types::Monster> {
         let def = self.monster_defs.get(&monster_type);
         let base_health = def.map(|d| d.max_health()).unwrap_or(10);
@@ -233,6 +236,7 @@ impl super::GameState {
             level_override,
             aggressive,
             dormant: def.is_some_and(|d| d.ambush_range > 0.0),
+            scale,
             lifecycle,
             last_attack_at: 0,
             siege,

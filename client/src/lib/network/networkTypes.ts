@@ -105,6 +105,8 @@ export type ServerMonster = {
   aggressive?: boolean
   /** Stands as stone until a player comes close or strikes it. */
   dormant?: boolean
+  /** Model scale on top of its type's. */
+  scale?: number | null
 }
 
 export type AccountCharacter = {

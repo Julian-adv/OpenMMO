@@ -43,6 +43,8 @@ export interface MonsterData {
   floorLevel?: number
   /** Stands frozen as stone, nameless, until it wakes. */
   dormant?: boolean
+  /** Scale on top of the type's, for a wave leader. */
+  scale?: number
   /** `Date.now()` of its last waking; it shakes off the stone from here. */
   wokeAt?: number
   /** A raid boss going back to sleep sinks from this `Date.now()`; the server

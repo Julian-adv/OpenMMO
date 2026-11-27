@@ -8,8 +8,9 @@ use crate::auth::{unix_now, AuthService, DefenseSite, Disgraces};
 use crate::estate_defense_defs::{grade_for_horn, DefenseGrade};
 use crate::types::{MonsterLifecycle, PlayerId, Position};
 use onlinerpg_shared::celestial::is_night;
+use onlinerpg_shared::messages::{EstateDefenseOutcome, EstateDefenseState};
 use onlinerpg_shared::pathfinding::{get_floor_y_base, is_circle_blocked_on_floor};
-use onlinerpg_shared::{MonsterState, Siege};
+use onlinerpg_shared::{MonsterState, ServerMessage, Siege};
 use onlinerpg_terrain::land::plot_addr;
 use rand::seq::SliceRandom;
 use rand::Rng;
@@ -56,28 +57,24 @@ const SIDE_SLIDE_DEG: [f32; 7] = [0.0, 10.0, -10.0, 20.0, -20.0, 30.0, -30.0];
 const RAIDER_SLIDE_DEG: [f32; 5] = [0.0, 5.0, -5.0, 10.0, -10.0];
 /// Raiders of one side spread this far apart along the circle.
 const RAIDER_SPACING_DEG: f32 = 9.0;
+/// A wave's summoning shows this long before its raiders stand.
+const RISE_SECS: u32 = 2;
+/// A held banner's chest rises this long before its lid opens; the shares
+/// spill as dungeon chests spill theirs, a lid swing later.
+const CHEST_OPEN_LEAD: Duration = Duration::from_millis(1200);
+const LEADER_SCALE: f32 = 1.3;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum Outcome {
-    Held,
-    BannerFell,
-    Wiped,
-    TimedOut,
-}
-
-impl Outcome {
-    fn notice(self) -> PlayerMessage {
-        let (code, message) = match self {
-            Self::Held => (
-                "held",
-                "The banner held. A treasure chest spills its spoils.",
-            ),
-            Self::Wiped => ("wiped", "No defender is left standing. The banner fell."),
-            Self::TimedOut => ("timedOut", "Time ran out. The banner fell."),
-            Self::BannerFell => ("fell", "The banner fell."),
-        };
-        localized(&format!("server.estateDefense.{code}"), message)
-    }
+fn outcome_notice(outcome: EstateDefenseOutcome) -> PlayerMessage {
+    let (code, message) = match outcome {
+        EstateDefenseOutcome::Held => (
+            "held",
+            "The banner held. A treasure chest spills its spoils.",
+        ),
+        EstateDefenseOutcome::Wiped => ("wiped", "No defender is left standing. The banner fell."),
+        EstateDefenseOutcome::TimedOut => ("timedOut", "Time ran out. The banner fell."),
+        EstateDefenseOutcome::BannerFell => ("fell", "The banner fell."),
+    };
+    localized(&format!("server.estateDefense.{code}"), message)
 }
 
 struct Raider {
@@ -101,6 +98,8 @@ pub(crate) struct EstateDefense {
     first_side: usize,
     elapsed: u32,
     next_wave: usize,
+    /// The announced wave still rising: when, and where its raiders stand.
+    rising: Option<(u32, Vec<(Position, bool)>)>,
     raiders: HashMap<String, Raider>,
     banner_hp: u8,
     dealt: HashMap<i64, u64>,
@@ -118,6 +117,30 @@ impl EstateDefense {
             .find(|s| self.sides[*s].is_some())
     }
 
+    /// The side `wave` comes from; `None` for the last, from every side.
+    fn wave_side(&self, wave: usize) -> Option<usize> {
+        (wave + 1 < WAVE_AT.len())
+            .then(|| self.landing_side((self.first_side + wave) % 4))
+            .flatten()
+    }
+
+    fn state(&self, estate_id: i64) -> EstateDefenseState {
+        EstateDefenseState {
+            estate_id,
+            banner: self.banner,
+            wave: self.next_wave as u8,
+            next_wave_in_ms: WAVE_AT
+                .get(self.next_wave)
+                .map(|at| at.saturating_sub(self.elapsed) * 1000),
+            next_side: self.wave_side(self.next_wave).map(|side| side as u8),
+            wave_total: WAVE_AT.len() as u8,
+            banner_hp: self.banner_hp,
+            banner_max: BANNER_DURABILITY,
+            ends_in_ms: TIME_LIMIT.saturating_sub(self.elapsed) * 1000,
+            monsters: self.grade.monsters.clone(),
+        }
+    }
+
     /// Spawn angles and leader flags of `wave`, and the side it comes from
     /// (`None` for the last, which comes from every side).
     fn wave_plan(&self, wave: usize) -> (Vec<(f32, bool)>, Option<usize>) {
@@ -132,9 +155,9 @@ impl EstateDefense {
             }
             landing
         };
-        if wave + 1 < WAVE_AT.len() {
-            let side = place((self.first_side + wave) % 4, WAVE_SIZE, false);
-            (plan, side)
+        if let Some(side) = self.wave_side(wave) {
+            place(side, WAVE_SIZE, false);
+            (plan, Some(side))
         } else {
             for side in 0..4 {
                 place(side, FINAL_WAVE_PER_SIDE, false);
@@ -224,6 +247,23 @@ impl GameState {
             .player_ids_within_position(banner, 0, ZONE_RADIUS_M)
             .await;
         self.notify(&ids, notice).await;
+    }
+
+    /// Show the defense's state to its family and everyone in the zone.
+    async fn publish_defense_state(&self, estate_id: i64) {
+        let Some((state, family_id)) = self
+            .defenses()
+            .get(&estate_id)
+            .map(|d| (d.state(estate_id), d.family_id))
+        else {
+            return;
+        };
+        let audience = self.defense_audience(family_id, &state.banner).await;
+        self.send_direct_message_to_players(
+            &audience,
+            ServerMessage::EstateDefenseStatus { state },
+        )
+        .await;
     }
 
     pub async fn blow_war_horn(&self, player_id: &PlayerId, instance_id: u64, auth: &AuthService) {
@@ -437,6 +477,7 @@ impl GameState {
             first_side: rand::thread_rng().gen_range(0..4),
             elapsed: 0,
             next_wave: 0,
+            rising: None,
             raiders: HashMap::new(),
             banner_hp: BANNER_DURABILITY,
             dealt: HashMap::new(),
@@ -475,6 +516,7 @@ impl GameState {
         .with_param("name", summoner_name);
         let audience = self.defense_audience(family_id, &banner).await;
         self.notify(&audience, &notice).await;
+        self.publish_defense_state(estate_id).await;
     }
 
     /// Family members online and anyone within the zone.
@@ -616,8 +658,8 @@ impl GameState {
         &self,
         estate_id: i64,
         defenders: &mut HashSet<PlayerId>,
-    ) -> Option<Outcome> {
-        let (banner, eligible, elapsed, wave) = {
+    ) -> Option<EstateDefenseOutcome> {
+        let (banner, eligible, elapsed, wave, rise) = {
             let mut defenses = self.defenses();
             let defense = defenses.get_mut(&estate_id)?;
             defense.elapsed += ESTATE_DEFENSE_TICK.as_secs() as u32;
@@ -627,15 +669,23 @@ impl GameState {
                     defense.next_wave += 1;
                     defense.next_wave - 1
                 });
+            let rise = defense
+                .rising
+                .take_if(|(at, _)| defense.elapsed >= *at)
+                .map(|(_, spawns)| spawns);
             (
                 defense.banner,
                 defense.eligible.clone(),
                 defense.elapsed,
                 wave,
+                rise,
             )
         };
+        if let Some(spawns) = rise {
+            self.raise_wave(estate_id, spawns).await;
+        }
         if let Some(wave) = wave {
-            self.spawn_wave(estate_id, wave).await;
+            self.announce_wave(estate_id, wave).await;
         }
 
         let living = self.living_defenders(&banner, &eligible).await;
@@ -700,7 +750,7 @@ impl GameState {
             }
             (
                 defense.banner_hp,
-                defense.next_wave >= WAVE_AT.len(),
+                defense.next_wave >= WAVE_AT.len() && defense.rising.is_none(),
                 defense.raiders.len(),
                 defense.empty_secs,
             )
@@ -714,15 +764,16 @@ impl GameState {
             .with_param("hp", banner_hp.to_string())
             .with_param("max", BANNER_DURABILITY.to_string());
             self.notify_zone(&banner, &notice).await;
+            self.publish_defense_state(estate_id).await;
         }
         if banner_hp == 0 {
-            Some(Outcome::BannerFell)
+            Some(EstateDefenseOutcome::BannerFell)
         } else if empty_secs >= WIPE_SECS {
-            Some(Outcome::Wiped)
+            Some(EstateDefenseOutcome::Wiped)
         } else if waves_done && raiders_left == 0 && elapsed >= EARLIEST_SUCCESS {
-            Some(Outcome::Held)
+            Some(EstateDefenseOutcome::Held)
         } else if elapsed >= TIME_LIMIT {
-            Some(Outcome::TimedOut)
+            Some(EstateDefenseOutcome::TimedOut)
         } else {
             None
         }
@@ -736,20 +787,69 @@ impl GameState {
         living
     }
 
-    async fn spawn_wave(&self, estate_id: i64, wave: usize) {
-        let Some((grade, banner, targets, (plan, side))) = self
+    /// Pick where `wave` rises, show its summoning, and hold its raiders
+    /// back `RISE_SECS`.
+    async fn announce_wave(&self, estate_id: i64, wave: usize) {
+        let Some((banner, (plan, side))) = self
             .defenses()
             .get(&estate_id)
-            .map(|d| (d.grade, d.banner, d.targets.clone(), d.wave_plan(wave)))
+            .map(|d| (d.banner, d.wave_plan(wave)))
+        else {
+            return;
+        };
+        let mut spawns = Vec::new();
+        for (angle, leader) in plan {
+            if let Some((_, position)) = self.first_ground(&banner, angle, &RAIDER_SLIDE_DEG).await
+            {
+                spawns.push((position, leader));
+            }
+        }
+        let positions = spawns.iter().map(|(p, _)| *p).collect();
+        if let Some(defense) = self.defenses().get_mut(&estate_id) {
+            defense.rising = Some((defense.elapsed + RISE_SECS, spawns));
+        }
+        let (code, side) = match side {
+            Some(side) => (
+                format!("server.estateDefense.wave.{}", SIDE_NAMES[side]),
+                SIDE_NAMES[side],
+            ),
+            None => ("server.estateDefense.waveAll".to_string(), "all"),
+        };
+        info!(
+            "Estate defense on estate {estate_id}: wave {} ({side})",
+            wave + 1
+        );
+        let zone = self
+            .player_ids_within_position(&banner, 0, ZONE_RADIUS_M)
+            .await;
+        self.send_direct_message_to_players(
+            &zone,
+            ServerMessage::EstateDefenseWave {
+                estate_id,
+                spawns: positions,
+                rise_in_ms: RISE_SECS * 1000,
+            },
+        )
+        .await;
+        let notice = localized(
+            &code,
+            format!("Wave {} of 5 comes from the {side}.", wave + 1),
+        )
+        .with_param("wave", (wave + 1).to_string());
+        self.notify(&zone, &notice).await;
+        self.publish_defense_state(estate_id).await;
+    }
+
+    async fn raise_wave(&self, estate_id: i64, spawns: Vec<(Position, bool)>) {
+        let Some((grade, banner, targets)) = self
+            .defenses()
+            .get(&estate_id)
+            .map(|d| (d.grade, d.banner, d.targets.clone()))
         else {
             return;
         };
         let mut spawned = Vec::new();
-        for (angle, leader) in plan {
-            let Some((_, position)) = self.first_ground(&banner, angle, &RAIDER_SLIDE_DEG).await
-            else {
-                continue;
-            };
+        for (position, leader) in spawns {
             let (monster_type, level) = if leader {
                 (grade.leader.clone(), grade.leader_level)
             } else {
@@ -778,13 +878,13 @@ impl GameState {
                         place_bonus: grade.place_bonus,
                         targets: targets.clone(),
                     }),
+                    leader.then_some(LEADER_SCALE),
                 )
                 .await
             {
                 spawned.push((monster.id, monster.max_health, leader));
             }
         }
-        let count = spawned.len();
         if let Some(defense) = self.defenses().get_mut(&estate_id) {
             for (id, max_health, leader) in spawned {
                 defense.spawned += 1;
@@ -798,26 +898,14 @@ impl GameState {
                 );
             }
         }
-        let (code, side) = match side {
-            Some(side) => (
-                format!("server.estateDefense.wave.{}", SIDE_NAMES[side]),
-                SIDE_NAMES[side],
-            ),
-            None => ("server.estateDefense.waveAll".to_string(), "all"),
-        };
-        info!(
-            "Estate defense on estate {estate_id}: wave {} ({side}), {count} raiders",
-            wave + 1
-        );
-        let notice = localized(
-            &code,
-            format!("Wave {} of 5 comes from the {side}.", wave + 1),
-        )
-        .with_param("wave", (wave + 1).to_string());
-        self.notify_zone(&banner, &notice).await;
     }
 
-    async fn end_estate_defense(&self, estate_id: i64, outcome: Outcome, auth: &AuthService) {
+    async fn end_estate_defense(
+        &self,
+        estate_id: i64,
+        outcome: EstateDefenseOutcome,
+        auth: &AuthService,
+    ) {
         let Some(defense) = self.defenses().remove(&estate_id) else {
             return;
         };
@@ -829,14 +917,24 @@ impl GameState {
             "Estate defense {} on estate {estate_id} ended: {outcome:?} after {}s, banner {}/{BANNER_DURABILITY}, {} raiders",
             defense.grade.id, defense.elapsed, defense.banner_hp, defense.spawned
         );
-        if outcome == Outcome::Held {
+        if outcome == EstateDefenseOutcome::Held {
             self.reward_defenders(&defense, auth).await;
         }
         let audience = self
             .defense_audience(defense.family_id, &defense.banner)
             .await;
-        self.notify(&audience, &outcome.notice()).await;
-        if outcome != Outcome::Held && !defense.practice {
+        self.send_direct_message_to_players(
+            &audience,
+            ServerMessage::EstateDefenseEnded {
+                estate_id,
+                banner: defense.banner,
+                outcome,
+                open_in_ms: CHEST_OPEN_LEAD.as_millis() as u32,
+            },
+        )
+        .await;
+        self.notify(&audience, &outcome_notice(outcome)).await;
+        if outcome != EstateDefenseOutcome::Held && !defense.practice {
             self.disgrace(defense.family_id, defense.summoner, auth)
                 .await;
         }
@@ -859,6 +957,7 @@ impl GameState {
                 .collect()
         };
         let tier_rolls = self.item_defs.chest_roll_table(defense.grade.chest_tier);
+        let mut spills = Vec::new();
         for &(player_id, character_id, dealt) in &shares {
             let items = roll_share(defense.grade, &tier_rolls, &mut rand::thread_rng());
             info!(
@@ -867,13 +966,21 @@ impl GameState {
                 self.player_name_of(&player_id).await,
             );
             self.record_item_drops(&items, false);
-            self.spawn_scattered_items(items, defense.banner, 0, 1.0, 3.0, player_id)
-                .await;
+            spills.push((player_id, items));
             if !defense.practice {
                 self.grant_title(character_id, &defense.grade.title, Some(auth))
                     .await;
             }
         }
+        let game = self.clone();
+        let banner = defense.banner;
+        tokio::spawn(async move {
+            tokio::time::sleep(CHEST_OPEN_LEAD + *super::combat::CHEST_LOOT_EJECT_DELAY).await;
+            for (player_id, items) in spills {
+                game.spawn_scattered_items(items, banner, 0, 1.0, 3.0, player_id)
+                    .await;
+            }
+        });
         info!(
             "Estate defense {}: {} of {} eligible earned a share; summoner {}",
             defense.grade.id,

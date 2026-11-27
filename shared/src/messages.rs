@@ -262,6 +262,37 @@ pub enum FieldRaidOutcome {
     Wiped,
 }
 
+/// How an estate defense ended (doc/ESTATE_DEFENSE.md).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EstateDefenseOutcome {
+    Held,
+    BannerFell,
+    Wiped,
+    TimedOut,
+}
+
+/// An open estate defense as its defenders' HUD shows it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EstateDefenseState {
+    pub estate_id: i64,
+    pub banner: Position,
+    /// Waves already risen, 0–5.
+    pub wave: u8,
+    /// Until the next wave rises; `None` once all have.
+    pub next_wave_in_ms: Option<u32>,
+    /// Screen side the next wave comes from: 0 up, 1 right, 2 down, 3 left;
+    /// `None` for every side.
+    pub next_side: Option<u8>,
+    pub wave_total: u8,
+    pub banner_hp: u8,
+    pub banner_max: u8,
+    /// Until the defense is lost on time.
+    pub ends_in_ms: u32,
+    /// Monster types it can bring, to load ahead of the first wave.
+    pub monsters: Vec<String>,
+}
+
 /// Why a `PlayerAttack` request was dropped. Deliberately coarse: a stale id
 /// must not reveal hidden monster state such as its floor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -2521,6 +2552,23 @@ pub enum ServerMessage {
         position: Position,
         wake_in_ms: u32,
     },
+    /// An estate defense's state, on its start and whenever it changes.
+    EstateDefenseStatus {
+        state: EstateDefenseState,
+    },
+    /// Raiders rise at `spawns` once `rise_in_ms` has passed.
+    EstateDefenseWave {
+        estate_id: i64,
+        spawns: Vec<Position>,
+        rise_in_ms: u32,
+    },
+    EstateDefenseEnded {
+        estate_id: i64,
+        banner: Position,
+        outcome: EstateDefenseOutcome,
+        /// A held banner's chest opens this long after it shows.
+        open_in_ms: u32,
+    },
     /// The raid failed and the boss at `position` sinks back into its
     /// dormant stand-in; its removal follows.
     FieldBossSleeping {
@@ -3313,6 +3361,9 @@ impl ServerMessage {
             | Self::MailNotice { .. }
             | Self::FieldRaidNotice { .. }
             | Self::FieldBossWaking { .. }
+            | Self::EstateDefenseStatus { .. }
+            | Self::EstateDefenseWave { .. }
+            | Self::EstateDefenseEnded { .. }
             | Self::FieldBossSleeping { .. }
             | Self::HousePlacementStarted { .. }
             | Self::HousePlacementResult { .. }

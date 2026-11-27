@@ -1279,5 +1279,8 @@
   "server.estateDefense.fell": "The banner fell.",
   "server.estateDefense.wiped": "No defender is left standing. The banner fell.",
   "server.estateDefense.timedOut": "Time ran out. The banner fell.",
-  "server.estateDefense.disgraced": "The banner was lost: for 10 days you are known as Who Lost the Banner."
+  "server.estateDefense.disgraced": "The banner was lost: for 10 days you are known as Who Lost the Banner.",
+  "estateDefense.wave": "Wave {{wave}}/{{total}}",
+  "estateDefense.nextWave": "Next wave in {{seconds}}s",
+  "estateDefense.banner": "Banner"
 }

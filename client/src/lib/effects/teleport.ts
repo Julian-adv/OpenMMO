@@ -10,6 +10,42 @@ import {
 } from '../stores/teleportEffectStore'
 
 const HEIGHT = 18
+/** How long a summoning pillar lingers once its monster stands. */
+const SUMMON_FADE_MS = 700
+
+export type BeamPalette = {
+  edge: string
+  core: string
+  ring: string
+  glow: string
+}
+
+const TELEPORT_PALETTE: BeamPalette = {
+  edge: '#69bfff',
+  core: '#f2ffff',
+  ring: '#a3e5ff',
+  glow: '#dcfaff',
+}
+
+/** Estate-defense raiders rise in a dark crimson pillar. */
+export const SUMMON_PALETTE: BeamPalette = {
+  edge: '#8a1030',
+  core: '#ff7a8a',
+  ring: '#b0203a',
+  glow: '#5a1a40',
+}
+
+/** The idle slot, or the one holding the oldest event. */
+export function freeOrOldest<S extends { event: { startedAt: number } | null }>(
+  slots: S[]
+): S {
+  return (
+    slots.find((slot) => !slot.event) ??
+    slots.reduce((oldest, slot) =>
+      slot.event!.startedAt < oldest.event!.startedAt ? slot : oldest
+    )
+  )
+}
 
 export class TeleportEffectSystem {
   readonly group = new THREE.Group()
@@ -25,7 +61,7 @@ export class TeleportEffectSystem {
   private sparks = new THREE.InstancedMesh(this.geometry, this.beamMaterial, 20)
   private dummy = new THREE.Object3D()
 
-  constructor() {
+  constructor(palette: BeamPalette = TELEPORT_PALETTE) {
     for (const material of [
       this.beamMaterial,
       this.ringMaterial,
@@ -40,7 +76,11 @@ export class TeleportEffectSystem {
     const distance = uv().x.sub(0.5).abs()
     const core = exp(distance.mul(28).pow(2).negate())
     const halo = exp(distance.mul(5).pow(2).negate())
-    this.beamMaterial.colorNode = mix(color('#69bfff'), color('#f2ffff'), core)
+    this.beamMaterial.colorNode = mix(
+      color(palette.edge),
+      color(palette.core),
+      core
+    )
     this.beamMaterial.opacityNode = core
       .mul(0.85)
       .add(halo.mul(0.25))
@@ -48,13 +88,13 @@ export class TeleportEffectSystem {
       .mul(float(1).sub(uv().y).smoothstep(0, 0.18))
       .mul(this.beamOpacity)
     const radius = uv().sub(0.5).length().mul(2)
-    this.ringMaterial.colorNode = color('#a3e5ff')
+    this.ringMaterial.colorNode = color(palette.ring)
     this.ringMaterial.opacityNode = exp(
       radius.sub(0.72).mul(25).pow(2).negate()
     )
       .add(exp(radius.mul(3).pow(2).negate()).mul(0.3))
       .mul(this.floorOpacity)
-    this.glowMaterial.colorNode = color('#dcfaff')
+    this.glowMaterial.colorNode = color(palette.glow)
     this.glowMaterial.opacityNode = float(1)
       .sub(radius)
       .max(0)
@@ -119,6 +159,46 @@ export class TeleportEffectSystem {
       )
       this.dummy.rotation.set(0, angle, 0)
       this.dummy.scale.set(0.12, 0.4 + (i % 3) * 0.3, 1)
+      this.dummy.updateMatrix()
+      this.sparks.setMatrixAt(i, this.dummy.matrix)
+    }
+    this.sparks.instanceMatrix.needsUpdate = true
+    return true
+  }
+
+  /** A pillar that stands for `riseMs` while a monster takes shape in its
+   * fog, then fades. False once it is gone. */
+  summon(elapsedMs: number, riseMs: number, camera: THREE.Camera) {
+    if (elapsedMs >= riseMs + SUMMON_FADE_MS) {
+      this.clear()
+      return false
+    }
+    this.group.visible = true
+    const time = Math.max(0, elapsedMs)
+    const grow = Math.min(1, time / 400)
+    const fade = Math.max(0, (time - riseMs) / SUMMON_FADE_MS)
+    const top = HEIGHT * (1 - (1 - grow) ** 3)
+    for (const beam of this.beams) {
+      beam.position.y = top / 2
+      beam.scale.set(1.4 * (1 - fade * 0.7), Math.max(0.01, top), 1)
+    }
+    this.beamOpacity.value = grow * (1 - fade) ** 1.3
+    this.floorOpacity.value = Math.min(1, time / 300) * (1 - fade)
+    this.ring.scale.setScalar(2.2 + Math.sin(time / 180) * 0.15 + fade * 2)
+    this.glow.scale.setScalar(4.5)
+    this.glow.quaternion.copy(camera.quaternion)
+    for (let i = 0; i < this.sparks.count; i++) {
+      const offset = i / this.sparks.count
+      const travel = (time / 900 + offset) % 1
+      const angle = i * 2.39996 + time / 1200
+      const radius = 0.6 + (i % 5) * 0.25
+      this.dummy.position.set(
+        Math.cos(angle) * radius,
+        0.1 + travel * 0.5,
+        Math.sin(angle) * radius
+      )
+      this.dummy.rotation.set(-Math.PI / 2, 0, angle)
+      this.dummy.scale.set(1.6 - travel, 0.7 - travel * 0.4, 1)
       this.dummy.updateMatrix()
       this.sparks.setMatrixAt(i, this.dummy.matrix)
     }

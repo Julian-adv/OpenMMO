@@ -303,18 +303,19 @@
 - 등급 표 `data-src/estate_defense.csv`(`server/src/estate_defense_defs.rs`), 뿔나팔 `war_horn_1`~`4`(`items.csv`, `useAction` `estate_defense`), 드롭 `world_drop.csv`의 `minLevel`·`maxLevel` 열.
 - 본체 `server/src/game_state/estate_defense.rs`: 사용 검사, 1초 틱의 시간표·함락·전멸·시간 초과, 상자 몫, 칭호, 오명, 배치 잠금 검사(`in_estate_defense_circle`), 수호 중 앰비언트 스폰 중지.
 - 영지·가주 확인과 오명 저장은 `server/src/auth_estate_defense.rs`(`characters.disgrace_until`, `families.disgrace_until`).
-- 웨이브 몬스터는 `MonsterLifecycle::EstateDefense`와 `Monster.siege`(서버 전용)를 단다. 행동 트리 `raider`(`behavior_trees.json`)가 깃발을 집으로 삼아 걸어오고, 8m 안의 자격자나 때린 사람과 싸운다. 명중 보너스는 등급의 `placeBonus`.
-- 오명은 1초 틱이 접속자에게 칭호로 씌우고 벗긴다. 가문 가입·탈퇴도 다음 틱에 반영된다.
+- 웨이브 몬스터는 `MonsterLifecycle::EstateDefense`와 `Monster.siege`(서버 전용)를 단다. 행동 트리 `raider`(`behavior_trees.json`)가 깃발을 집으로 삼아 걸어오고, 5m 안의 자격자나 때린 사람과 싸운다. 명중 보너스는 등급의 `placeBonus`.
+- 오명은 10초마다 오명 대상 가문·캐릭터의 접속자에게 칭호로 씌우고 벗긴다. 가문 가입·탈퇴도 그때 반영된다.
 - 관리자 `/warhorn N`: 선 자리에서 N등급 연습 수호전을 연다. 영지·밤·뿔나팔 없이 빈 터와 스폰 자리만 검사한다. 상자는 나오고 칭호와 오명은 없다.
 
-2단계 (미구현):
+2단계 (2026-11-27, 프로토콜 183):
 
-- 화면 알림은 지금 시스템 채팅뿐이다. HUD(웨이브, 남은 시간, 깃발 내구, 방향 화살표)와 전용 메시지가 필요하다.
-- 빛기둥·안개 등장 연출, 깃발 모델, 상자 개체. 지금은 성공하면 상자 없이 몫이 깃발 주변 땅에 바로 떨어진다.
-- 트로피 네 종(에셋 포함)과 지급, 뿔나팔 아이콘(지금은 귀환 주문서 아이콘을 빌려 쓴다).
-- 우두머리 크기 1.3배. 지금은 레벨만 +2다.
-- 등장 2초 동안 움직이지 않고 맞지 않는 것. 지금은 나타나자마자 걷는다.
-- 뿔나팔을 분 순간 그 등급 몬스터의 모델과 동작 변환을 클라이언트가 미리 해 둔다. 홉고블린·버그베어·오거·트롤은 플레이어 동작을 골격에 맞춰 변환하는데, 세션에서 처음 보는 몬스터는 몇 초 걸려 그동안 동작 없이 미끄러진다(2026-11-27 개발 서버에서 본 현상).
+- `EstateDefenseStatus`(시작·웨이브·함락 때), `EstateDefenseWave`(등장 지점과 2초), `EstateDefenseEnded`. 웨이브는 알린 뒤 2초 지나 몬스터가 선다.
+- HUD `EstateDefenseHud.svelte`: 웨이브 n/5, 다음 웨이브 초읽기, 깃발 내구, 남은 시간. 다음 웨이브 20초 전부터 그 방향 화면 가장자리에 화살표(마지막 웨이브는 네 방향).
+- `GameSceneEstateDefenseLayer.svelte`: 깃발 자리에 가문 깃발 모델, 등장 지점마다 검붉은 빛기둥과 바닥 안개(`TeleportEffectSystem`의 `SUMMON_PALETTE`·`summon`). 성공하면 빛기둥 속에 던전 보물 상자가 나타나 `open_in_ms`(1.2초) 뒤 열리고, 서버는 거기에 던전 상자와 같은 뚜껑 시간(`chest_loot_eject`)을 더해 몫을 뿌린다. 상자는 클릭하지 않고 저절로 열린다(기획의 "누구나 연다"를 단순화).
+- 시작 상태를 받으면 그 등급 몬스터의 모델(Monster.svelte와 같은 로더)과 플레이어 동작 변환을 미리 해 둔다(`utils/monsterPreload.ts`). 세션에서 처음 보는 공용 동작 몬스터가 변환 동안 미끄러지는 문제는 수호전 밖(던전의 홉고블린·버그베어 등)에도 남아 있다.
+- 우두머리 1.3배: `Monster.scale`(전송 필드, `spawn_monster_with`의 인자).
+
+남은 것: 트로피 네 종(에셋 포함)과 지급, 뿔나팔 아이콘(지금은 귀환 주문서 아이콘을 빌려 쓴다).
 
 ## 결정 기록
 

@@ -16,6 +16,7 @@
   import GameSceneMergerLayer from './GameSceneMergerLayer.svelte'
   import GameSceneRageAuraLayer from './GameSceneRageAuraLayer.svelte'
   import GameSceneTeleportLayer from './GameSceneTeleportLayer.svelte'
+  import GameSceneEstateDefenseLayer from './GameSceneEstateDefenseLayer.svelte'
   import GameSceneGroundEruptionLayer from './GameSceneGroundEruptionLayer.svelte'
   import { teleportHiddenPlayers } from '../../stores/teleportEffectStore'
   import { serverGameTime } from '../../stores/timeStore'
@@ -327,6 +328,7 @@
   let mergerLayer: GameSceneMergerLayer | undefined
   let rageAuraLayer: GameSceneRageAuraLayer | undefined
   let teleportLayer: GameSceneTeleportLayer | undefined
+  let estateDefenseLayer: GameSceneEstateDefenseLayer | undefined
   let groundEruptionLayer: GameSceneGroundEruptionLayer | undefined
   // One shadow light: enchantment, fire, local light, then nearby light.
   let unifiedTorchLight = $state<THREE.PointLight | undefined>(undefined)
@@ -691,6 +693,7 @@
 
   export function updateUnifiedTorchFlicker(deltaTime: number) {
     teleportLayer?.update()
+    estateDefenseLayer?.update()
     groundEruptionLayer?.update()
     enchantLayer?.update()
     levelUpLayer?.update()
@@ -759,6 +762,7 @@
 </script>
 
 <GameSceneTeleportLayer bind:this={teleportLayer} {currentPlayer} />
+<GameSceneEstateDefenseLayer bind:this={estateDefenseLayer} {currentPlayer} />
 <GameSceneGroundEruptionLayer bind:this={groundEruptionLayer} {currentPlayer} />
 <GameSceneEnchantSuccessLayer
   bind:this={enchantLayer}

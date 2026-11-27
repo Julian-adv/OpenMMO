@@ -59,11 +59,11 @@
     MONSTER_SKILLS,
     type MonsterSkillEffects,
   } from '../effects/monster-skills'
+  import { attackClipNames, getMonsterDef } from '../data/monsterDefs'
   import {
-    attackClipNames,
-    getMonsterDef,
-    splitClipNames,
-  } from '../data/monsterDefs'
+    monsterClipNames,
+    sharedPackGrounding,
+  } from '../utils/monsterPreload'
   import { getItemDef } from '../data/itemDefs'
   import { playMonsterSound } from '../managers/sfxManager'
   import {
@@ -109,6 +109,8 @@
     health: number
     maxHealth: number
     showHealth?: boolean
+    /** Scale on top of the type's, for a wave leader. */
+    scale?: number
     onHitFinished?: () => void
   }
 
@@ -133,6 +135,7 @@
     health,
     maxHealth,
     showHealth = false,
+    scale = 1,
     onHitFinished,
   }: Props = $props()
 
@@ -148,7 +151,7 @@
   // hand weapon are resolved once at init from the initial type, not reactively.
   const initialDef = untrack(() => getMonsterDef(type))
   const initialModel = initialDef?.model ?? 'monsters/scp939.glb'
-  const initialScale = initialDef?.scale ?? 1
+  const initialScale = (initialDef?.scale ?? 1) * untrack(() => scale)
   const isBoss = initialDef?.boss === true
   const gltf = useLoader(GLTFLoader, {
     extend: (loader) => loader.setMeshoptDecoder(MeshoptDecoder),
@@ -160,9 +163,7 @@
 
   // Every anim* field of the def, so only the clips this monster plays are
   // retargeted — the packs carry three times as many.
-  const usedClipNames = Object.entries(initialDef ?? {})
-    .filter(([key, value]) => key.startsWith('anim') && !!value)
-    .flatMap(([, value]) => splitClipNames(value as string))
+  const usedClipNames = monsterClipNames(initialDef)
 
   function findClip(name: string): THREE.AnimationClip | undefined {
     const clip =
@@ -812,10 +813,7 @@
             initialModel,
             $gltf.scene,
             usedClipNames,
-            {
-              restClip: initialDef.animDie,
-              restOffset: (initialDef.corpseGroundOffset ?? 0) / initialScale,
-            }
+            sharedPackGrounding(initialDef)
           ).then((clips) => {
             sharedClips = clips
             playAnimation()

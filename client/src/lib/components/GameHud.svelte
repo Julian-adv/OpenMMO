@@ -25,6 +25,7 @@
   import FishingPrompt from './FishingPrompt.svelte'
   import ChargeTargetPrompt from './ChargeTargetPrompt.svelte'
   import WatchDutyChip from './WatchDutyChip.svelte'
+  import EstateDefenseHud from './EstateDefenseHud.svelte'
   import DanceJoinPrompt from './DanceJoinPrompt.svelte'
   import TradeOfferToast from './TradeOfferToast.svelte'
   import OutfitOfferToast from './OutfitOfferToast.svelte'
@@ -299,6 +300,7 @@
     <InstrumentPanel />
     <NpcContextMenu />
     <WatchDutyChip />
+    <EstateDefenseHud />
     <!-- A watcher can only look. -->
     {#if !watchMode}
       <TradeWindow />

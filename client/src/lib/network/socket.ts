@@ -45,6 +45,7 @@ import {
 } from '../stores/partyStore'
 import { resetFriendStores } from '../stores/friendStore'
 import { resetFamilyStores } from '../stores/familyStore'
+import { resetEstateDefense } from '../stores/estateDefenseStore'
 import { resetPlayerTrade } from '../stores/playerTradeStore'
 import { resetLandClaimPreview, type LandClaim } from '../stores/landClaimStore'
 import { resetFences } from '../stores/fenceStore'
@@ -397,6 +398,7 @@ class NetworkManager {
       // Refresh the friend roster and presence after rejoining.
       resetFriendStores()
       resetFamilyStores()
+      resetEstateDefense()
       resetBookmarks()
       closeSeasonalEvents()
       // Disconnect cancels any open trade.

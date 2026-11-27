@@ -1279,5 +1279,8 @@
   "server.estateDefense.fell": "旗幟倒下了。",
   "server.estateDefense.wiped": "沒有守衛者還站著。旗幟倒下了。",
   "server.estateDefense.timedOut": "時間耗盡。旗幟倒下了。",
-  "server.estateDefense.disgraced": "旗幟已失。10天內你將背負「失旗者」的汙名。"
+  "server.estateDefense.disgraced": "旗幟已失。10天內你將背負「失旗者」的汙名。",
+  "estateDefense.wave": "第 {{wave}}/{{total}} 波",
+  "estateDefense.nextWave": "下一波 {{seconds}} 秒",
+  "estateDefense.banner": "旗幟"
 }

@@ -140,6 +140,7 @@
     droppedWeaponItemDefId={monster.droppedWeaponItemDefId}
     sinkAt={monster.sinkAt}
     dormant={monster.dormant}
+    scale={monster.scale}
     wokeAt={monster.wokeAt}
     health={monster.health}
     maxHealth={monster.maxHealth}

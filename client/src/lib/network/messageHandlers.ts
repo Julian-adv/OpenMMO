@@ -1,3 +1,8 @@
+import {
+  handleEstateDefenseEnded,
+  handleEstateDefenseStatus,
+  handleEstateDefenseWave,
+} from '../stores/estateDefenseStore'
 import { manaState } from '../stores/manaStore'
 import { tempHealth } from '../stores/playerHealthDisplay'
 import {
@@ -2477,6 +2482,23 @@ export function handleServerMessage(
 
     case 'FieldBossSleeping':
       handleFieldBossSleeping(data)
+      break
+
+    case 'EstateDefenseStatus':
+      handleEstateDefenseStatus(data.state)
+      break
+
+    case 'EstateDefenseWave':
+      handleEstateDefenseWave(data.spawns, data.rise_in_ms)
+      break
+
+    case 'EstateDefenseEnded':
+      handleEstateDefenseEnded(
+        data.estate_id,
+        data.banner,
+        data.outcome,
+        data.open_in_ms
+      )
       break
 
     case 'InteractionRejected': {
