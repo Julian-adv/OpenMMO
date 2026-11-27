@@ -793,6 +793,7 @@ impl super::GameState {
     /// logout's save.
     pub async fn flush_dirty_saves(&self, auth: &AuthService) {
         let _persistence = self.persistence_lock.lock().await;
+        self.save_item_ids(auth).await;
         self.flush_offline_stall_owners(auth).await;
         self.flush_weapon_enchant_failures(auth).await;
         self.flush_loot_tally(auth).await;

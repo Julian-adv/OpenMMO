@@ -26,6 +26,7 @@
   import ChargeTargetPrompt from './ChargeTargetPrompt.svelte'
   import WatchDutyChip from './WatchDutyChip.svelte'
   import EstateDefenseHud from './EstateDefenseHud.svelte'
+  import EstateTrophyWindow from './EstateTrophyWindow.svelte'
   import DanceJoinPrompt from './DanceJoinPrompt.svelte'
   import TradeOfferToast from './TradeOfferToast.svelte'
   import OutfitOfferToast from './OutfitOfferToast.svelte'
@@ -576,6 +577,8 @@
   {#if $impoundSession}
     <ImpoundDialog />
   {/if}
+
+  <EstateTrophyWindow />
 
   {#if $bookmarkDialog}
     <BookmarkDialog />

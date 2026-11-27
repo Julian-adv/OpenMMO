@@ -170,6 +170,9 @@ impl AuthService {
                 [],
             )?;
         }
+        if !columns.contains("item_id") {
+            conn.execute("ALTER TABLE character_items ADD COLUMN item_id INTEGER", [])?;
+        }
 
         Ok(())
     }

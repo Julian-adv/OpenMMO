@@ -1047,6 +1047,7 @@ impl super::GameState {
                                 cape_texture: item.cape_texture.clone(),
                                 first_instance_id: next_id,
                                 quantity: item.quantity,
+                                kept_id: Some(item.instance_id),
                             },
                         )
                         .ids_used;

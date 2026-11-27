@@ -1282,5 +1282,8 @@
   "server.estateDefense.disgraced": "旗帜已失。10天内你将背负“失旗者”的污名。",
   "estateDefense.wave": "第 {{wave}}/{{total}} 波",
   "estateDefense.nextWave": "下一波 {{seconds}} 秒",
-  "estateDefense.banner": "旗帜"
+  "estateDefense.banner": "旗帜",
+  "estateTrophy.defended": "{{date}}，守住了旗帜",
+  "estateTrophy.summoner": "号角：{{name}}",
+  "estateTrophy.defenders": "共同守卫：{{names}}"
 }

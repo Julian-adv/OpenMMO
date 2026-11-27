@@ -43,6 +43,7 @@ export function itemTooltip(
         def: params.def,
         enchant: params.item?.enchant ?? params.enchant,
         locked: params.item?.locked,
+        itemId: params.item?.instance_id,
         compare: displacedDef
           ? { def: displacedDef, enchant: displaced.enchant }
           : undefined,

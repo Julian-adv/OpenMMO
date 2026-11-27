@@ -670,3 +670,24 @@ async fn maximum_prices_and_wallets_settle_without_intermediate_overflow() {
         assert!(g.stalls.read().await[&market.owner].listings.is_empty());
     }
 }
+
+#[tokio::test]
+async fn a_dagger_bought_off_a_stall_keeps_its_id() {
+    let market = make_market("stall_dagger_id", 0, 1_000).await;
+    let game_state = &market.game_state;
+    give(game_state, &market.owner, bag_item(1, "peddler_stall", 1)).await;
+    give(game_state, &market.owner, bag_item(9, "dagger", 1)).await;
+    game_state.use_item(&market.owner, 1).await;
+    let id = stall_id(game_state, &market.owner).await;
+    game_state.list_stall_item(&market.owner, 9, 1, 100).await;
+    game_state
+        .buy_from_stall(&market.customer, id, buy(9, 1), &market.auth)
+        .await;
+    let inventories = game_state.inventories.read().await;
+    let dagger = inventories[&market.customer]
+        .bag
+        .iter()
+        .find(|i| i.item_def_id == "dagger")
+        .expect("the customer has the dagger");
+    assert_eq!(dagger.instance_id, 9);
+}

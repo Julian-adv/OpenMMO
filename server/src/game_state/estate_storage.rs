@@ -623,6 +623,7 @@ impl GameState {
                 &character,
                 &rows,
                 placed_item_def_id,
+                instance_id,
                 position,
                 snapped_rotation,
                 floor_level,
@@ -1075,12 +1076,13 @@ impl GameState {
             if line.qty == 0 || !seen_withdrawals.insert(line.instance_id) {
                 return Err("Invalid storage selection.");
             }
-            let item = state
+            let index = state
                 .items
                 .iter()
-                .find(|item| item.instance_id == line.instance_id)
-                .cloned()
+                .position(|item| item.instance_id == line.instance_id)
                 .ok_or("An item is no longer in the chest.")?;
+            let item = state.items[index].clone();
+            let item_id = state.item_ids.get(index).copied().flatten();
             if line.qty > item.quantity {
                 return Err("Invalid storage quantity.");
             }
@@ -1091,7 +1093,7 @@ impl GameState {
             if !stackable && line.qty != 1 {
                 return Err("Invalid storage quantity.");
             }
-            withdrawal_plans.push((item, line.qty, stackable));
+            withdrawal_plans.push((item, line.qty, stackable, item_id));
         }
 
         let storage_weight: f32 = state
@@ -1105,7 +1107,9 @@ impl GameState {
             .sum();
         let withdrawn_weight: f32 = withdrawal_plans
             .iter()
-            .map(|(item, quantity, _)| self.item_defs.weight(&item.item_def_id) * *quantity as f32)
+            .map(|(item, quantity, _, _)| {
+                self.item_defs.weight(&item.item_def_id) * *quantity as f32
+            })
             .sum();
         let final_storage_weight = storage_weight - withdrawn_weight + deposited_weight;
         if !deposits.is_empty() && final_storage_weight > state.max_weight + f32::EPSILON {
@@ -1122,7 +1126,7 @@ impl GameState {
             .sum();
         let withdrawn_carry_weight: f32 = withdrawal_plans
             .iter()
-            .map(|(item, quantity, _)| {
+            .map(|(item, quantity, _, _)| {
                 self.item_defs.weight_with(&item.item_def_id, armor_mult) * *quantity as f32
             })
             .sum();
@@ -1134,7 +1138,7 @@ impl GameState {
         }
 
         let mut inserts = Vec::with_capacity(withdrawal_plans.len());
-        for (item, quantity, stackable) in &withdrawal_plans {
+        for (item, quantity, stackable, item_id) in &withdrawal_plans {
             if *stackable
                 && inventory.bag.iter().any(|entry| {
                     entry.item_def_id == item.item_def_id
@@ -1156,6 +1160,7 @@ impl GameState {
                 cape_texture: item.cape_texture.clone(),
                 first_instance_id: next_id,
                 quantity: *quantity,
+                kept_id: *item_id,
             };
             next_id += insert.ids_reserved();
             inserts.push(insert);
@@ -1244,7 +1249,10 @@ impl GameState {
             .ok_or("This storage chest has an unknown type.")?;
         let max_weight = self.max_carry_weight(player_id).await;
         let armor_mult = self.armor_weight_mult(player_id).await;
-        let next_id = self.next_instance_id().await;
+        let next_id = match chest.item_id {
+            Some(id) => id,
+            None => self.next_instance_id().await,
+        };
         let _persistence = self.persistence_lock.lock().await;
         let mut character = self
             .get_player_save_data(player_id)
@@ -1333,6 +1341,7 @@ mod index_tests {
             text: None,
             family_id: None,
             emblem: None,
+            item_id: None,
         }
     }
 

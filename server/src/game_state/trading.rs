@@ -1196,6 +1196,7 @@ impl super::GameState {
                         cape_texture: purchase.cape_texture.clone(),
                         first_instance_id: next_id,
                         quantity: purchase.qty,
+                        kept_id: None,
                     },
                 )
                 .ids_used;
@@ -1863,6 +1864,7 @@ impl super::GameState {
                         cape_texture: plan.cape_texture.clone(),
                         first_instance_id: next_unit_id,
                         quantity: plan.qty,
+                        kept_id: None,
                     },
                 )
                 .ids_used;

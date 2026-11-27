@@ -604,8 +604,9 @@ async fn a_first_offence_returns_the_house_scroll_and_what_a_chest_held() {
     rusqlite::Connection::open(&db)
         .unwrap()
         .execute(
-            "INSERT INTO estate_chest_items(chest_id,item_def_id,quantity,enchant,locked)
-             VALUES (?1,'iron_sword',1,3,1), (?1,'apple',5,0,0)",
+            "INSERT INTO estate_chest_items(chest_id,item_def_id,quantity,enchant,locked,item_id)
+             VALUES (?1,'iron_sword',1,3,1,901), (?1,'iron_sword',1,3,1,902),
+                    (?1,'apple',5,0,0,NULL)",
             [chest.id],
         )
         .unwrap();
@@ -634,6 +635,7 @@ async fn a_first_offence_returns_the_house_scroll_and_what_a_chest_held() {
             ("storage_chest", 600),
             ("scroll_of_small_house", 5_000),
             ("iron_sword", 0),
+            ("iron_sword", 0),
             ("apple", 0)
         ]
     );
@@ -642,11 +644,21 @@ async fn a_first_offence_returns_the_house_scroll_and_what_a_chest_held() {
     assert_eq!(game.get_player_gold(&owner).await, 0);
     let inventories = game.inventories.read().await;
     let bag = &inventories[&owner].bag;
-    let sword = bag
+    let swords: Vec<_> = bag
         .iter()
-        .find(|item| item.item_def_id == "iron_sword")
+        .filter(|item| item.item_def_id == "iron_sword")
+        .map(|item| (item.instance_id, item.enchant, item.locked))
+        .collect();
+    assert_eq!(
+        swords,
+        [(901, 3, true), (902, 3, true)],
+        "ids kept, not merged"
+    );
+    let returned_chest = bag
+        .iter()
+        .find(|item| item.item_def_id == "storage_chest")
         .unwrap();
-    assert_eq!((sword.enchant, sword.locked), (3, true));
+    assert_eq!(returned_chest.instance_id, 60);
     for (item, quantity) in [
         ("storage_chest", 1),
         ("scroll_of_small_house", 1),

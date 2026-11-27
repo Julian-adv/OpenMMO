@@ -1723,6 +1723,7 @@ mod tests {
             cape_color: None,
             cape_texture: None,
             locked: false,
+            item_id: None,
         }
     }
 

@@ -1932,3 +1932,54 @@ async fn an_estate_mailbox_opens_the_inbox_within_reach() {
     game.open_mailbox(&id, mailbox, &auth).await;
     assert!(refused(drain(&mut rx)));
 }
+
+#[tokio::test]
+async fn a_stored_dagger_comes_back_with_its_id() {
+    let game = make_flat_world_game_state("stored_dagger_id");
+    let auth = make_test_auth("stored_dagger_id");
+    let character_id = storage_owner(&game, &auth, "Keeper").await;
+    let id = pid("Keeper");
+    game.inventories
+        .write()
+        .await
+        .get_mut(&id)
+        .unwrap()
+        .bag
+        .push(bag_item(77, "dagger", 1));
+    game.place_estate_chest(&id, 2, pos3(2.5, 5.0, 2.5), 0.0, 0, &auth)
+        .await;
+    let chest = auth.load_estate_chests().unwrap().remove(0);
+    game.transfer_estate_items(
+        &id,
+        chest.id,
+        vec![BagLineItem {
+            instance_id: 77,
+            qty: 1,
+        }],
+        vec![],
+        0,
+        &auth,
+    )
+    .await;
+    let state = auth
+        .estate_chest_state(chest.id, character_id)
+        .unwrap()
+        .unwrap();
+    assert_eq!(state.item_ids, vec![Some(77)]);
+    let stored = state.items[0].instance_id;
+    game.transfer_estate_items(
+        &id,
+        chest.id,
+        vec![],
+        vec![BagLineItem {
+            instance_id: stored,
+            qty: 1,
+        }],
+        state.revision,
+        &auth,
+    )
+    .await;
+    let inv = game.get_player_inventory(&id).await.unwrap();
+    let dagger = inv.bag.iter().find(|i| i.item_def_id == "dagger").unwrap();
+    assert_eq!(dagger.instance_id, 77);
+}

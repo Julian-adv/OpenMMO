@@ -913,6 +913,7 @@ impl GameState {
             insert.cape_color = stack.cape_color.clone();
             insert.cape_texture = stack.cape_texture.clone();
             insert.quantity = *units;
+            insert.kept_id = stack.item_id;
             insert.first_instance_id = self.reserve_instance_ids(insert.ids_reserved()).await;
             inserts.push(insert);
         }

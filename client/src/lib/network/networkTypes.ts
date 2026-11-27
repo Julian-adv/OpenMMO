@@ -440,6 +440,7 @@ export type ClientMessage =
       }
     }
   | { RecoverEstateChest: { chest_id: number } }
+  | { ViewEstateTrophy: { item_id: number } }
   | { LandAccount: { merchant_player_id: number } }
   | { ImpoundQuery: { npc_player_id: number } }
   | { ImpoundReclaim: { npc_player_id: number } }
@@ -560,6 +561,15 @@ export type EstateChest = {
   family_id?: number | null
   /** What a family banner shows while its estate stays with its family. */
   emblem?: Emblem | null
+  /** The lasting id of the item that was placed. */
+  item_id?: number | null
+}
+
+/** The defense behind one wall trophy. */
+export type EstateTrophyRecord = {
+  summoner: string
+  defended_on: { year: number; month: number; day: number }
+  defenders: string[]
 }
 
 export type EstateChestState = {

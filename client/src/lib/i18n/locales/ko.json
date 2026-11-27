@@ -1282,5 +1282,8 @@
   "server.estateDefense.disgraced": "깃발을 잃었습니다. 10일 동안 '깃발을 빼앗긴 자'의 오명을 씁니다.",
   "estateDefense.wave": "웨이브 {{wave}}/{{total}}",
   "estateDefense.nextWave": "다음 웨이브 {{seconds}}초",
-  "estateDefense.banner": "깃발"
+  "estateDefense.banner": "깃발",
+  "estateTrophy.defended": "{{date}}, 깃발을 지켜냄",
+  "estateTrophy.summoner": "뿔나팔: {{name}}",
+  "estateTrophy.defenders": "함께 지킨 이: {{names}}"
 }

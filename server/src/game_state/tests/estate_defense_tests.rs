@@ -171,6 +171,11 @@ async fn holding_the_banner_through_five_waves_pays_the_defender() {
         .count();
     assert_eq!(potions, 3);
     assert_eq!(bag_count(&game, &pid("Lord"), "trophy_orc_axes").await, 1);
+    let trophy = trophy_id(&game).await;
+    let record = auth.estate_trophy(trophy).unwrap().expect("trophy record");
+    assert_eq!(record.summoner, "Lord");
+    assert_eq!(record.defenders, vec!["Lord".to_string()]);
+    assert_eq!(record.defended_on.day, night().day);
     let character = game.character_id_of(&pid("Lord")).await.unwrap();
     assert!(auth
         .load_titles(character)
@@ -302,4 +307,64 @@ async fn a_practice_defense_needs_no_horn_and_leaves_no_disgrace() {
         .unwrap()
         .characters
         .contains_key(&character));
+}
+
+async fn trophy_id(game: &GameState) -> u64 {
+    game.inventories.read().await[&pid("Lord")]
+        .bag
+        .iter()
+        .find(|item| item.item_def_id == "trophy_orc_axes")
+        .map(|item| item.instance_id)
+        .expect("trophy in the bag")
+}
+
+#[tokio::test]
+async fn a_trophy_keeps_its_id_through_a_save_and_the_wall() {
+    let (game, auth, _rx) = lord("defense_trophy_id").await;
+    game.award_item(&pid("Lord"), "trophy_orc_axes").await;
+    let id = trophy_id(&game).await;
+    let character = game.character_id_of(&pid("Lord")).await.unwrap();
+
+    game.mark_inventory_dirty(&pid("Lord")).await;
+    game.flush_dirty_saves(&auth).await;
+    game.load_player_inventory(&pid("Lord"), character, &auth)
+        .await;
+    assert_eq!(trophy_id(&game).await, id, "reloaded from the database");
+
+    let spot = pos3(BANNER.0 + 2.0, 5.0, BANNER.1);
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Lord"))
+        .unwrap()
+        .position = spot;
+    game.place_estate_chest(&pid("Lord"), id, spot, 0.0, 0, &auth)
+        .await;
+    let placed = auth
+        .load_estate_chests()
+        .unwrap()
+        .into_iter()
+        .find(|chest| chest.item_def_id == "trophy_orc_axes")
+        .expect("trophy on the wall");
+    assert_eq!(placed.item_id, Some(id));
+    assert_eq!(bag_count(&game, &pid("Lord"), "trophy_orc_axes").await, 0);
+
+    game.recover_estate_chest(&pid("Lord"), placed.id, &auth)
+        .await;
+    assert_eq!(trophy_id(&game).await, id, "taken down again");
+
+    game.drop_items(
+        &pid("Lord"),
+        vec![onlinerpg_shared::messages::BagLineItem {
+            instance_id: id,
+            qty: 1,
+        }],
+    )
+    .await;
+    assert!(
+        game.ground_items.read().await.contains_key(&id),
+        "on the ground"
+    );
+    game.pickup_item(&pid("Lord"), id).await;
+    assert_eq!(trophy_id(&game).await, id, "picked up again");
 }

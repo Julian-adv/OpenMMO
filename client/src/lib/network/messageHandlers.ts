@@ -762,7 +762,8 @@ import {
   startEstateFurniturePlacement,
   applyEstateFurnitureEditResult,
 } from '../stores/estateFurniturePlacementStore'
-import type { EstateChest } from './networkTypes'
+import type { EstateChest, EstateTrophyRecord } from './networkTypes'
+import { receiveTrophyRecord } from '../stores/estateTrophyStore'
 import { TerrainSnapshots, type TerrainSnapshot } from './terrainSnapshots'
 import {
   furniturePurchasePending,
@@ -1302,6 +1303,13 @@ export function handleServerMessage(
       )
       break
     }
+
+    case 'EstateTrophyRecord':
+      receiveTrophyRecord(
+        data.item_id,
+        (data.record as EstateTrophyRecord | null) ?? null
+      )
+      break
 
     case 'FamilyStorageLog':
       familyStorageLog.set(

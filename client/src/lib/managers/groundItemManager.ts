@@ -97,6 +97,10 @@ class GroundItemManager {
   private pendingRemoval = new Set<number>()
 
   spawn(item: ServerGroundItem, options: SpawnOptions = {}) {
+    // A unit keeps its id when dropped again, so an earlier pickup of the
+    // same id must not remove it.
+    this.pickupInProgress.delete(item.instance_id)
+    this.pendingRemoval.delete(item.instance_id)
     const restingRotationY = Math.random() * Math.PI * 2
     const spawnAnimation = options.animateSpawn
       ? createSpawnAnimation(restingRotationY)

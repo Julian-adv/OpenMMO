@@ -1282,5 +1282,8 @@
   "server.estateDefense.disgraced": "旗を失いました。10日間「旗を奪われた者」の汚名を負います。",
   "estateDefense.wave": "ウェーブ {{wave}}/{{total}}",
   "estateDefense.nextWave": "次のウェーブまで {{seconds}}秒",
-  "estateDefense.banner": "旗"
+  "estateDefense.banner": "旗",
+  "estateTrophy.defended": "{{date}}、旗を守り抜いた",
+  "estateTrophy.summoner": "角笛: {{name}}",
+  "estateTrophy.defenders": "共に守った者: {{names}}"
 }

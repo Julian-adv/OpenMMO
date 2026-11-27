@@ -12,6 +12,13 @@
     weaponTypeLabel,
   } from '../data/itemDefs'
   import { inventoryStore } from '../stores/inventoryStore'
+  import {
+    isEstateTrophy,
+    requestTrophyRecord,
+    trophyRecords,
+  } from '../stores/estateTrophyStore'
+  import { networkManager } from '../network/socket'
+  import EstateTrophyRecordLines from './EstateTrophyRecordLines.svelte'
 
   interface Props {
     def: ItemDefinition
@@ -20,6 +27,8 @@
     side?: 'left' | 'right'
     anchor: DOMRect
     compare?: { def: ItemDefinition; enchant: number }
+    /** The hovered unit's lasting id, for a trophy's record. */
+    itemId?: number
   }
 
   // Mounted at document.body by the itemTooltip action; sits beside the
@@ -31,7 +40,18 @@
     side = 'right',
     anchor,
     compare,
+    itemId,
   }: Props = $props()
+
+  $effect(() => {
+    if (itemId !== undefined && isEstateTrophy(def.id))
+      requestTrophyRecord(itemId, (id) =>
+        networkManager.sendViewEstateTrophy(id)
+      )
+  })
+  const trophyRecord = $derived(
+    itemId === undefined ? null : $trophyRecords.get(itemId)
+  )
 
   const chosenAmmo = $derived(
     $inventoryStore.active_ammo
@@ -88,6 +108,11 @@
     <div class="tooltip-lock">{$t('item.locked')}</div>
   {/if}
   <div class="tooltip-desc">{itemDescription(def, $locale)}</div>
+  {#if trophyRecord}
+    <div class="tooltip-trophy">
+      <EstateTrophyRecordLines record={trophyRecord} />
+    </div>
+  {/if}
   <div class="tooltip-stats">
     <span>{$t('item.weight', { value: def.weight })}</span>
     {#if def.equipSlot}
@@ -210,5 +235,8 @@
   /* An empty quiver: the bow reads as its token die alone until it is fixed. */
   .tooltip-warn {
     color: #e08a8a;
+  }
+  .tooltip-trophy {
+    margin-top: 6px;
   }
 </style>

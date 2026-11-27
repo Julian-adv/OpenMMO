@@ -197,6 +197,7 @@ async fn prints_keep_otherwise_identical_capes_apart() {
                 cape_texture: texture,
                 first_instance_id: id,
                 quantity: 1,
+                kept_id: None,
             },
         );
     }

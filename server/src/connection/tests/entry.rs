@@ -409,6 +409,7 @@ async fn entering_with_a_stethoscope_on_shows_other_players_hp() {
         enchant: 0,
         cape_color: None,
         cape_texture: None,
+        item_id: None,
     });
     auth.save_batch(&[], &[(character.id, rows)], &[], &[], None)
         .unwrap();
@@ -534,6 +535,10 @@ async fn enter_game_restores_only_current_dungeon_visits() {
         assert_eq!(saved.gold, 123);
         let mut saved_inventory = auth.load_inventory(character.id).unwrap();
         saved_inventory.sort_by(|a, b| a.item_def_id.cmp(&b.item_def_id));
+        assert!(saved_inventory.iter().all(|row| row.item_id.is_some()));
+        saved_inventory
+            .iter_mut()
+            .for_each(|row| row.item_id = None);
         assert_eq!(saved_inventory, inventory);
     }
 }

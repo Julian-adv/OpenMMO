@@ -536,7 +536,7 @@ pub struct GameState {
     inventories: Arc<RwLock<HashMap<PlayerId, PlayerInventory>>>,
     /// Items dropped on the ground, keyed by instance_id.
     ground_items: Arc<RwLock<HashMap<u64, ServerGroundItem>>>,
-    /// Monotonically increasing counter for item instance IDs.
+    /// The next lasting item id (doc/ITEM_IDS.md).
     next_item_instance_id: Arc<RwLock<u64>>,
     /// Live haggled price modifiers granted by LLM NPCs (economy phase 2).
     deals: Arc<RwLock<HashMap<deals::DealKey, deals::DealEntry>>>,

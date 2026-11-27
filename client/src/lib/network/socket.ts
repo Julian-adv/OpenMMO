@@ -46,6 +46,7 @@ import {
 import { resetFriendStores } from '../stores/friendStore'
 import { resetFamilyStores } from '../stores/familyStore'
 import { resetEstateDefense } from '../stores/estateDefenseStore'
+import { resetTrophyRequests } from '../stores/estateTrophyStore'
 import { resetPlayerTrade } from '../stores/playerTradeStore'
 import { resetLandClaimPreview, type LandClaim } from '../stores/landClaimStore'
 import { resetFences } from '../stores/fenceStore'
@@ -399,6 +400,7 @@ class NetworkManager {
       resetFriendStores()
       resetFamilyStores()
       resetEstateDefense()
+      resetTrophyRequests()
       resetBookmarks()
       closeSeasonalEvents()
       // Disconnect cancels any open trade.
@@ -1083,6 +1085,10 @@ class NetworkManager {
 
   sendRecoverEstateChest(chestId: number) {
     this.sendMessage({ RecoverEstateChest: { chest_id: chestId } })
+  }
+
+  sendViewEstateTrophy(itemId: number) {
+    this.sendMessage({ ViewEstateTrophy: { item_id: itemId } })
   }
 
   sendImpoundQuery(npcPlayerId: number) {

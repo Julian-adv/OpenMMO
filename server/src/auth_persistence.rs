@@ -16,6 +16,8 @@ pub struct ItemRow {
     pub cape_color: Option<String>,
     /// Texture hash on a cape; `None` on everything else.
     pub cape_texture: Option<String>,
+    /// The lasting item id (doc/ITEM_IDS.md); `None` on rows saved before it.
+    pub item_id: Option<u64>,
 }
 
 /// A permanently learned skill.
@@ -124,8 +126,8 @@ impl AuthService {
         let mut insert = conn.prepare(
             "INSERT INTO character_items \
              (character_id, item_def_id, quantity, equip_slot, enchant, cape_color, \
-              cape_texture, locked) \
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+              cape_texture, locked, item_id) \
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         )?;
         let mut update_enchant = conn.prepare(
             "UPDATE characters SET weapon_enchant = ?2, armor_enchant = ?3 WHERE id = ?1",
@@ -143,7 +145,8 @@ impl AuthService {
                     item.enchant,
                     item.cape_color,
                     item.cape_texture,
-                    item.locked
+                    item.locked,
+                    item.item_id.map(|id| id as i64)
                 ])?;
             }
             let mut weapon_enchant = 0;
@@ -224,6 +227,48 @@ impl AuthService {
             }
         }
         tx.commit()?;
+        Ok(())
+    }
+
+    /// The highest lasting item id issued (doc/ITEM_IDS.md): the written
+    /// counter, or a larger id already saved if the server stopped before
+    /// writing it.
+    pub fn last_item_id(&self) -> Result<u64, AuthError> {
+        let conn = self.open_connection()?;
+        let last: i64 = conn.query_row(
+            "SELECT MAX(id) FROM (
+                SELECT last_issued AS id FROM item_id_counter
+                UNION ALL SELECT MAX(item_id) FROM character_items
+                UNION ALL SELECT MAX(item_id) FROM estate_chest_items
+                UNION ALL SELECT MAX(item_id) FROM estate_chests
+                UNION ALL SELECT MAX(item_id) FROM guard_impound_goods
+                UNION ALL SELECT MAX(item_id) FROM estate_defense_trophies
+                UNION ALL SELECT 0
+            )",
+            [],
+            |row| row.get(0),
+        )?;
+        Ok(last as u64)
+    }
+
+    pub(super) fn ensure_item_id_schema(conn: &Connection) -> Result<(), rusqlite::Error> {
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS item_id_counter (
+                id INTEGER PRIMARY KEY CHECK (id = 1),
+                last_issued INTEGER NOT NULL
+            )",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn write_last_item_id(&self, last: u64) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        conn.execute(
+            "INSERT INTO item_id_counter (id, last_issued) VALUES (1, ?1)
+             ON CONFLICT(id) DO UPDATE SET last_issued = MAX(last_issued, excluded.last_issued)",
+            [last as i64],
+        )?;
         Ok(())
     }
 
@@ -379,8 +424,8 @@ impl AuthService {
     pub fn load_inventory(&self, character_id: i64) -> Result<Vec<ItemRow>, AuthError> {
         let conn = self.open_connection()?;
         let mut stmt = conn.prepare(
-            "SELECT item_def_id, quantity, equip_slot, enchant, cape_color, cape_texture, locked \
-             FROM character_items WHERE character_id = ?1",
+            "SELECT item_def_id, quantity, equip_slot, enchant, cape_color, cape_texture, locked, \
+             item_id FROM character_items WHERE character_id = ?1",
         )?;
         let rows = stmt
             .query_map(params![character_id], |row| {
@@ -392,6 +437,7 @@ impl AuthService {
                     enchant: row.get(3)?,
                     cape_color: row.get(4)?,
                     cape_texture: row.get(5)?,
+                    item_id: row.get::<_, Option<u64>>(7)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

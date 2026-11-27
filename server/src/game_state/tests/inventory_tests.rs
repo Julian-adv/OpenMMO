@@ -20,6 +20,7 @@ fn insert(
             quantity: qty,
             cape_color: None,
             cape_texture: None,
+            kept_id: None,
         },
     )
     .ids_used

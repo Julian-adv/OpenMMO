@@ -52,7 +52,7 @@ mod field_raids;
 mod seasonal;
 #[path = "auth_statues.rs"]
 mod statues;
-pub(crate) use estate_defense::{DefenseSite, Disgraces};
+pub(crate) use estate_defense::{DefenseSite, Disgraces, TrophySite};
 pub(crate) use estate_storage::EstateDeposit;
 pub(crate) use family::{FamilyDeparture, FamilyEmblem, FamilyRoster};
 pub(crate) use statues::StatueRow;
@@ -227,6 +227,7 @@ impl AuthService {
         Self::ensure_titles_schema(&conn)?;
         Self::ensure_npc_outfits_schema(&conn)?;
         Self::ensure_trade_ledger_schema(&conn)?;
+        Self::ensure_item_id_schema(&conn)?;
         Self::ensure_gold_snapshots_schema(&conn)?;
         Self::ensure_server_starts_schema(&conn)?;
         Self::ensure_item_sales_schema(&conn)?;

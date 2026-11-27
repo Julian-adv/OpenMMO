@@ -1189,6 +1189,7 @@ mod tests {
             cape_color: None,
             cape_texture: None,
             locked: false,
+            item_id: None,
         };
         for id in 1..=20 {
             let account = match id {
@@ -1392,6 +1393,7 @@ mod tests {
             cape_color: None,
             cape_texture: None,
             locked: false,
+            item_id: None,
         };
         for id in 1..=14 {
             let account = match id {

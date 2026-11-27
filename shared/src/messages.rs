@@ -293,6 +293,15 @@ pub struct EstateDefenseState {
     pub monsters: Vec<String>,
 }
 
+/// The defense behind one wall trophy (doc/ESTATE_DEFENSE.md#트로피).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EstateTrophyRecord {
+    pub summoner: String,
+    pub defended_on: GameDateTime,
+    /// Who earned a share.
+    pub defenders: Vec<String>,
+}
+
 /// Why a `PlayerAttack` request was dropped. Deliberately coarse: a stale id
 /// must not reveal hidden monster state such as its floor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -1475,6 +1484,10 @@ pub enum ClientMessage {
     /// Settle a finished watch with lent gear that cannot be put back.
     WatchRackSettle {
         object_id: u32,
+    },
+    /// Ask for the defense behind a trophy, by its lasting item id.
+    ViewEstateTrophy {
+        item_id: u64,
     },
 }
 
@@ -3053,6 +3066,11 @@ pub enum ServerMessage {
     FamilyMergeProposal {
         proposal: crate::family::FamilyMergeProposal,
     },
+    /// Reply to `ViewEstateTrophy`; `None` when no defense is on record.
+    EstateTrophyRecord {
+        item_id: u64,
+        record: Option<EstateTrophyRecord>,
+    },
 }
 
 pub use crate::entity::PlayerId;
@@ -3305,6 +3323,7 @@ impl ServerMessage {
             | Self::FamilyState { .. }
             | Self::FamilyStorageLog { .. }
             | Self::FamilyMergeProposal { .. }
+            | Self::EstateTrophyRecord { .. }
             | Self::FamilyInviteReceived { .. }
             | Self::PartyPositions { .. }
             | Self::PartyVitals { .. }

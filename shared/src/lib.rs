@@ -334,7 +334,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// fields and messages.
 /// v181: operator schedules for seasonal events: `QuerySeasonalEvents`/`SetSeasonalEvent`,
 /// `SeasonalEvents` and `ObjectRegionsChanged`.
-pub const PROTOCOL_VERSION: u32 = 183;
+pub const PROTOCOL_VERSION: u32 = 184;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

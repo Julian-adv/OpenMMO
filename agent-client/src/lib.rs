@@ -260,6 +260,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::FamilyChatMessage { .. } => "FamilyChatMessage",
         ServerMessage::FamilyStorageLog { .. } => "FamilyStorageLog",
         ServerMessage::FamilyMergeProposal { .. } => "FamilyMergeProposal",
+        ServerMessage::EstateTrophyRecord { .. } => "EstateTrophyRecord",
         ServerMessage::HungerUpdate { .. } => "HungerUpdate",
         ServerMessage::ManaUpdate { .. } => "ManaUpdate",
         ServerMessage::TempHealthUpdate { .. } => "TempHealthUpdate",

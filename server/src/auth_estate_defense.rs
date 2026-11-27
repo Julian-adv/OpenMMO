@@ -3,6 +3,8 @@
 
 use super::{AuthError, AuthService};
 use onlinerpg_shared::family::FAMILY_RANK_HEAD;
+use onlinerpg_shared::messages::EstateTrophyRecord;
+use onlinerpg_shared::world::GameDateTime;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::collections::HashMap;
 
@@ -15,6 +17,13 @@ pub struct DefenseSite {
     pub family_id: Option<i64>,
     /// Characters of the estate's family, the horn-blower included.
     pub members: Vec<i64>,
+}
+
+/// Where a trophy's defense was held, kept beside its record for audits.
+pub struct TrophySite {
+    pub estate_id: i64,
+    pub summoner_id: i64,
+    pub horn: String,
 }
 
 /// Active disgraces: until when, by family and by character.
@@ -34,7 +43,78 @@ impl AuthService {
                 )?;
             }
         }
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS estate_defense_trophies (
+                item_id INTEGER PRIMARY KEY,
+                estate_id INTEGER NOT NULL,
+                summoner_id INTEGER NOT NULL,
+                summoner_name TEXT NOT NULL,
+                horn TEXT NOT NULL,
+                year INTEGER NOT NULL,
+                month INTEGER NOT NULL,
+                day INTEGER NOT NULL,
+                defenders TEXT NOT NULL,
+                created_at INTEGER NOT NULL
+            )",
+            [],
+        )?;
         Ok(())
+    }
+
+    /// Keep the defense behind a trophy; names are as they were that night.
+    pub fn record_estate_trophy(
+        &self,
+        item_id: u64,
+        site: &TrophySite,
+        record: &EstateTrophyRecord,
+    ) -> Result<(), AuthError> {
+        let conn = self.open_connection()?;
+        let day = &record.defended_on;
+        conn.execute(
+            "INSERT INTO estate_defense_trophies
+             (item_id, estate_id, summoner_id, summoner_name, horn, year, month, day,
+              defenders, created_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                item_id as i64,
+                site.estate_id,
+                site.summoner_id,
+                record.summoner,
+                site.horn,
+                day.year,
+                day.month,
+                day.day,
+                serde_json::to_string(&record.defenders).unwrap_or_default(),
+                super::unix_now()
+            ],
+        )?;
+        Ok(())
+    }
+
+    pub fn estate_trophy(&self, item_id: u64) -> Result<Option<EstateTrophyRecord>, AuthError> {
+        let conn = self.open_connection()?;
+        let record = conn
+            .query_row(
+                "SELECT summoner_name, year, month, day, defenders
+                 FROM estate_defense_trophies WHERE item_id=?1",
+                [item_id as i64],
+                |row| {
+                    let defenders: String = row.get(4)?;
+                    Ok(EstateTrophyRecord {
+                        summoner: row.get(0)?,
+                        defended_on: GameDateTime {
+                            year: row.get(1)?,
+                            month: row.get(2)?,
+                            day: row.get(3)?,
+                            hour: 0,
+                            minute: 0,
+                        },
+                        defenders: serde_json::from_str(&defenders).unwrap_or_default(),
+                    })
+                },
+            )
+            .optional()?;
+        Ok(record)
     }
 
     /// The estate under `plot` if `character_id` may blow a horn on it: its

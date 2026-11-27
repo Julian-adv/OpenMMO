@@ -78,8 +78,11 @@ async fn dirty_save_is_retried_after_failure() {
             .last_x,
         42.0
     );
+    let mut saved = auth.load_inventory(record.id).unwrap();
+    assert!(saved.iter().all(|row| row.item_id.is_some()));
+    saved.iter_mut().for_each(|row| row.item_id = None);
     assert_eq!(
-        auth.load_inventory(record.id).unwrap(),
+        saved,
         vec![crate::auth::ItemRow {
             locked: false,
             item_def_id: "torch".to_string(),
@@ -88,6 +91,7 @@ async fn dirty_save_is_retried_after_failure() {
             enchant: 0,
             cape_color: None,
             cape_texture: None,
+            item_id: None,
         }]
     );
 }
@@ -117,6 +121,7 @@ async fn kick_flushes_dropped_inventory_before_replacement_load() {
                 enchant: 0,
                 cape_color: None,
                 cape_texture: None,
+                item_id: None,
             }],
         )],
         &[],
@@ -336,6 +341,7 @@ fn item_row(
         enchant,
         cape_color: None,
         cape_texture: None,
+        item_id: None,
     }
 }
 
@@ -378,6 +384,7 @@ async fn a_dyed_cape_loads_back_dyed() {
             enchant: 0,
             cape_color: Some("#3355ff".to_string()),
             cape_texture: Some(TEXTURE_HASH.to_string()),
+            item_id: None,
         }],
     )
     .await;
@@ -480,4 +487,19 @@ async fn login_load_keeps_instance_ids_distinct_across_row_shapes() {
         ids.iter().all(|id| *id < next),
         "the cursor stayed inside the reserved range"
     );
+}
+
+#[tokio::test]
+async fn item_ids_count_on_from_the_last_one_after_a_restart() {
+    let (auth, _db) = super::make_test_auth_with_path("item_ids_restart");
+    let game = make_test_game_state("item_ids_restart");
+    game.load_item_ids(&auth).await.unwrap();
+    let first = game.next_instance_id().await;
+    assert_eq!(first, 1, "a fresh world starts at 1");
+    game.reserve_instance_ids(41).await;
+    game.flush_dirty_saves(&auth).await;
+
+    let restarted = make_test_game_state("item_ids_restarted");
+    restarted.load_item_ids(&auth).await.unwrap();
+    assert_eq!(restarted.next_instance_id().await, 43);
 }

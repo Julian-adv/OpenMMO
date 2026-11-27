@@ -1,4 +1,8 @@
 <script lang="ts">
+  import {
+    isEstateTrophy,
+    showTrophyRecord,
+  } from '../../stores/estateTrophyStore'
   import { getObjectDef } from '../../data/objectCatalog'
   import { T, useTask, useThrelte } from '@threlte/core'
   import { onMount, untrack } from 'svelte'
@@ -478,6 +482,10 @@
         networkManager.sendOpenNoticeBoard({
           Estate: { furniture_id: chest.id },
         })
+      else if (chest.item_id && isEstateTrophy(chest.item_def_id))
+        showTrophyRecord(chest.item_id, chest.item_def_id, (id) =>
+          networkManager.sendViewEstateTrophy(id)
+        )
     }
     const escape = (event: KeyboardEvent) => {
       if (

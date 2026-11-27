@@ -1548,6 +1548,13 @@ async fn handle_client_message(
                     .await;
             }
         }
+        ClientMessage::ViewEstateTrophy { item_id } => {
+            if let Some(id) = &state.player_id {
+                game_state
+                    .view_estate_trophy(id, item_id, auth_service)
+                    .await;
+            }
+        }
         ClientMessage::RecoverEstateChest { chest_id } => {
             if let Some(id) = &state.player_id {
                 game_state

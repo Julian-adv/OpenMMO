@@ -697,6 +697,7 @@ impl GameState {
                     cape_texture: item.cape_texture,
                     first_instance_id: next_id,
                     quantity: *qty,
+                    kept_id: Some(item.instance_id),
                 },
             )
             .ids_used;

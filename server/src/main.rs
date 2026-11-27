@@ -624,6 +624,10 @@ async fn main() -> ExitCode {
             false,
         )
         .await;
+    if let Err(err) = game_state.load_item_ids(&auth_service).await {
+        error!("Failed to read the last item id: {}", err);
+        return ExitCode::FAILURE;
+    }
     game_state.load_pricing(&auth_service).await;
     game_state.load_weather(args.weather_bias).await;
     if let Err(err) = game_state.load_fences(&auth_service).await {

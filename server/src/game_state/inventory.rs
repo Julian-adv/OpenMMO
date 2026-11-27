@@ -134,6 +134,9 @@ pub(super) struct BagInsert<'a> {
     pub cape_texture: Option<String>,
     pub first_instance_id: u64,
     pub quantity: u32,
+    /// A single non-stackable unit moving rather than appearing keeps this
+    /// lasting id (doc/ITEM_IDS.md) instead of taking `first_instance_id`.
+    pub kept_id: Option<u64>,
 }
 
 impl<'a> BagInsert<'a> {
@@ -169,6 +172,7 @@ impl<'a> BagInsert<'a> {
             quantity: 1,
             cape_color: None,
             cape_texture: None,
+            kept_id: None,
         }
     }
 
@@ -212,6 +216,7 @@ pub(super) fn stack_into_bag(bag: &mut Vec<ItemInstance>, insert: BagInsert) -> 
         cape_texture,
         first_instance_id,
         quantity,
+        kept_id,
     } = insert;
     if stackable {
         bag.push(ItemInstance {
@@ -229,6 +234,21 @@ pub(super) fn stack_into_bag(bag: &mut Vec<ItemInstance>, insert: BagInsert) -> 
         };
     }
 
+    if let (Some(id), 1) = (kept_id, quantity) {
+        bag.push(ItemInstance {
+            locked,
+            instance_id: id,
+            item_def_id: item_def_id.to_string(),
+            quantity: 1,
+            enchant,
+            cape_color,
+            cape_texture,
+        });
+        return BagInsertResult {
+            ids_used: 0,
+            first_instance_id: Some(id),
+        };
+    }
     for offset in 0..quantity as u64 {
         bag.push(ItemInstance {
             locked,
@@ -466,6 +486,7 @@ pub(super) fn serialize_inventory(inv: &PlayerInventory) -> Vec<ItemRow> {
             enchant: item.enchant,
             cape_color: item.cape_color.clone(),
             cape_texture: item.cape_texture.clone(),
+            item_id: Some(item.instance_id),
         })
         .collect();
     for (slot, item) in &inv.equipped {
@@ -477,6 +498,7 @@ pub(super) fn serialize_inventory(inv: &PlayerInventory) -> Vec<ItemRow> {
             enchant: item.enchant,
             cape_color: item.cape_color.clone(),
             cape_texture: item.cape_texture.clone(),
+            item_id: Some(item.instance_id),
         });
     }
     rows
@@ -493,6 +515,23 @@ impl super::GameState {
 
     pub(super) async fn next_instance_id(&self) -> u64 {
         self.reserve_instance_ids(1).await
+    }
+
+    /// Continue after the last id issued before the restart.
+    pub async fn load_item_ids(&self, auth: &AuthService) -> Result<(), crate::auth::AuthError> {
+        let auth = auth.clone();
+        let last = super::auth_db(move || auth.last_item_id()).await?;
+        *self.next_item_instance_id.write().await = last + 1;
+        Ok(())
+    }
+
+    /// Write the last issued id with the periodic save.
+    pub(super) async fn save_item_ids(&self, auth: &AuthService) {
+        let last = *self.next_item_instance_id.read().await - 1;
+        let store = auth.clone();
+        if let Err(error) = super::auth_db(move || store.write_last_item_id(last)).await {
+            warn!(%error, "Failed to write the last item id");
+        }
     }
 
     /// Carry limit from STR, the hunger band (doc/HUNGER.md) and worn
@@ -586,12 +625,30 @@ impl super::GameState {
         };
 
         if !rows.is_empty() {
-            // A non-stackable row saved with quantity N unfolds into N slots,
-            // so reserve per unit rather than per row.
-            let units: u64 = rows.iter().map(|r| r.quantity.max(1) as u64).sum();
+            // A unit keeps its saved id; the rest, and a non-stackable row
+            // saved with quantity N unfolding into N slots, take new ones.
+            let mut seen = std::collections::HashSet::new();
+            let rows: Vec<_> = rows
+                .into_iter()
+                .map(|row| {
+                    let kept = row
+                        .item_id
+                        .filter(|_| {
+                            row.quantity <= 1 && !self.item_defs.stackable(&row.item_def_id)
+                        })
+                        .filter(|id| seen.insert(*id));
+                    (row, kept)
+                })
+                .collect();
+            let units: u64 = rows
+                .iter()
+                .filter(|(_, kept)| kept.is_none())
+                .map(|(row, _)| row.quantity.max(1) as u64)
+                .sum();
             let mut next_id = self.reserve_instance_ids(units).await;
 
-            for row in rows {
+            for (row, kept) in rows {
+                let stackable = self.item_defs.stackable(&row.item_def_id);
                 match row.equip_slot {
                     Some(slot_str) => {
                         if let Ok(slot) = slot_str.parse::<EquipSlot>() {
@@ -599,7 +656,7 @@ impl super::GameState {
                                 slot,
                                 ItemInstance {
                                     locked: row.locked,
-                                    instance_id: next_id,
+                                    instance_id: kept.unwrap_or(next_id),
                                     item_def_id: row.item_def_id,
                                     quantity: 1,
                                     enchant: row.enchant,
@@ -607,7 +664,7 @@ impl super::GameState {
                                     cape_texture: row.cape_texture,
                                 },
                             );
-                            next_id += 1;
+                            next_id += u64::from(kept.is_none());
                         } else {
                             warn!(
                                 "Unknown equip slot '{}' in DB for character {}",
@@ -622,13 +679,14 @@ impl super::GameState {
                             &mut inventory.bag,
                             BagInsert {
                                 locked: row.locked,
-                                stackable: self.item_defs.stackable(&row.item_def_id),
+                                stackable,
                                 item_def_id: &row.item_def_id,
                                 enchant: row.enchant,
                                 cape_color: row.cape_color,
                                 cape_texture: row.cape_texture,
                                 first_instance_id: next_id,
                                 quantity: row.quantity,
+                                kept_id: kept,
                             },
                         )
                         .ids_used;
@@ -766,20 +824,27 @@ impl super::GameState {
     }
 
     /// Award one unit to the bag, or the ground when it exceeds carry weight.
-    pub async fn award_item(&self, player_id: &PlayerId, item_def_id: &str) {
-        self.award_items(player_id, item_def_id, 1).await;
+    /// Returns a non-stackable unit's lasting id.
+    pub async fn award_item(&self, player_id: &PlayerId, item_def_id: &str) -> Option<u64> {
+        self.award_items(player_id, item_def_id, 1).await
     }
 
     /// Award `quantity` units of a stackable def, or one of any def, to the
-    /// bag, or all to the ground when they exceed carry weight.
-    pub async fn award_items(&self, player_id: &PlayerId, item_def_id: &str, quantity: u32) {
+    /// bag, or all to the ground when they exceed carry weight. Returns a
+    /// non-stackable unit's lasting id.
+    pub async fn award_items(
+        &self,
+        player_id: &PlayerId,
+        item_def_id: &str,
+        quantity: u32,
+    ) -> Option<u64> {
         let Some(stackable) = self.item_defs.get(item_def_id).map(|d| d.stackable) else {
             warn!("award_items: unknown item_def_id {:?}", item_def_id);
-            return;
+            return None;
         };
         if quantity == 0 || (!stackable && quantity > 1) {
             warn!("award_items: cannot award {quantity} of {item_def_id:?}");
-            return;
+            return None;
         }
         let max_weight = self.max_carry_weight(player_id).await;
         let armor_mult = self.armor_weight_mult(player_id).await;
@@ -794,7 +859,7 @@ impl super::GameState {
         let placement = {
             let mut inventories = self.inventories.write().await;
             let Some(inv) = inventories.get_mut(player_id) else {
-                return;
+                return None;
             };
             if self.calc_total_weight(inv, armor_mult) + def_weight > max_weight {
                 Placement::Overweight
@@ -820,7 +885,7 @@ impl super::GameState {
                     let players = self.players.read().await;
                     match players.get(player_id) {
                         Some(p) => (p.position, p.floor_level),
-                        None => return,
+                        None => return None,
                     }
                 };
                 self.send_system_message(player_id, "Too heavy to carry — it slips to the ground.")
@@ -846,6 +911,7 @@ impl super::GameState {
                 self.spawn_ground_item(ground_item).await;
             }
         }
+        (!stackable).then_some(reserved_instance_id)
     }
 
     /// Prefer highest average damage, then the lowest item definition ID.
@@ -2341,8 +2407,11 @@ impl super::GameState {
                 let position = self
                     .loot_drop_position(player_position, floor_level, preferred)
                     .await;
+                // A lone unit keeps its id on the ground (doc/ITEM_IDS.md).
+                let kept = (!self.item_defs.stackable(&plan.item_def_id) && plan.qty == 1)
+                    .then_some(plan.instance_id);
                 let ground_item = GroundItem {
-                    instance_id: next_ground_id,
+                    instance_id: kept.unwrap_or(next_ground_id),
                     item_def_id: plan.item_def_id.clone(),
                     position,
                     floor_level,
@@ -2550,8 +2619,8 @@ impl super::GameState {
             } else {
                 ground_items.remove(&instance_id);
             }
-            // Ids are never reused, so the pre-lock `ground_item` clone still
-            // matches `entry` — no need to copy out of it under the locks.
+            // A ground id names one pile at a time, so the pre-lock
+            // `ground_item` clone still matches `entry`.
             let inserted = stack_into_bag(
                 &mut inv.bag,
                 BagInsert {
@@ -2563,6 +2632,7 @@ impl super::GameState {
                     cape_texture: ground_item.cape_texture.clone(),
                     first_instance_id: bag_instance_id,
                     quantity: take,
+                    kept_id: Some(instance_id),
                 },
             );
             (

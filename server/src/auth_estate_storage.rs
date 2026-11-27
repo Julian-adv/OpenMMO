@@ -319,14 +319,17 @@ fn log_family_storage(
     Ok(())
 }
 
-fn read_items(conn: &Connection, chest_id: i64) -> Result<Vec<ItemInstance>, rusqlite::Error> {
+/// Stored units keyed by row id, with each one's lasting item id.
+type StoredItems = (Vec<ItemInstance>, Vec<Option<u64>>);
+
+fn read_items(conn: &Connection, chest_id: i64) -> Result<StoredItems, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT id,item_def_id,quantity,enchant,cape_color,cape_texture,locked
+        "SELECT id,item_def_id,quantity,enchant,cape_color,cape_texture,locked,item_id
          FROM estate_chest_items WHERE chest_id=?1 ORDER BY id",
     )?;
-    let items = stmt
-        .query_map([chest_id], |row| {
-            Ok(ItemInstance {
+    let rows = stmt.query_map([chest_id], |row| {
+        Ok((
+            ItemInstance {
                 locked: row.get(6)?,
                 instance_id: row.get::<_, i64>(0)? as u64,
                 item_def_id: row.get(1)?,
@@ -334,10 +337,11 @@ fn read_items(conn: &Connection, chest_id: i64) -> Result<Vec<ItemInstance>, rus
                 enchant: row.get(3)?,
                 cape_color: row.get(4)?,
                 cape_texture: row.get(5)?,
-            })
-        })?
-        .collect();
-    items
+            },
+            row.get::<_, Option<u64>>(7)?,
+        ))
+    })?;
+    rows.collect()
 }
 
 impl AuthService {
@@ -447,6 +451,15 @@ impl AuthService {
         if !Self::table_columns(conn, "estate_chests")?.contains("family_id") {
             conn.execute("ALTER TABLE estate_chests ADD COLUMN family_id INTEGER", [])?;
         }
+        if !Self::table_columns(conn, "estate_chest_items")?.contains("item_id") {
+            conn.execute(
+                "ALTER TABLE estate_chest_items ADD COLUMN item_id INTEGER",
+                [],
+            )?;
+        }
+        if !Self::table_columns(conn, "estate_chests")?.contains("item_id") {
+            conn.execute("ALTER TABLE estate_chests ADD COLUMN item_id INTEGER", [])?;
+        }
         conn.execute_batch(
             "CREATE INDEX IF NOT EXISTS idx_estate_chests_family
                 ON estate_chests(family_id) WHERE family_id IS NOT NULL;
@@ -536,17 +549,16 @@ impl AuthService {
 
     pub fn load_estate_chests(&self) -> Result<Vec<EstateChest>, AuthError> {
         let conn = self.open_connection()?;
-        let mut stmt = conn.prepare(
-            &format!(
-                "SELECT c.id,c.estate_id,c.owner_id,c.item_def_id,c.x,c.y,c.z,c.rotation_deg,
-                        c.floor_level,COALESCE(e.missed,1)>0,c.revision,c.text,{FURNITURE_FAMILY_COLUMNS}
+        let mut stmt = conn.prepare(&format!(
+            "SELECT c.id,c.estate_id,c.owner_id,c.item_def_id,c.x,c.y,c.z,c.rotation_deg,
+                        c.floor_level,COALESCE(e.missed,1)>0,c.revision,c.text,c.item_id,
+                        {FURNITURE_FAMILY_COLUMNS}
                  FROM estate_chests c LEFT JOIN land_estates e ON e.id=c.estate_id
                  {FURNITURE_FAMILY_JOIN}"
-            ),
-        )?;
+        ))?;
         let chests = stmt
             .query_map([], |row| {
-                let (family_id, emblem) = furniture_family(row, 12)?;
+                let (family_id, emblem) = furniture_family(row, 13)?;
                 Ok(EstateChest {
                     id: row.get(0)?,
                     estate_id: row.get(1)?,
@@ -564,6 +576,7 @@ impl AuthService {
                     text: row.get(11)?,
                     family_id,
                     emblem,
+                    item_id: row.get::<_, Option<u64>>(12)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -613,6 +626,7 @@ impl AuthService {
         character: &CharacterSaveData,
         inventory: &[ItemRow],
         item_def_id: String,
+        item_id: u64,
         position: Position,
         rotation_deg: f32,
         floor_level: i8,
@@ -646,8 +660,8 @@ impl AuthService {
         };
         tx.execute(
             "INSERT INTO estate_chests
-             (estate_id,owner_id,item_def_id,x,y,z,rotation_deg,floor_level,family_id)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
+             (estate_id,owner_id,item_def_id,x,y,z,rotation_deg,floor_level,family_id,item_id)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10)",
             params![
                 estate_id,
                 owner_id,
@@ -657,7 +671,8 @@ impl AuthService {
                 position.z,
                 rotation_deg,
                 floor_level,
-                family_id
+                family_id,
+                item_id as i64
             ],
         )?;
         let id = tx.last_insert_rowid();
@@ -690,6 +705,7 @@ impl AuthService {
             text: None,
             family_id,
             emblem,
+            item_id: Some(item_id),
         }))
     }
 
@@ -785,6 +801,7 @@ impl AuthService {
         if definition.capacity_kg == 0.0 {
             return Ok(Err("This is decorative furniture, not a storage chest."));
         }
+        let (items, item_ids) = read_items(&conn, chest_id)?;
         Ok(Ok(EstateChestState {
             chest_id,
             family: item_def_id == FAMILY_CHEST_ITEM,
@@ -793,7 +810,8 @@ impl AuthService {
             max_weight: definition.max_weight(),
             can_deposit: access.can_deposit,
             can_withdraw: access.can_withdraw,
-            items: read_items(&conn, chest_id)?,
+            items,
+            item_ids,
         }))
     }
 
@@ -888,8 +906,8 @@ impl AuthService {
             } else {
                 tx.execute(
                     "INSERT INTO estate_chest_items
-                     (chest_id,item_def_id,quantity,enchant,cape_color,cape_texture,locked)
-                     VALUES (?1,?2,?3,?4,?5,?6,?7)",
+                     (chest_id,item_def_id,quantity,enchant,cape_color,cape_texture,locked,item_id)
+                     VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
                     params![
                         chest_id,
                         item.item_def_id,
@@ -897,7 +915,8 @@ impl AuthService {
                         item.enchant,
                         item.cape_color,
                         item.cape_texture,
-                        item.locked
+                        item.locked,
+                        (!deposit.stackable).then_some(item.instance_id as i64)
                     ],
                 )?;
             }

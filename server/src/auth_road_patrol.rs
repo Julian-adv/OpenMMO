@@ -78,6 +78,8 @@ pub struct ImpoundedStack {
     pub locked: bool,
     /// Whether the reclaim fee applies; what a chest held comes back free.
     pub charged: bool,
+    /// The lasting id of a single non-stackable unit.
+    pub item_id: Option<u64>,
 }
 
 impl ImpoundedStack {
@@ -178,6 +180,12 @@ impl AuthService {
             );
             DROP TABLE IF EXISTS road_patrol_state;",
         )?;
+        if !Self::table_columns(conn, "guard_impound_goods")?.contains("item_id") {
+            conn.execute(
+                "ALTER TABLE guard_impound_goods ADD COLUMN item_id INTEGER",
+                [],
+            )?;
+        }
         conn.execute(
             "INSERT OR IGNORE INTO guard_impound_since (account_name, seized_at)
              SELECT DISTINCT account_name, ?1 FROM guard_impounds",
@@ -218,23 +226,26 @@ impl AuthService {
             entry(&mut by_account, owner, obstruction).edges.push(*edge);
         }
         for id in &clearance.furniture {
-            let piece: Option<(i64, String)> = tx
+            let piece: Option<(i64, String, Option<i64>)> = tx
                 .query_row(
-                    "SELECT owner_id, item_def_id FROM estate_chests WHERE id=?1",
+                    "SELECT owner_id, item_def_id, item_id FROM estate_chests WHERE id=?1",
                     [id],
-                    |row| Ok((row.get(0)?, row.get(1)?)),
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
                 )
                 .optional()?;
-            let Some((owner, item_def_id)) = piece else {
+            let Some((owner, item_def_id, item_id)) = piece else {
                 continue;
             };
             let Some(owner) = character_account(&tx, owner)? else {
                 continue;
             };
-            let mut goods = vec![ImpoundedStack::charged(item_def_id)];
+            let mut goods = vec![ImpoundedStack {
+                item_id: item_id.map(|id| id as u64),
+                ..ImpoundedStack::charged(item_def_id)
+            }];
             {
                 let mut stmt = tx.prepare(
-                    "SELECT item_def_id, quantity, enchant, cape_color, cape_texture, locked
+                    "SELECT item_def_id, quantity, enchant, cape_color, cape_texture, locked, item_id
                      FROM estate_chest_items WHERE chest_id=?1 ORDER BY id",
                 )?;
                 let held = stmt.query_map([id], |row| {
@@ -247,6 +258,7 @@ impl AuthService {
                         cape_texture: row.get(4)?,
                         locked: row.get(5)?,
                         charged: false,
+                        item_id: row.get::<_, Option<u64>>(6)?,
                     })
                 })?;
                 for stack in held {
@@ -308,11 +320,13 @@ impl AuthService {
                         stack.cape_color,
                         stack.cape_texture,
                         stack.locked,
-                        stack.charged
+                        stack.charged,
+                        stack.item_id.map(|id| id as i64)
                     ];
                     let merged = tx.execute(
                         "UPDATE guard_impound_goods SET quantity = quantity + ?3
-                         WHERE account_name=?1 AND item_def_id=?2 AND enchant=?4
+                         WHERE ?9 IS NULL AND item_id IS NULL
+                           AND account_name=?1 AND item_def_id=?2 AND enchant=?4
                            AND cape_color IS ?5 AND cape_texture IS ?6
                            AND locked=?7 AND charged=?8",
                         fields,
@@ -320,8 +334,9 @@ impl AuthService {
                     if merged == 0 {
                         tx.execute(
                             "INSERT INTO guard_impound_goods (account_name, item_def_id,
-                                quantity, enchant, cape_color, cape_texture, locked, charged)
-                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+                                quantity, enchant, cape_color, cape_texture, locked, charged,
+                                item_id)
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
                             fields,
                         )?;
                     }
@@ -337,12 +352,13 @@ impl AuthService {
         let conn = self.open_connection()?;
         forfeit_unclaimed_impounds(&conn)?;
         let mut stmt = conn.prepare(
-            "SELECT NULL, i.item_def_id, i.quantity, 0, NULL, NULL, 0, 1, 0 AS tier, 0 AS id
+            "SELECT NULL, i.item_def_id, i.quantity, 0, NULL, NULL, 0, 1, 0 AS tier, 0 AS id,
+                    NULL
              FROM guard_impounds i
              JOIN characters c ON c.account_name=i.account_name WHERE c.id=?1
              UNION ALL
              SELECT g.id, g.item_def_id, g.quantity, g.enchant, g.cape_color, g.cape_texture,
-                    g.locked, g.charged, 2 - g.charged, g.id
+                    g.locked, g.charged, 2 - g.charged, g.id, g.item_id
              FROM guard_impound_goods g
              JOIN characters c ON c.account_name=g.account_name WHERE c.id=?1
              ORDER BY tier, id, 2",
@@ -358,6 +374,7 @@ impl AuthService {
                     cape_texture: row.get(5)?,
                     locked: row.get(6)?,
                     charged: row.get(7)?,
+                    item_id: row.get::<_, Option<u64>>(10)?,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;

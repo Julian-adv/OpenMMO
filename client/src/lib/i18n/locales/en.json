@@ -1282,5 +1282,8 @@
   "server.estateDefense.disgraced": "The banner was lost: for 10 days you are known as Who Lost the Banner.",
   "estateDefense.wave": "Wave {{wave}}/{{total}}",
   "estateDefense.nextWave": "Next wave in {{seconds}}s",
-  "estateDefense.banner": "Banner"
+  "estateDefense.banner": "Banner",
+  "estateTrophy.defended": "Held the banner on {{date}}",
+  "estateTrophy.summoner": "War horn: {{name}}",
+  "estateTrophy.defenders": "Defended by {{names}}"
 }

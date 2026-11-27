@@ -4,11 +4,11 @@
 use super::inventory::consume_one;
 use super::localization::{localized, PlayerMessage};
 use super::{auth_db, GameState};
-use crate::auth::{unix_now, AuthService, DefenseSite, Disgraces};
+use crate::auth::{unix_now, AuthService, DefenseSite, Disgraces, TrophySite};
 use crate::estate_defense_defs::{grade_for_horn, DefenseGrade};
 use crate::types::{MonsterLifecycle, PlayerId, Position};
 use onlinerpg_shared::celestial::is_night;
-use onlinerpg_shared::messages::{EstateDefenseOutcome, EstateDefenseState};
+use onlinerpg_shared::messages::{EstateDefenseOutcome, EstateDefenseState, EstateTrophyRecord};
 use onlinerpg_shared::pathfinding::{get_floor_y_base, is_circle_blocked_on_floor};
 use onlinerpg_shared::{MonsterState, ServerMessage, Siege};
 use onlinerpg_terrain::land::plot_addr;
@@ -918,8 +918,9 @@ impl GameState {
             defense.grade.id, defense.elapsed, defense.banner_hp, defense.spawned
         );
         if outcome == EstateDefenseOutcome::Held {
-            self.reward_defenders(&defense, auth).await;
-            self.award_trophy(&defense).await;
+            let defenders = self.reward_defenders(&defense, auth).await;
+            self.award_trophy(estate_id, &defense, defenders, auth)
+                .await;
         }
         let audience = self
             .defense_audience(defense.family_id, &defense.banner)
@@ -941,7 +942,8 @@ impl GameState {
         }
     }
 
-    async fn reward_defenders(&self, defense: &EstateDefense, auth: &AuthService) {
+    /// Pays each defender who earned a share and returns their names.
+    async fn reward_defenders(&self, defense: &EstateDefense, auth: &AuthService) -> Vec<String> {
         let threshold = defense.spawned_health / defense.spawned.max(1) * SHARE_THRESHOLD_RAIDERS;
         let living = self
             .living_defenders(&defense.banner, &defense.eligible)
@@ -959,13 +961,15 @@ impl GameState {
         };
         let tier_rolls = self.item_defs.chest_roll_table(defense.grade.chest_tier);
         let mut spills = Vec::new();
+        let mut names = Vec::with_capacity(shares.len());
         for &(player_id, character_id, dealt) in &shares {
             let items = roll_share(defense.grade, &tier_rolls, &mut rand::thread_rng());
+            let name = self.player_name_of(&player_id).await;
             info!(
-                "Estate defense {}: {} dealt {dealt} (threshold {threshold}), share {items:?}",
+                "Estate defense {}: {name} dealt {dealt} (threshold {threshold}), share {items:?}",
                 defense.grade.id,
-                self.player_name_of(&player_id).await,
             );
+            names.push(name);
             self.record_item_drops(&items, false);
             spills.push((player_id, items));
             if !defense.practice {
@@ -989,10 +993,18 @@ impl GameState {
             defense.eligible.len(),
             defense.summoner_name
         );
+        names
     }
 
-    /// A summoner who logged out before the end gets none.
-    async fn award_trophy(&self, defense: &EstateDefense) {
+    /// A summoner who logged out before the end gets none. The defense is
+    /// kept under the trophy's item id for `ViewEstateTrophy`.
+    async fn award_trophy(
+        &self,
+        estate_id: i64,
+        defense: &EstateDefense,
+        defenders: Vec<String>,
+        auth: &AuthService,
+    ) {
         if defense.practice {
             return;
         }
@@ -1004,11 +1016,45 @@ impl GameState {
             );
             return;
         };
-        self.award_item(&player_id, trophy).await;
+        let Some(item_id) = self.award_item(&player_id, trophy).await else {
+            return;
+        };
         info!(
-            "Estate defense {}: {} received {trophy}",
+            "Estate defense {}: {} received {trophy} {item_id}",
             defense.grade.id, defense.summoner_name
         );
+        let record = EstateTrophyRecord {
+            summoner: defense.summoner_name.clone(),
+            defended_on: self.current_game_datetime(),
+            defenders,
+        };
+        let site = TrophySite {
+            estate_id,
+            summoner_id: defense.summoner,
+            horn: defense.grade.horn.clone(),
+        };
+        let store = auth.clone();
+        if let Err(error) =
+            auth_db(move || store.record_estate_trophy(item_id, &site, &record)).await
+        {
+            warn!(%error, "Failed to record estate trophy {item_id}");
+        }
+    }
+
+    pub async fn view_estate_trophy(&self, player_id: &PlayerId, item_id: u64, auth: &AuthService) {
+        let store = auth.clone();
+        let record = match auth_db(move || store.estate_trophy(item_id)).await {
+            Ok(record) => record,
+            Err(error) => {
+                warn!(%error, "Failed to read estate trophy {item_id}");
+                return;
+            }
+        };
+        self.send_direct_message(
+            player_id,
+            ServerMessage::EstateTrophyRecord { item_id, record },
+        )
+        .await;
     }
 
     async fn disgrace(&self, family_id: Option<i64>, summoner: i64, auth: &AuthService) {

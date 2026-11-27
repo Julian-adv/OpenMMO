@@ -123,6 +123,9 @@ pub struct EstateChest {
     /// that family's estate.
     #[serde(default)]
     pub emblem: Option<crate::family::Emblem>,
+    /// The lasting id of the item that was placed (doc/ITEM_IDS.md).
+    #[serde(default)]
+    pub item_id: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -136,6 +139,9 @@ pub struct EstateChestState {
     /// A family chest: deposits and withdrawals follow the viewer's rank.
     pub family: bool,
     pub items: Vec<ItemInstance>,
+    /// Server-side: each stored unit's lasting item id, beside `items`.
+    #[serde(skip)]
+    pub item_ids: Vec<Option<u64>>,
 }
 
 #[cfg(test)]

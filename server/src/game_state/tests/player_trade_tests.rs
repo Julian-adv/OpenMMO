@@ -109,8 +109,13 @@ async fn a_completed_trade_moves_items_and_coin_once() {
         1
     );
     assert_eq!(
-        a_bag.iter().filter(|i| i.item_def_id == "dagger").count(),
-        1
+        a_bag
+            .iter()
+            .filter(|i| i.item_def_id == "dagger")
+            .map(|i| i.instance_id)
+            .collect::<Vec<_>>(),
+        vec![2],
+        "the dagger keeps its id across the table"
     );
     assert_eq!(
         b_bag
