@@ -1044,7 +1044,7 @@ impl GameState {
                 )
                 .await;
             game_state
-                .spawn_world_drops(chest_pos, floor_level, None, Vec::new(), player_id)
+                .spawn_world_drops(chest_pos, floor_level, None, Vec::new(), player_id, true)
                 .await;
         });
     }
@@ -1150,7 +1150,7 @@ impl GameState {
         {
             self.grant_dungeon_key(&recipient, &key, false).await;
         }
-        self.spawn_world_drops(position, -(depth as i8), None, Vec::new(), *player_id)
+        self.spawn_world_drops(position, -(depth as i8), None, Vec::new(), *player_id, true)
             .await;
     }
 

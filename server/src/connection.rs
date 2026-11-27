@@ -1199,6 +1199,11 @@ async fn handle_client_message(
                             .try_preview_land_claim(id, instance_id, auth_service)
                             .await;
                     }
+                    Some(AuthenticatedUseAction::EstateDefense) => {
+                        game_state
+                            .blow_war_horn(id, instance_id, auth_service)
+                            .await;
+                    }
                     None => {
                         if !game_state
                             .try_start_house_placement(id, instance_id, auth_service)

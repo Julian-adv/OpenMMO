@@ -20,3 +20,8 @@ medusa_slayer,Slayer of Medusa,메두사를 쓰러뜨린 자,boss_kill,medusa,,f
 medusa_slayer_solo,Who Slew Medusa Alone,홀로 메두사를 쓰러뜨린 자,boss_kill,medusa,,true,61,medusa_slayer
 terraclash_raider,Who Brought Down Terraclash,테라클래시를 무너뜨린 자,field_raid,terraclash,,false,62,
 terraclash_final_blow,Who Dealt Terraclash the Final Blow,테라클래시에 마지막 일격을 가한 자,field_raid_last_hit,terraclash,,false,63,terraclash_raider
+estate_defender_1,Who Held the Banner,깃발을 지킨 자,estate_defense,defense_1,,false,70,
+estate_defender_2,Who Held the Banner Against the Horde,무리에 맞서 깃발을 지킨 자,estate_defense,defense_2,,false,71,estate_defender_1
+estate_defender_3,Who Held the Banner Against the Stone Host,돌의 군세에 맞서 깃발을 지킨 자,estate_defense,defense_3,,false,72,estate_defender_2
+estate_defender_4,Who Held the Banner Against the Serpent Brood,뱀의 무리에 맞서 깃발을 지킨 자,estate_defense,defense_4,,false,73,estate_defender_3
+estate_disgrace,Who Lost the Banner,깃발을 빼앗긴 자,disgrace,,,false,90,

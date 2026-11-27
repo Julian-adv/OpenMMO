@@ -117,6 +117,7 @@ pub enum AuthenticatedUseAction {
     LandClaim,
     EstateReturn,
     FamilyReturn,
+    EstateDefense,
 }
 
 impl AuthenticatedUseAction {

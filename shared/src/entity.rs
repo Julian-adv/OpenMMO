@@ -268,6 +268,16 @@ pub enum MonsterLifecycle {
     DungeonSlot,
     /// An altar-summoned field boss; the raid removes it when it ends.
     FieldRaid,
+    /// A war-horn wave raider; the estate defense removes it when it ends.
+    EstateDefense,
+}
+
+/// What an estate-defense raider marches on and whom it picks fights with.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Siege {
+    pub banner: Position,
+    pub place_bonus: i32,
+    pub targets: std::sync::Arc<std::collections::HashSet<PlayerId>>,
 }
 
 impl MonsterLifecycle {
@@ -310,6 +320,8 @@ pub struct Monster {
     pub lifecycle: MonsterLifecycle,
     #[serde(skip)]
     pub last_attack_at: u64,
+    #[serde(skip)]
+    pub siege: Option<Siege>,
 }
 
 #[cfg(test)]

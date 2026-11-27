@@ -529,6 +529,7 @@ fn character_listing_to_shared(listing: crate::auth::CharacterListing) -> Charac
         titles,
         active_title,
         family,
+        family_rank,
     } = listing;
     Character {
         id: record.id,
@@ -546,6 +547,7 @@ fn character_listing_to_shared(listing: crate::auth::CharacterListing) -> Charac
         titles,
         active_title,
         family,
+        family_rank,
     }
 }
 

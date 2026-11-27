@@ -327,6 +327,10 @@ impl GameState {
         if !edge.valid() {
             return Err("Invalid fence edge.");
         }
+        let center = edge.center(0.0);
+        if place && self.in_estate_defense_circle(center.x, center.z) {
+            return Err(super::estate_defense::BANNER_LOCKED);
+        }
         self.tick_land_taxes(auth).await;
         let _persistence = self.persistence_lock.lock().await;
         if self.reject_if_trading(player_id, "edit fences").await {

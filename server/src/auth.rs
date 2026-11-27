@@ -38,6 +38,8 @@ mod dungeon_population;
 #[path = "auth_enchant_failures.rs"]
 mod enchant_failures;
 pub(crate) use dashboard_sessions::DASHBOARD_SESSION_SECONDS;
+#[path = "auth_estate_defense.rs"]
+mod estate_defense;
 #[path = "auth_estate_storage.rs"]
 mod estate_storage;
 #[path = "auth_family.rs"]
@@ -50,6 +52,7 @@ mod field_raids;
 mod seasonal;
 #[path = "auth_statues.rs"]
 mod statues;
+pub(crate) use estate_defense::{DefenseSite, Disgraces};
 pub(crate) use estate_storage::EstateDeposit;
 pub(crate) use family::{FamilyDeparture, FamilyEmblem, FamilyRoster};
 pub(crate) use statues::StatueRow;

@@ -16,6 +16,7 @@ pub struct CharacterListing {
     pub titles: Vec<String>,
     pub active_title: Option<String>,
     pub family: Option<String>,
+    pub family_rank: Option<String>,
 }
 
 impl CharacterListing {
@@ -27,6 +28,7 @@ impl CharacterListing {
             titles: Vec::new(),
             active_title: None,
             family: None,
+            family_rank: None,
         }
     }
 }
@@ -278,13 +280,14 @@ impl AuthService {
             .map(|record| {
                 let worn = equipment.remove(&record.id).unwrap_or_default();
                 let (titles, active_title) = titles.remove(&record.id).unwrap_or_default();
-                let family = families.remove(&record.id);
+                let (family, family_rank) = families.remove(&record.id).unzip();
                 CharacterListing {
                     record,
                     worn,
                     titles,
                     active_title,
                     family,
+                    family_rank,
                 }
             })
             .collect())

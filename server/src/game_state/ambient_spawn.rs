@@ -69,7 +69,7 @@ impl super::GameState {
         for step in steps {
             // Surface only: house storeys and dungeons have their own spawns,
             // and the placement below is XZ-only.
-            if step.floor_level != 0 {
+            if step.floor_level != 0 || self.is_defending(&step.player_id) {
                 continue;
             }
             let dx = shortest_world_delta_x(step.from.x, step.to.x);

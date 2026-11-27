@@ -1015,6 +1015,7 @@ pub(crate) mod tests {
             titles: Vec::new(),
             active_title: None,
             family: None,
+            family_rank: None,
         }
     }
 

@@ -355,6 +355,7 @@ async fn monster_loot_is_withheld_until_the_killing_blow_lands() {
         pid("killer"),
         None,
         *super::combat::PLAYER_ATTACK_IMPACT_DELAY,
+        true,
     );
 
     // Advance virtual time so the withheld task has been polled to its timer.
@@ -419,6 +420,7 @@ async fn kill_loot_is_reserved_for_its_owner() {
         pid("dealer"),
         None,
         std::time::Duration::ZERO,
+        true,
     );
     tokio::time::sleep(std::time::Duration::from_millis(1)).await;
 

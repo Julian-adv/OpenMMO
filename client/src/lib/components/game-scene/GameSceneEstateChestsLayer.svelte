@@ -48,6 +48,8 @@
   } from '../../stores/debugStore'
   import { currentDungeonDepth } from '../../stores/dungeonStore'
   import { playerVisualFloorLevel } from '../../stores/housingStore'
+  import { fenceHitTest } from '../../stores/fenceStore'
+  import { startFenceTool } from '../../utils/fenceTool'
   import { unwrapWorldXNear } from '../../terrain/world-wrap'
   import type { LocalPlayer } from '../../stores/gameStore'
   import type { EstateChest } from '../../network/networkTypes'
@@ -440,8 +442,16 @@
       )
         return
       if (!chest || chest.floor_level !== get(playerVisualFloorLevel)) {
-        if (selecting)
-          estateChestError.set('Click furniture on the current floor.')
+        if (!selecting) return
+        // Fences are no furniture: picking one switches to the fence tool.
+        if (
+          get(playerVisualFloorLevel) === 0 &&
+          get(fenceHitTest)?.(event.clientX, event.clientY)
+        ) {
+          startFenceTool()
+          return
+        }
+        estateChestError.set('Click furniture on the current floor.')
         return
       }
       if (

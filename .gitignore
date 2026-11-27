@@ -84,6 +84,7 @@ data/bgm.json
 data/debuffs.json
 data/dungeons.json
 data/dungeon_spawns.json
+data/estate_defense.json
 data/estate_storage.json
 data/field_bosses.json
 data/seasonal_events.json

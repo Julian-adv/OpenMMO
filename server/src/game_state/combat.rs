@@ -130,6 +130,8 @@ struct MonsterAttackSnapshot {
     field_raid: bool,
     /// Its plain swing breaks stone (`SkillSet::shatter`) this many times over.
     shatter: Option<u32>,
+    /// An estate-defense raider's grade to-hit, in place of the ground's.
+    place_bonus: Option<i32>,
 }
 
 enum GazeWard {
@@ -348,6 +350,7 @@ impl super::GameState {
         owner: PlayerId,
         key_grant: Option<(PlayerId, String)>,
         impact_delay: Duration,
+        drops_horns: bool,
     ) {
         let game_state = self.clone();
         tokio::spawn(async move {
@@ -359,7 +362,14 @@ impl super::GameState {
                 game_state.spawn_ground_item(item).await;
             }
             game_state
-                .spawn_world_drops(origin, floor_level, monster_level, monster_drops, owner)
+                .spawn_world_drops(
+                    origin,
+                    floor_level,
+                    monster_level,
+                    monster_drops,
+                    owner,
+                    drops_horns,
+                )
                 .await;
         });
     }
@@ -1405,6 +1415,7 @@ impl super::GameState {
         let mut dealt = 0;
         let mut health_update = None;
         let mut field_raid_boss = false;
+        let mut raider = false;
         let mut damage_by = Vec::new();
         let is_dead = {
             let mut monsters = self.monsters.write().await;
@@ -1417,6 +1428,7 @@ impl super::GameState {
 
                 dealt = damage.min(monster.health);
                 field_raid_boss = monster.lifecycle == MonsterLifecycle::FieldRaid;
+                raider = monster.lifecycle == MonsterLifecycle::EstateDefense;
                 monster.health = monster.health.saturating_sub(damage);
                 if dealt > 0 && monster.health > 0 {
                     health_update = Some(ServerMessage::MonsterHealthUpdate {
@@ -1445,6 +1457,10 @@ impl super::GameState {
             }
             died
         };
+        if raider {
+            self.record_estate_defense_hit(monster_id, player_id, dealt)
+                .await;
+        }
         if monster_floor_level < 0 {
             self.record_boss_damage(monster_id, player_id, dealt).await;
         } else if field_raid_boss && is_dead {
@@ -1563,6 +1579,7 @@ impl super::GameState {
                 loot_owner,
                 key_grant,
                 loot_delay,
+                !raider,
             );
 
             self.drain_hunger_for_kill(player_id).await;
@@ -1771,6 +1788,7 @@ impl super::GameState {
             shatter: onlinerpg_shared::monster_ai::skills_for(&monster.monster_type)
                 .and_then(|set| set.shatter)
                 .map(|shatter| shatter.multiplier),
+            place_bonus: monster.siege.as_ref().map(|siege| siege.place_bonus),
         }
     }
 
@@ -2311,7 +2329,9 @@ impl super::GameState {
                 ignores_guard,
             } => {
                 let target_guard = self.effective_guard(target_player_id).await;
-                let place_bonus = self.place_attack_bonus(&monster_position, monster_floor_level);
+                let place_bonus = snapshot.place_bonus.unwrap_or_else(|| {
+                    self.place_attack_bonus(&monster_position, monster_floor_level)
+                });
                 let mut result = combat::roll_attack_with_accuracy(
                     attack_bonus + place_bonus,
                     target_guard,

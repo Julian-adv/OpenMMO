@@ -167,6 +167,10 @@ impl super::GameState {
         }
     }
 
+    pub(super) async fn online_family_player_ids(&self, family_id: i64) -> Vec<PlayerId> {
+        self.families.read().await.online(family_id)
+    }
+
     pub(crate) async fn family_emblem_of(&self, player_id: &PlayerId) -> Option<FamilyEmblem> {
         self.families.read().await.emblem_of(player_id)
     }

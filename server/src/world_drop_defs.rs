@@ -21,12 +21,27 @@ pub struct WorldDropEntry {
     /// Highest effective level that still counts as low level for this entry.
     #[serde(rename = "lowLevelMaxLevel", default)]
     pub low_level_max_level: Option<u8>,
+    /// Kill-level band an entry drops in; set either and chests, props and
+    /// kills outside it never roll it.
+    #[serde(rename = "minLevel", default)]
+    pub min_level: Option<u8>,
+    #[serde(rename = "maxLevel", default)]
+    pub max_level: Option<u8>,
 }
 
 impl WorldDropEntry {
     /// This entry's chance for a loot source of `source_level`. A source with
     /// no level (chest, prop) always rolls the full chance.
     pub fn chance_for(&self, source_level: Option<u8>) -> f32 {
+        if self.min_level.is_some() || self.max_level.is_some() {
+            let in_band = source_level.is_some_and(|level| {
+                self.min_level.is_none_or(|min| level >= min)
+                    && self.max_level.is_none_or(|max| level <= max)
+            });
+            if !in_band {
+                return 0.0;
+            }
+        }
         match (
             self.low_level_chance,
             self.low_level_max_level,
@@ -134,6 +149,8 @@ mod tests {
             chance: 0.01,
             low_level_chance: low.map(|(c, _)| c),
             low_level_max_level: low.map(|(_, l)| l),
+            min_level: None,
+            max_level: None,
         }
     }
 
@@ -147,5 +164,24 @@ mod tests {
         assert_eq!(scaled.chance_for(None), 0.01);
         // An entry without the rule ignores the level entirely.
         assert_eq!(entry(None).chance_for(Some(1)), 0.01);
+    }
+
+    #[test]
+    fn a_level_band_drops_only_from_kills_inside_it() {
+        let banded = WorldDropEntry {
+            min_level: Some(13),
+            max_level: Some(25),
+            ..entry(None)
+        };
+        assert_eq!(banded.chance_for(Some(12)), 0.0);
+        assert_eq!(banded.chance_for(Some(13)), 0.01);
+        assert_eq!(banded.chance_for(Some(25)), 0.01);
+        assert_eq!(banded.chance_for(Some(26)), 0.0);
+        assert_eq!(banded.chance_for(None), 0.0);
+        let open = WorldDropEntry {
+            min_level: Some(36),
+            ..entry(None)
+        };
+        assert_eq!(open.chance_for(Some(60)), 0.01);
     }
 }

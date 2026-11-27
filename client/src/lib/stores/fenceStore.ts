@@ -22,6 +22,10 @@ export const fenceTarget = writable<{
   removing: boolean
   reason: string | null
 } | null>(null)
+/** Whether a placed fence is under the screen point; set by the fences layer. */
+export const fenceHitTest = writable<
+  ((clientX: number, clientY: number) => boolean) | null
+>(null)
 export const fenceCount = derived(inventoryStore, (inventory) =>
   inventory.bag.reduce(
     (count, item) =>

@@ -135,9 +135,17 @@ pub struct MonsterBrain {
     pub(super) waking_left_ms: f32,
     /// Time spent home with nobody to fight, toward sleeping again.
     pub(super) rest_ms: f32,
+    /// The only players it picks a fight with unprompted; `None` for anyone.
+    /// A blow from anyone else still turns it on the striker.
+    pub targets: Option<std::sync::Arc<std::collections::HashSet<PlayerId>>>,
 }
 
 impl MonsterBrain {
+    /// Where it returns to: an estate-defense raider's banner.
+    pub fn set_home(&mut self, home: Position) {
+        self.spawn_position = home;
+    }
+
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         monster_id: String,
@@ -234,6 +242,7 @@ impl MonsterBrain {
             dormant: false,
             waking_left_ms: 0.0,
             rest_ms: 0.0,
+            targets: None,
         }
     }
 

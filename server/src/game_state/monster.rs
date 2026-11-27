@@ -181,6 +181,32 @@ impl super::GameState {
         level_override: Option<u8>,
         aggressive: bool,
     ) -> Option<crate::types::Monster> {
+        self.spawn_monster_with(
+            monster_type,
+            position,
+            rotation,
+            floor_level,
+            lifecycle,
+            level_override,
+            aggressive,
+            None,
+        )
+        .await
+    }
+
+    /// `spawn_monster` with the siege an estate-defense raider carries.
+    #[allow(clippy::too_many_arguments)]
+    pub(super) async fn spawn_monster_with(
+        &self,
+        monster_type: String,
+        position: Position,
+        rotation: f32,
+        floor_level: i8,
+        lifecycle: MonsterLifecycle,
+        level_override: Option<u8>,
+        aggressive: bool,
+        siege: Option<onlinerpg_shared::Siege>,
+    ) -> Option<crate::types::Monster> {
         let def = self.monster_defs.get(&monster_type);
         let base_health = def.map(|d| d.max_health()).unwrap_or(10);
         // Depth scaling preserves any higher authored health, including bosses.
@@ -209,6 +235,7 @@ impl super::GameState {
             dormant: def.is_some_and(|d| d.ambush_range > 0.0),
             lifecycle,
             last_attack_at: 0,
+            siege,
         };
 
         let mut monsters = self.monsters.write().await;

@@ -532,5 +532,13 @@
   "blindfold.description": "系在眼上的黑布条。被遮住的双眼不会对上任何凝视，但战斗时如同半盲。",
   "blindfold.name": "蒙眼布",
   "floating_eye_meat.description": "从浮眼身上割下的冰冷颤动的肉块。据说吃下它的人不用眼睛也能看见。",
-  "floating_eye_meat.name": "浮眼之肉"
+  "floating_eye_meat.name": "浮眼之肉",
+  "war_horn_1.description": "夜里在自己领地的空地上吹响，敌人会分五波从四面八方涌来。守住旗帜即可获得宝箱。在家族领地只有家主能吹响。",
+  "war_horn_1.name": "下级挑衅号角",
+  "war_horn_2.description": "夜里在自己领地的空地上吹响，敌人会分五波从四面八方涌来。守住旗帜即可获得宝箱。在家族领地只有家主能吹响。",
+  "war_horn_2.name": "中级挑衅号角",
+  "war_horn_3.description": "夜里在自己领地的空地上吹响，敌人会分五波从四面八方涌来。守住旗帜即可获得宝箱。在家族领地只有家主能吹响。",
+  "war_horn_3.name": "上级挑衅号角",
+  "war_horn_4.description": "夜里在自己领地的空地上吹响，敌人会分五波从四面八方涌来。守住旗帜即可获得宝箱。在家族领地只有家主能吹响。",
+  "war_horn_4.name": "顶级挑衅号角"
 }

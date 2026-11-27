@@ -131,6 +131,7 @@ async fn founding_needs_an_estate_and_the_fee_and_a_free_name() {
     let account = auth.login_google("family-Owner").unwrap();
     let listed = auth.list_characters_with_equipment(&account).unwrap();
     assert_eq!(listed[0].family.as_deref(), Some("Ironwood"));
+    assert_eq!(listed[0].family_rank.as_deref(), Some("Head"));
 
     game.rename_family(&pid("Owner"), &registrar, "Oakheart", &auth)
         .await;

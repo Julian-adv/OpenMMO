@@ -128,6 +128,7 @@ impl AuthService {
         Self::ensure_seasonal_schema(conn)?;
         Self::ensure_estate_storage_schema(conn)?;
         Self::ensure_family_schema(conn)?;
+        Self::ensure_estate_defense_schema(conn)?;
         Self::ensure_notice_board_schema(conn)?;
         Self::ensure_mail_schema(conn)?;
         Self::ensure_road_patrol_schema(conn)?;

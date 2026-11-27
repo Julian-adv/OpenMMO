@@ -15,6 +15,7 @@
     showFenceNoSpawnZones,
     stopFenceMode,
     refreshFenceHeights,
+    fenceHitTest,
   } from '../../stores/fenceStore'
   import {
     mapEditorMode,
@@ -235,6 +236,17 @@
       cursor = null
       hidePreview()
     }
+    const fenceAt = (clientX: number, clientY: number) => {
+      if (!instances) return undefined
+      const rect = canvas.getBoundingClientRect()
+      pointer.set(
+        ((clientX - rect.left) / rect.width) * 2 - 1,
+        -((clientY - rect.top) / rect.height) * 2 + 1
+      )
+      raycaster.setFromCamera(pointer, get(camera))
+      const hit = raycaster.intersectObject(instances, false)[0]
+      return hit?.instanceId === undefined ? undefined : entries[hit.instanceId]
+    }
     const click = (event: MouseEvent) => {
       if (get(cameraRotationEnabled) || get(estateFurnitureEditorActive)) return
       if (get(landscapingMode) && !get(fenceMode)) return
@@ -248,17 +260,8 @@
           get(housingEditorMode)
         )
           return
-        const rect = canvas.getBoundingClientRect()
-        pointer.set(
-          ((event.clientX - rect.left) / rect.width) * 2 - 1,
-          -((event.clientY - rect.top) / rect.height) * 2 + 1
-        )
-        raycaster.setFromCamera(pointer, get(camera))
-        const hit = raycaster.intersectObject(instances, false)[0]
-        if (
-          hit?.instanceId === undefined ||
-          !fenceInReach(entries[hit.instanceId].edge, player.position)
-        )
+        const hit = fenceAt(event.clientX, event.clientY)
+        if (hit === undefined || !fenceInReach(hit.edge, player.position))
           return
         event.preventDefault()
         event.stopImmediatePropagation()
@@ -283,12 +286,16 @@
       stopFenceMode()
       hidePreview()
     }
+    fenceHitTest.set(
+      (clientX, clientY) => fenceAt(clientX, clientY) !== undefined
+    )
     canvas.addEventListener('pointermove', move)
     canvas.addEventListener('pointerleave', leave)
     canvas.addEventListener('mousedown', click, true)
     window.addEventListener('keydown', escape, true)
     return () => {
       disposed = true
+      fenceHitTest.set(null)
       unsubscribeHeight()
       canvas.removeEventListener('pointermove', move)
       canvas.removeEventListener('pointerleave', leave)

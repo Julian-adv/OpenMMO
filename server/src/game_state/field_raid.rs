@@ -455,7 +455,7 @@ impl GameState {
                 if dead {
                     return;
                 }
-                let living = self.living_near(&raid.position).await;
+                let living = self.living_near(&raid.position, BATTLE_ZONE_RADIUS_M).await;
                 self.mark_raiders(&living, |r| r.in_zone = true).await;
                 let outcome = if let Some(outcome) = raid.sky_outcome(&self.current_game_datetime())
                 {
@@ -505,11 +505,9 @@ impl GameState {
         self.rebuild_region_furniture_passability(rx, rz, &placements);
     }
 
-    /// Living characters in the battle zone.
-    async fn living_near(&self, center: &Position) -> Vec<PlayerId> {
-        let mut ids = self
-            .player_ids_within_position(center, 0, BATTLE_ZONE_RADIUS_M)
-            .await;
+    /// Living characters on the surface within `radius` of `center`.
+    pub(super) async fn living_near(&self, center: &Position, radius: f32) -> Vec<PlayerId> {
+        let mut ids = self.player_ids_within_position(center, 0, radius).await;
         let players = self.players.read().await;
         ids.retain(|id| players.get(id).is_some_and(|p| p.health > 0));
         ids
@@ -579,7 +577,7 @@ impl GameState {
         }
         self.set_stand_in_woken(raid.boss, false);
         info!("Field raid {} ended: {outcome:?}", raid.boss.monster);
-        let living = self.living_near(&raid.position).await;
+        let living = self.living_near(&raid.position, BATTLE_ZONE_RADIUS_M).await;
         raid.mark(self.raider_identities(&living).await, |r| {
             r.in_zone = true;
             r.in_zone_at_end = true;

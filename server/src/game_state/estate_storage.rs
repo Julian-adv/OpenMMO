@@ -238,6 +238,9 @@ impl GameState {
             rotation_deg,
             floor_level,
         } = request;
+        if self.in_estate_defense_circle(requested.x, requested.z) {
+            return Err(super::estate_defense::BANNER_LOCKED);
+        }
         self.tick_land_taxes(auth).await;
         let _persistence = self.persistence_lock.lock().await;
         if self.reject_if_trading(player_id, "move furniture").await {
@@ -563,6 +566,9 @@ impl GameState {
     ) -> Result<(), &'static str> {
         if !requested.is_finite() || !rotation_deg.is_finite() {
             return Err("Invalid furniture placement.");
+        }
+        if self.in_estate_defense_circle(requested.x, requested.z) {
+            return Err(super::estate_defense::BANNER_LOCKED);
         }
         self.tick_land_taxes(auth).await;
         let _persistence = self.persistence_lock.lock().await;

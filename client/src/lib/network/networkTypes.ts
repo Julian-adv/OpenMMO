@@ -123,6 +123,8 @@ export type AccountCharacter = {
   titles?: string[]
   active_title?: string | null
   family?: string | null
+  /** The family's label for this character's rank, such as 가주. */
+  family_rank?: string | null
 }
 
 export const ARMOR_SLOTS = ['head', 'chest', 'pants', 'boots', 'hands'] as const

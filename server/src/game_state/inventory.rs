@@ -2113,6 +2113,7 @@ impl super::GameState {
         source_level: Option<u8>,
         bonus_item_ids: Vec<String>,
         owner: PlayerId,
+        drops_horns: bool,
     ) {
         /// How far from the loot origin a world drop scatters.
         const WORLD_DROP_OFFSET_METERS: f32 = 1.5;
@@ -2120,7 +2121,14 @@ impl super::GameState {
         let mut item_def_ids = bonus_item_ids;
         {
             let mut rng = rand::thread_rng();
-            item_def_ids.extend(self.world_drop_defs.roll(&mut rng, source_level));
+            item_def_ids.extend(
+                self.world_drop_defs
+                    .roll(&mut rng, source_level)
+                    .into_iter()
+                    .filter(|id| {
+                        drops_horns || crate::estate_defense_defs::grade_for_horn(id).is_none()
+                    }),
+            );
         }
         self.record_item_drops(&item_def_ids, source_level.is_some());
         if !item_def_ids.is_empty() {

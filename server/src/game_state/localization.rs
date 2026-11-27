@@ -1,5 +1,6 @@
 use onlinerpg_shared::messages::LocalizedMessage;
 
+#[derive(Clone)]
 pub(crate) struct PlayerMessage {
     pub message: String,
     pub localization: Option<LocalizedMessage>,

@@ -298,7 +298,9 @@ impl super::GameState {
     fn new_brain(&self, monster: &Monster) -> MonsterBrain {
         let def = self.monster_defs.get(&monster.monster_type);
         let ambush_range = def.map_or(0.0, |d| d.ambush_range);
-        let behavior = if ambush_range > 0.0 {
+        let behavior = if monster.siege.is_some() {
+            monster_ai::RAIDER_BEHAVIOR.to_string()
+        } else if ambush_range > 0.0 {
             AMBUSH_BEHAVIOR.to_string()
         } else if monster.aggressive {
             AGGRESSIVE_BEHAVIOR.to_string()
@@ -332,6 +334,10 @@ impl super::GameState {
         brain.reaction_ms = def.map_or(0.0, |d| d.reaction_ms);
         brain.staggers = !def.is_some_and(|d| d.stagger_immune);
         brain.set_ambush(ambush_range, monster.dormant);
+        if let Some(siege) = &monster.siege {
+            brain.set_home(siege.banner);
+            brain.targets = Some(siege.targets.clone());
+        }
         brain
     }
 

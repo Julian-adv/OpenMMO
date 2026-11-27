@@ -10,6 +10,7 @@ mod connection;
 mod dashboard_session;
 mod debuff_defs;
 mod dungeon_defs;
+mod estate_defense_defs;
 mod game;
 mod game_state;
 mod geoip;
@@ -455,6 +456,7 @@ async fn main() -> ExitCode {
     let monster_defs = monster_defs::MonsterDefs::load();
     let item_defs = item_defs::item_defs().clone();
     title_defs::validate(&monster_defs, &item_defs);
+    estate_defense_defs::validate(&monster_defs, &item_defs);
     let dungeon_defs = dungeon_defs::DungeonDefs::load(&item_defs, &monster_defs);
     let world_drop_defs = world_drop_defs::WorldDropDefs::load(&item_defs);
     let paths = state_paths(&args.state_dir);
@@ -650,6 +652,7 @@ async fn main() -> ExitCode {
         );
         return ExitCode::FAILURE;
     }
+    game_state.load_disgraces(&auth_service).await;
     if let Err(err) = game_state.load_estate_chests(&auth_service).await {
         error!("Failed to load estate storage chests: {}", err);
         return ExitCode::FAILURE;
@@ -829,6 +832,21 @@ async fn main() -> ExitCode {
         move || {
             let game_state = Arc::clone(&game_state_for_raid);
             async move { game_state.tick_field_raid().await }
+        },
+    ));
+
+    let game_state_for_defense = Arc::clone(&game_state);
+    let defense_auth = Arc::clone(&auth_service);
+    background.spawn(run_ticks(
+        "estate_defense",
+        game_state::ESTATE_DEFENSE_TICK,
+        drain_shutdown.clone(),
+        &health,
+        health::Deadline::FromPeriod,
+        move || {
+            let game_state = Arc::clone(&game_state_for_defense);
+            let auth = Arc::clone(&defense_auth);
+            async move { game_state.tick_estate_defenses(&auth).await }
         },
     ));
 

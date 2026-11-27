@@ -636,6 +636,9 @@ pub struct Character {
     /// Family name (doc/FAMILY_SYSTEM.md).
     #[serde(default)]
     pub family: Option<String>,
+    /// The family's label for the character's rank, such as 가주.
+    #[serde(default)]
+    pub family_rank: Option<String>,
 }
 
 #[cfg(test)]

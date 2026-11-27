@@ -126,18 +126,22 @@ pub(super) fn estate_access_sql(param: &str, family_bits: Option<u32>) -> String
     }
 }
 
-/// Family name per character of `account_name`, for the character list.
+/// Family name and rank label per character of `account_name`, for the
+/// character list.
 pub(super) fn read_family_names(
     conn: &Connection,
     account_name: &str,
-) -> Result<std::collections::HashMap<i64, String>, rusqlite::Error> {
+) -> Result<std::collections::HashMap<i64, (String, String)>, rusqlite::Error> {
     let mut stmt = conn.prepare(
-        "SELECT c.id, f.name FROM characters c
+        "SELECT c.id, f.name, r.label FROM characters c
          JOIN family_members m ON m.character_id=c.id JOIN families f ON f.id=m.family_id
+         JOIN family_ranks r ON r.family_id=m.family_id AND r.rank=m.rank
          WHERE c.account_name=?1",
     )?;
     let names = stmt
-        .query_map([account_name], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .query_map([account_name], |row| {
+            Ok((row.get(0)?, (row.get(1)?, row.get(2)?)))
+        })?
         .collect();
     names
 }
@@ -205,13 +209,16 @@ pub(super) fn estate_destination(
     Ok((plots, rugs))
 }
 
-struct Membership {
-    family_id: i64,
-    rank: u8,
+pub(super) struct Membership {
+    pub(super) family_id: i64,
+    pub(super) rank: u8,
     permissions: u32,
 }
 
-fn membership(conn: &Connection, character_id: i64) -> Result<Option<Membership>, rusqlite::Error> {
+pub(super) fn membership(
+    conn: &Connection,
+    character_id: i64,
+) -> Result<Option<Membership>, rusqlite::Error> {
     conn.query_row(
         "SELECT m.family_id, m.rank, r.permissions FROM family_members m
          JOIN family_ranks r ON r.family_id=m.family_id AND r.rank=m.rank

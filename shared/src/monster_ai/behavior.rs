@@ -105,6 +105,10 @@ impl MonsterBrain {
                     || self.position.dist_xz_sq(&self.spawn_position) > range * range)
                     .into()
             }
+            "outside_spawn_range" => {
+                let range = param(params, "range", DEFAULT_LEASH_RANGE);
+                (self.position.dist_xz_sq(&self.spawn_position) > range * range).into()
+            }
             "health_below_ratio" => {
                 let ratio = param(params, "ratio", DEFAULT_FLEE_HEALTH_RATIO);
                 let health_ratio = if self.max_health == 0 {
@@ -944,7 +948,8 @@ impl MonsterBrain {
             .iter()
             .filter_map(|p| {
                 let dist_sq = self.position.dist_xz_sq(&p.position);
-                (p.health > 0 && dist_sq <= range_sq).then_some((dist_sq, p))
+                let picked = self.targets.as_ref().is_none_or(|t| t.contains(&p.id));
+                (picked && p.health > 0 && dist_sq <= range_sq).then_some((dist_sq, p))
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))
         else {

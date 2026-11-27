@@ -142,7 +142,12 @@ impl GameState {
         self.grant_title(character_id, &def.id, auth).await;
     }
 
-    async fn grant_title(&self, character_id: i64, title: &str, auth: Option<&AuthService>) {
+    pub(super) async fn grant_title(
+        &self,
+        character_id: i64,
+        title: &str,
+        auth: Option<&AuthService>,
+    ) {
         let persisted = match auth {
             Some(auth) => {
                 let auth = auth.clone();
@@ -187,7 +192,7 @@ impl GameState {
         .await;
         // Auto-show only a first-ever title, or one that supersedes the shown
         // one; any other pick (an explicit "none" included) is the player's.
-        let shown = self.shown_title(&player_id).await;
+        let shown = self.chosen_title(&player_id).await;
         let promote = match shown.as_deref() {
             None => first,
             Some(current) => {
@@ -210,7 +215,15 @@ impl GameState {
             .map(|(pid, _)| *pid)
     }
 
-    async fn shown_title(&self, player_id: &PlayerId) -> Option<String> {
+    /// The title the player picked, even while a disgrace covers it.
+    async fn chosen_title(&self, player_id: &PlayerId) -> Option<String> {
+        match self.title_behind_disgrace(player_id) {
+            Some(chosen) => chosen,
+            None => self.shown_title(player_id).await,
+        }
+    }
+
+    pub(super) async fn shown_title(&self, player_id: &PlayerId) -> Option<String> {
         self.players
             .read()
             .await
@@ -237,7 +250,7 @@ impl GameState {
             .get(player_id)
             .cloned()
             .unwrap_or_default();
-        let active = self.shown_title(player_id).await;
+        let active = self.chosen_title(player_id).await;
         self.send_direct_message(player_id, ServerMessage::PlayerTitles { titles, active })
             .await;
     }
@@ -279,6 +292,15 @@ impl GameState {
                 return;
             }
         }
+        if self.hold_title_behind_disgrace(player_id, &title) {
+            self.send_player_titles(player_id).await;
+            return;
+        }
+        self.show_title(player_id, title).await;
+    }
+
+    /// Put `title` over the player's head for everyone around.
+    pub(super) async fn show_title(&self, player_id: &PlayerId, title: Option<String>) {
         let at = {
             let mut players = self.players.write().await;
             let Some(p) = players.get_mut(player_id) else {
@@ -320,7 +342,7 @@ impl GameState {
                     .await;
                 return;
             }
-            let shown = self.shown_title(player_id).await;
+            let shown = self.chosen_title(player_id).await;
             let mut lines = vec!["Titles (/title N to show, /title off to hide):".to_string()];
             for (i, id) in titles.iter().enumerate() {
                 let name = title_defs::title_def(id).map_or(id.as_str(), |d| d.name.as_str());

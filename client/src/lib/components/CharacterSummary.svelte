@@ -3,6 +3,7 @@
   import { titleName } from '../data/titleDefs'
   import { t } from '../i18n'
   import { character_max_mana } from '../wasm/onlinerpg_shared'
+  import { familyDefaultLabelKey } from '../stores/familyStore'
 
   interface Props {
     character: AccountCharacter
@@ -13,6 +14,11 @@
   const activeTitle = $derived(
     character.active_title ? $titleName(character.active_title) : ''
   )
+  const familyRank = $derived.by(() => {
+    const label = character.family_rank ?? ''
+    const key = familyDefaultLabelKey(label)
+    return key ? $t(key) : label
+  })
   const attributes = ['str', 'dex', 'con', 'int', 'wis', 'cha'] as const
   const maxMp = $derived(
     character_max_mana(
@@ -34,6 +40,7 @@
       >{/if}</span
   >
   {#if !compact}
+    <span class="rank">{familyRank}</span>
     <span class="title" title={activeTitle || undefined}>{activeTitle}</span>
     <span class="meta">
       {$t('stat.level')}
@@ -75,6 +82,15 @@
   .family {
     margin-left: 0.3em;
     color: #cdeec4;
+  }
+
+  .rank {
+    height: 1.3em;
+    overflow: hidden;
+    color: #cdeec4;
+    font-size: 13px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .title {

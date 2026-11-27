@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { startFenceTool } from '../utils/fenceTool'
   import { locale } from '../i18n'
   import { onMount } from 'svelte'
   import {
@@ -140,12 +141,7 @@
   function selectFence() {
     if ($fenceMode || $estateChestPending) return
     stopHouseInteraction()
-    stopEstateChestMode()
-    if ($landscapingMode) {
-      selectLandscapingTool('Fence')
-    } else {
-      networkManager.sendStartLandscapingMode('Fence')
-    }
+    startFenceTool()
   }
 
   function selectStorage(instanceId: number | undefined) {

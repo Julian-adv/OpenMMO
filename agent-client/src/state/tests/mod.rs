@@ -69,6 +69,7 @@ pub(crate) fn monster(id: &str) -> Monster {
         dormant: false,
         lifecycle: Default::default(),
         last_attack_at: 0,
+        siege: None,
     }
 }
 

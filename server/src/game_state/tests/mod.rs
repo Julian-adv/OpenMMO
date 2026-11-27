@@ -31,6 +31,7 @@ mod combat_tests;
 mod dance_tests;
 mod dungeon_tests;
 mod enchant_tests;
+mod estate_defense_tests;
 mod estate_storage_tests;
 mod family_tests;
 mod fence_tests;
@@ -602,6 +603,7 @@ pub(super) fn make_monster(id: &str, position: Position, floor_level: i8) -> cra
         dormant: false,
         lifecycle: MonsterLifecycle::Ambient,
         last_attack_at: 0,
+        siege: None,
     }
 }
 

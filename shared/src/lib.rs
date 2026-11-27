@@ -334,7 +334,7 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// fields and messages.
 /// v181: operator schedules for seasonal events: `QuerySeasonalEvents`/`SetSeasonalEvent`,
 /// `SeasonalEvents` and `ObjectRegionsChanged`.
-pub const PROTOCOL_VERSION: u32 = 181;
+pub const PROTOCOL_VERSION: u32 = 182;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -404,7 +404,7 @@ pub use character::{
     AppearanceColor, Character, CharacterAppearance, CharacterAttributes, CharacterClass,
     FaceStyle, Gender, HairStyle, VisibleEquipment,
 };
-pub use entity::{Monster, MonsterLifecycle, MonsterState, Player, PlayerId};
+pub use entity::{Monster, MonsterLifecycle, MonsterState, Player, PlayerId, Siege};
 pub use messages::{
     deserialize_client_msg, deserialize_server_msg, serialize_client_msg, serialize_server_msg,
     ActiveDeal, AttackRejectReason, ClientMessage, DealKind, InstrumentNoteEvent, ServerMessage,
@@ -707,6 +707,7 @@ mod tests {
                 dormant: true,
                 lifecycle: MonsterLifecycle::Ambient,
                 last_attack_at: 0,
+                siege: None,
             },
         );
         let msg = ServerMessage::GameState {

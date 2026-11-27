@@ -98,6 +98,9 @@ pub const DEFAULT_BEHAVIOR: &str = "brave";
 pub const AGGRESSIVE_BEHAVIOR: &str = "aggressive";
 /// Behavior tree of a monster that never fights.
 pub const PASSIVE_BEHAVIOR: &str = "passive";
+/// Behavior tree of an estate-defense raider: marches on its banner, fights
+/// whoever stands in reach on the way.
+pub const RAIDER_BEHAVIOR: &str = "raider";
 /// Behavior tree of a waking statue.
 pub const AMBUSH_BEHAVIOR: &str = "ambush";
 /// How long a woken ambusher stands shaking off the stone before it acts.

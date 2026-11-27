@@ -186,7 +186,7 @@ fn foundation_inside_estate(house: &HouseData, plots: &[FencePlot]) -> bool {
     !cells.is_empty() && cells.into_iter().all(|(x, z)| owns_position(plots, x, z))
 }
 
-fn distance_to_house(house: &HouseData, position: &Position) -> f32 {
+pub(super) fn distance_to_house(house: &HouseData, position: &Position) -> f32 {
     house
         .rooms
         .iter()
@@ -787,6 +787,12 @@ impl GameState {
             return Err("The whole house must fit inside your estate.".to_string());
         }
         let cells = foundation_cells(&house);
+        if cells
+            .iter()
+            .any(|(x, z)| self.in_estate_defense_circle(*x, *z))
+        {
+            return Err(super::estate_defense::BANNER_LOCKED.to_string());
+        }
         let mut min_height = f32::INFINITY;
         let mut max_height = f32::NEG_INFINITY;
         let mut height_sum = 0.0;

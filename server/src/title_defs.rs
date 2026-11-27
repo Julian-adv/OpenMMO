@@ -110,6 +110,16 @@ pub fn validate(
                     item
                 );
             }
+            "estate_defense" => assert!(
+                def.boss_id.as_deref().is_some_and(|grade| {
+                    crate::estate_defense_defs::estate_defense_grades()
+                        .iter()
+                        .any(|g| g.id == grade)
+                }),
+                "title '{}' names no estate defense grade",
+                def.id
+            ),
+            "disgrace" => {}
             other => panic!("title '{}' has unknown source '{}'", def.id, other),
         }
     }
