@@ -510,3 +510,11 @@
 - 최상급 3D: 같은 날 같은 방법(원본 `trophy_serpent_head/tripo_web/tripo_convert_19be25d7-….glb`, 2,592 triangles). 0.70×0.90×0.159m, 텍스처 1024² WebP q90, GLB 479,712바이트, 깊이 0.16m.
 - 상급 3D: 같은 날 같은 방법(원본 `trophy_statue_face/tripo_web/tripo_convert_ff9e0f22-….glb`, 2,760 triangles). 받침판이 좁아 높이를 다른 트로피와 같은 0.90m에 맞췄다(`--size 0.9 --size-axis z`): 0.61×0.90×0.159m, GLB 509,292바이트, 바닥 크기 0.6×0.16m.
 - 중급 3D: 같은 날 같은 방법(원본 `trophy_cyclops_skull/tripo_web/tripo_convert_effd08ea-….glb`, 2,888 triangles), 높이 0.90m에 맞춤. 해골이 앞으로 튀어나와 0.70×0.90×0.342m, GLB 316,728바이트, 바닥 크기 0.7×0.34m.
+
+## 도발의 뿔나팔 — 2026-11-28
+
+[영지 수호전](../ESTATE_DEFENSE.md)을 여는 뿔나팔 네 등급(`war_horn_1`~`4`)이 모델 하나를 같이 쓰고, 아이콘의 쇠 띠 색으로 등급을 가른다: 하급 쇠, 중급 청동, 상급 은, 최상급 금.
+
+- 원화: OpenAI Codex 내장 ImageGen, **ChatGPT Pro 20x**, 2026-11-28, OpenAI 이용약관. 들소 뿔에 쇠 띠 셋, 쇠 마우스피스, 붉은 가죽 끈과 술. [원화](../../assets/items/war_horn/concept_v1/concept.png), 프롬프트와 해시는 같은 폴더.
+- 3D: 사용자가 같은 날 Tripo 웹에서 원화 한 장으로 생성(Tripo 이용약관, 2,828 triangles, 원본 `assets/items/war_horn/tripo_web/`). [export_item_asset.py](../../tools/blender-scripts/export_item_asset.py)로 X축 90° 돌려 땅에 눕히고 긴 변 0.60m(귀환 주문서 0.50m보다 조금 크게)에 맞췄다: 0.60×0.30×0.147m, 원점 바닥 가운데, 텍스처 512² WebP, GLB 212,864바이트.
+- 아이콘: 같은 스크립트의 Cycles 렌더(`--icon-rotation 30 -8 -40`)가 하급이다. 중급·상급·최상급은 그 512² 렌더에서 채도가 낮은 쇠 띠 픽셀만 청동·은·금으로 칠해 128²로 줄였다. 명령과 해시는 `tripo_web/generation.json`.
