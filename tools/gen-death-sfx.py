@@ -13,6 +13,12 @@ missing; edit it between a --plan-only run and the real one.
 import argparse, json, os, pathlib, sys, time, urllib.error, urllib.request
 
 PROMPTS = {
+    "war_horn": (
+        "One breath blown through a large hollow ox horn as a medieval warning signal. "
+        "Immediate breathy lip buzz blooming into one long deep resonant booo note, "
+        "slightly wavering as the breath runs out, then a short natural decay outdoors. "
+        "Solo close recording, no melody, second blast, orchestra, voice or music."
+    ),
     "statue_shatter": (
         "A life-size stone statue smashed by one heavy blow: an immediate sharp "
         "crack of solid rock splitting, then chunks of stone and gravel tumbling "

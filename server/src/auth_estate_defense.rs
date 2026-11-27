@@ -117,21 +117,22 @@ impl AuthService {
         Ok(record)
     }
 
-    /// The estate under `plot` if `character_id` may blow a horn on it: its
-    /// own account's unlinked estate, or its family's estate when it is the
-    /// head. Arrears refuse both.
+    /// Both the summoner and the banner must be on the defended estate.
     pub fn estate_defense_site(
         &self,
         character_id: i64,
-        plot: (i32, i32, u8),
+        origin: (i32, i32, u8),
+        banner: (i32, i32, u8),
     ) -> Verdict<DefenseSite> {
         let conn = self.open_connection()?;
         let estate: Option<(i64, String, Option<i64>, i64)> = conn
             .query_row(
                 "SELECT e.id, e.account_name, e.family_id, e.missed FROM land_plots p
                  JOIN land_estates e ON e.id=p.estate_id
-                 WHERE p.tile_x=?1 AND p.tile_z=?2 AND p.quadrant=?3",
-                params![plot.0, plot.1, plot.2],
+                 JOIN land_plots b ON b.estate_id=e.id
+                 WHERE p.tile_x=?1 AND p.tile_z=?2 AND p.quadrant=?3
+                   AND b.tile_x=?4 AND b.tile_z=?5 AND b.quadrant=?6",
+                params![origin.0, origin.1, origin.2, banner.0, banner.1, banner.2],
                 |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
             )
             .optional()?;

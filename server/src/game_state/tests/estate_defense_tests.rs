@@ -3,6 +3,7 @@
 use super::*;
 use onlinerpg_shared::world::GameDateTime;
 
+const SUMMONER: (f32, f32) = (16.0, 15.0);
 const BANNER: (f32, f32) = (16.0, 16.0);
 
 fn night() -> GameDateTime {
@@ -31,7 +32,7 @@ async fn lord(name: &str) -> (GameState, crate::auth::AuthService, DirectRx) {
         &auth,
         &account,
         "Lord",
-        pos3(BANNER.0, 5.0, BANNER.1),
+        pos3(SUMMONER.0, 5.0, SUMMONER.1),
         vec![bag_item(1, "land_deed", 1), bag_item(2, "war_horn_1", 2)],
     )
     .await;
@@ -117,7 +118,39 @@ async fn a_refused_horn_stays_in_the_bag() {
         codes.contains(&"server.estateDefense.notOwnEstate".to_string()),
         "{codes:?}"
     );
+    for (z, rotation) in [(31.5, 0.0), (32.5, std::f32::consts::PI)] {
+        game.teleport_player(&pid("Lord"), pos3(16.0, 5.0, z), rotation, 0)
+            .await;
+        game.blow_war_horn(&pid("Lord"), 2, &auth).await;
+        assert!(notices(&mut rx).contains(&"server.estateDefense.notOwnEstate".to_string()));
+        assert_eq!(horns(&game).await, 2);
+    }
     assert!(raiders(&game).await.is_empty());
+}
+
+#[tokio::test]
+async fn a_horn_blast_reaches_the_summoner_and_nearby_players_once() {
+    let (game, auth, mut summoner) = lord("defense_blast").await;
+    game.add_player(make_player("Neighbor", BANNER.0 + 5.0, BANNER.1))
+        .await;
+    let mut neighbor = game.register_direct_channel(&pid("Neighbor")).await;
+    let blasts = |rx: &mut DirectRx| {
+        drain(rx)
+            .into_iter()
+            .filter(|msg| {
+                matches!(msg,
+                    ServerMessage::WarHornBlown { player_id, position }
+                    if *player_id == pid("Lord") && (position.x, position.z) == SUMMONER
+                )
+            })
+            .count()
+    };
+    for (time, expected) in [(noon(), 0), (night(), 1), (night(), 0)] {
+        game.debug_set_datetime(&time);
+        game.blow_war_horn(&pid("Lord"), 2, &auth).await;
+        assert_eq!(blasts(&mut summoner), expected);
+        assert_eq!(blasts(&mut neighbor), expected);
+    }
 }
 
 #[tokio::test]
@@ -277,19 +310,23 @@ async fn raiders_march_on_the_banner() {
 
 #[tokio::test]
 async fn a_practice_defense_needs_no_horn_and_leaves_no_disgrace() {
-    let (game, auth, _rx) = lord("defense_practice").await;
+    let (game, auth, mut rx) = lord("defense_practice").await;
     game.debug_set_datetime(&noon());
-    game.players
-        .write()
-        .await
-        .get_mut(&pid("Lord"))
-        .unwrap()
-        .position = pos3(80.0, 5.0, 80.0);
+    game.teleport_player(
+        &pid("Lord"),
+        pos3(80.0, 5.0, 80.0),
+        std::f32::consts::FRAC_PI_2,
+        0,
+    )
+    .await;
     let reply = game
         .practice_defense_command(&pid("Lord"), "2")
         .await
         .unwrap();
     assert!(reply.contains("defense_2"));
+    assert!(drain(&mut rx).iter().any(|msg| matches!(msg,
+        ServerMessage::EstateDefenseStatus { state } if (state.banner.x, state.banner.z) == (81.0, 80.0)
+    )));
     assert_eq!(horns(&game).await, 2);
     tick(&game, &auth, 32).await;
     assert_eq!(raiders(&game).await.len(), 6);

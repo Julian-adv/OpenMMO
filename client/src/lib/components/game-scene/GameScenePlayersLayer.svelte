@@ -8,6 +8,8 @@
   import { T } from '@threlte/core'
   import * as THREE from 'three'
   import { get } from 'svelte/store'
+  import { onMount } from 'svelte'
+  import { warHornBlown } from '../../stores/estateDefenseStore'
   import { SvelteMap } from 'svelte/reactivity'
   import PlayerModel from '../PlayerModel.svelte'
   import GameSceneAbilitiesLayer from './GameSceneAbilitiesLayer.svelte'
@@ -270,6 +272,10 @@
 
   const modelFor = (id: number) =>
     id === currentPlayer?.id ? currentPlayerModel : remoteModels.get(id)
+
+  onMount(() =>
+    warHornBlown.on((id, gain) => void modelFor(id)?.playWarHorn(gain))
+  )
 
   function getAbilityAnchor(
     id: number,

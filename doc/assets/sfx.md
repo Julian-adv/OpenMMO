@@ -4,6 +4,13 @@ Short one-shot effects in `client/public/sounds/` (plain `.ogg`, not LFS).
 All effects route through `sfxManager.ts` so the Settings SFX slider/mute
 applies — never construct `Audio` elements elsewhere.
 
+## 영지 수호전 뿔나팔
+
+`war-horn.ogg`는 도발의 뿔나팔 네 등급이 함께 쓰는 한 번의 낮고 긴 나팔음이다.
+2026-11-28에 ElevenLabs Sound Effects API의 Starter 유료 플랜으로 생성했다. [ElevenLabs 유료 플랜 상업 이용 라이선스](https://help.elevenlabs.io/hc/en-us/articles/13313564601361-Can-I-publish-the-content-I-generate-on-the-platform)
+`tools/gen-death-sfx.py`의 `war_horn` 프롬프트로 2.4초를 요청했다(influence 0.65, 1회).
+원본은 `assets/sfx/war-horn-2026-11-28/war_horn-1.mp3`다. 끝 무음을 잘라 2.15초로 줄이고 마지막 70ms를 페이드아웃한 뒤 −5dB, 모노 44.1kHz OGG Vorbis q5로 저장했다.
+
 ## Fishing
 
 - fishing-cast.ogg — original synthesis by the contributor (band-passed noise

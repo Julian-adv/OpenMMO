@@ -2582,6 +2582,10 @@ pub enum ServerMessage {
         position: Position,
         wake_in_ms: u32,
     },
+    WarHornBlown {
+        player_id: PlayerId,
+        position: Position,
+    },
     /// An estate defense's state, on its start and whenever it changes.
     EstateDefenseStatus {
         state: EstateDefenseState,
@@ -3282,6 +3286,7 @@ impl ServerMessage {
             | Self::EquipmentEnchantSucceeded { .. }
             | Self::PlayerLeveledUp { .. }
             | Self::MergerCelebrated { .. }
+            | Self::WarHornBlown { .. }
             | Self::MonsterSkillStarted { .. }
             | Self::MonsterSkillStruck { .. }
             | Self::MonsterSkillReflected { .. }

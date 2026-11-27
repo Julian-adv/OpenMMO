@@ -223,6 +223,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::FieldRaidNotice { .. } => "FieldRaidNotice",
         ServerMessage::FieldBossWaking { .. } => "FieldBossWaking",
         ServerMessage::FieldBossSleeping { .. } => "FieldBossSleeping",
+        ServerMessage::WarHornBlown { .. } => "WarHornBlown",
         ServerMessage::EstateDefenseStatus { .. } => "EstateDefenseStatus",
         ServerMessage::EstateDefenseWave { .. } => "EstateDefenseWave",
         ServerMessage::EstateDefenseEnded { .. } => "EstateDefenseEnded",

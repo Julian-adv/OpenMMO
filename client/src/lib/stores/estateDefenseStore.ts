@@ -1,5 +1,9 @@
 import { writable } from 'svelte/store'
 import type { Position } from '../network/networkTypes'
+import { createEvent } from '../network/networkEvents'
+
+export const warHornBlown =
+  createEvent<(playerId: number, gain: number) => void>()
 
 /** Server `EstateDefenseState` (doc/ESTATE_DEFENSE.md). */
 export type EstateDefenseState = {

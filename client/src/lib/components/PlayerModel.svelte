@@ -49,7 +49,7 @@
   import { createSecondaryMotionScheduler } from '../effects/secondary-motion-scheduler'
   import { t, translate, type MessageKey } from '../i18n'
   import { visibleMana } from '../stores/gameStore'
-  import { playPrimalRoarSound } from '../managers/sfxManager'
+  import { playPrimalRoarSound, playPropSound } from '../managers/sfxManager'
   import {
     playerHealthDisplay,
     tempHealth,
@@ -57,6 +57,7 @@
   import { RiderMotion } from '../utils/riderMotion'
   import { MovementRotation } from '../utils/movementRotation'
   import { FishingReel } from '../utils/fishingReel'
+  import { WAR_HORN_BLOW_DELAY_MS, WarHornPose } from '../utils/warHornPose'
   import { fishingReelStance, type FishingCatch } from '../stores/fishingStore'
   import {
     ENCHANT_WEAPON_ANIMATION,
@@ -1870,6 +1871,7 @@
     // Cleanup on unmount
     return () => {
       destroyed = true
+      warHorn?.dispose()
       daggerTrail?.dispose()
       daggerTrail = undefined
       if (mixer) {
@@ -1954,6 +1956,25 @@
     playCastPose(HEAL_ANIMATION, true)
   }
 
+  let warHorn: WarHornPose | null = null
+  let hornStartedAt = 0
+
+  /** Raise the horn and sound it at `gain` once it reaches the lips. */
+  export async function playWarHorn(gain: number) {
+    const root = modelRoot
+    if (!root) return
+    try {
+      const { scene } = await loadWarmGLB('/models/objects/war_horn.glb')
+      if (destroyed || modelRoot !== root) return
+      warHorn?.dispose()
+      warHorn = WarHornPose.create(root, scene, gender === 'female')
+      hornStartedAt = performance.now()
+      playPropSound('warHorn', WAR_HORN_BLOW_DELAY_MS, gain)
+    } catch (error) {
+      console.error('Failed to load war horn', error)
+    }
+  }
+
   export function setEnchantPoseUntil(until: number, weapon: boolean) {
     enchantPoseUntil = until
     enchantWeapon = weapon
@@ -1974,13 +1995,18 @@
     const pushing = toilNow()?.clip === cartPushClip && !!cartPushClip
     if (weaponObject) {
       weaponObject.visible =
+        !warHorn &&
         !riding &&
         !handsOnOars &&
         !pushing &&
         (playerState !== 'interact' || fishingInteraction)
     }
     const offhandVisible =
-      !riding && !handsOnOars && !pushing && playerState !== 'interact'
+      !warHorn &&
+      !riding &&
+      !handsOnOars &&
+      !pushing &&
+      playerState !== 'interact'
     if (offhandObject) offhandObject.visible = offhandVisible
     if (torchFireGroup) torchFireGroup.visible = offhandVisible
   }
@@ -1998,6 +2024,7 @@
 
   // Step the cape after the mixer and pose corrections.
   export function update(deltaTime: number, wind: WindState | null = null) {
+    warHorn?.restore()
     fishingReel?.restore()
     enchantGrip?.update(0)
     riderMotion?.restore()
@@ -2060,6 +2087,15 @@
         !riding,
       catchPresentation
     )
+    if (
+      warHorn &&
+      (playerState === 'dead' ||
+        !warHorn.update((performance.now() - hornStartedAt) / 1000))
+    ) {
+      warHorn.dispose()
+      warHorn = null
+      updateHeldPropVisibility()
+    }
     const onScreen = !teleportHidden && position.y > OFFSCREEN_Y / 2
     if (capeRig) capeRig.root.visible = onScreen
     if (isCurrentPlayer) seeThrough.update(modelGroup, $localInvisible)

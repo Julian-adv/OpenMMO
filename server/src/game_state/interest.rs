@@ -424,6 +424,7 @@ impl Interest {
             | ServerMessage::PlayerLeveledUp { player_id }
             | ServerMessage::EquipmentEnchantSucceeded { player_id, .. }
             | ServerMessage::PlayerInstrumentNotes { player_id, .. }
+            | ServerMessage::WarHornBlown { player_id, .. }
             | ServerMessage::AbilityUsed { player_id, .. }
             | ServerMessage::HealingPrayed { player_id, .. }
                 if !self.hidden.is_empty() =>

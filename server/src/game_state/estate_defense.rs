@@ -1,5 +1,5 @@
 //! War-horn estate defenses (doc/ESTATE_DEFENSE.md): five waves march on a
-//! banner planted where the horn was blown; holding it pays out a chest.
+//! banner planted in front of the summoner; holding it pays out a chest.
 
 use super::inventory::consume_one;
 use super::localization::{localized, PlayerMessage};
@@ -300,22 +300,26 @@ impl GameState {
         if !is_night(&self.current_game_datetime()) {
             return Err("notNight");
         }
-        let banner = self.banner_ground(player_id).await?;
+        let (origin, banner) = self.banner_ground(player_id).await?;
         let character_id = self
             .character_id_of(player_id)
             .await
             .ok_or("notOwnEstate")?;
-        let plot = super::land::plot_key(plot_addr(banner.x, banner.z));
+        let origin_plot = super::land::plot_key(plot_addr(origin.x, origin.z));
+        let banner_plot = super::land::plot_key(plot_addr(banner.x, banner.z));
         let lookup = auth.clone();
-        let site: DefenseSite =
-            match auth_db(move || lookup.estate_defense_site(character_id, plot)).await {
-                Ok(Ok(site)) => site,
-                Ok(Err(code)) => return Err(code),
-                Err(error) => {
-                    warn!(%error, "Failed to read estate defense site");
-                    return Err("notOwnEstate");
-                }
-            };
+        let site: DefenseSite = match auth_db(move || {
+            lookup.estate_defense_site(character_id, origin_plot, banner_plot)
+        })
+        .await
+        {
+            Ok(Ok(site)) => site,
+            Ok(Err(code)) => return Err(code),
+            Err(error) => {
+                warn!(%error, "Failed to read estate defense site");
+                return Err("notOwnEstate");
+            }
+        };
         let defense = self
             .prepare_defense(player_id, character_id, grade, banner, &site, false)
             .await?;
@@ -343,7 +347,8 @@ impl GameState {
         self.mark_inventory_dirty(player_id).await;
         self.send_inventory_snapshot(player_id, snapshot).await;
         self.log_consumed(player_id, [grade.horn.as_str()]).await;
-        self.announce_defense(site.estate_id).await;
+        self.announce_defense(site.estate_id, player_id, origin)
+            .await;
         Ok(())
     }
 
@@ -368,7 +373,7 @@ impl GameState {
             .await
             .ok_or("Character not found.")?;
         let failed = |code| refusal(code).message;
-        let banner = self.banner_ground(admin_id).await.map_err(failed)?;
+        let (origin, banner) = self.banner_ground(admin_id).await.map_err(failed)?;
         let site = DefenseSite {
             estate_id: -character_id,
             family_id: None,
@@ -385,13 +390,16 @@ impl GameState {
             }
             defenses.insert(site.estate_id, defense);
         }
-        self.announce_defense(site.estate_id).await;
+        self.announce_defense(site.estate_id, admin_id, origin)
+            .await;
         Ok(format!("Practice defense {} opened.", grade.id))
     }
 
-    /// The outdoor dry ground the player stands on, out of combat.
-    async fn banner_ground(&self, player_id: &PlayerId) -> Result<Position, &'static str> {
-        let banner = {
+    async fn banner_ground(
+        &self,
+        player_id: &PlayerId,
+    ) -> Result<(Position, Position), &'static str> {
+        let (origin, rotation) = {
             let players = self.players.read().await;
             let player = players.get(player_id).ok_or("notOutdoors")?;
             if Self::in_combat(player) {
@@ -400,13 +408,23 @@ impl GameState {
             if player.floor_level != 0 {
                 return Err("notOutdoors");
             }
-            player.position
+            (player.position, player.rotation)
         };
+        self.outdoor_dry_ground(origin.x, origin.z)
+            .await
+            .ok_or("notOutdoors")?;
+        let (dx, dz) = rotation.sin_cos();
+        let banner = Position {
+            x: origin.x + dx,
+            z: origin.z + dz,
+            ..origin
+        }
+        .wrapped_x();
         let y = self
             .outdoor_dry_ground(banner.x, banner.z)
             .await
             .ok_or("notOutdoors")?;
-        Ok(Position { y, ..banner })
+        Ok((origin, Position { y, ..banner }))
     }
 
     /// Ground height outside any house floor and out of water.
@@ -487,7 +505,7 @@ impl GameState {
         })
     }
 
-    async fn announce_defense(&self, estate_id: i64) {
+    async fn announce_defense(&self, estate_id: i64, summoner: &PlayerId, origin: Position) {
         let Some((grade, banner, family_id, summoner_name, practice)) =
             self.defenses().get(&estate_id).map(|d| {
                 (
@@ -505,8 +523,8 @@ impl GameState {
             "Estate defense {} on estate {estate_id}: {summoner_name} blew {} at ({:.1},{:.1}); family {family_id:?}{}",
             grade.id,
             grade.horn,
-            banner.x,
-            banner.z,
+            origin.x,
+            origin.z,
             if practice { " (practice)" } else { "" }
         );
         let notice = localized(
@@ -514,6 +532,16 @@ impl GameState {
             format!("{summoner_name} blew the war horn. The enemy arrives in 30 seconds."),
         )
         .with_param("name", summoner_name);
+        self.publish_nearby(
+            &origin,
+            0,
+            ServerMessage::WarHornBlown {
+                player_id: *summoner,
+                position: origin,
+            },
+            None,
+        )
+        .await;
         let audience = self.defense_audience(family_id, &banner).await;
         self.notify(&audience, &notice).await;
         self.publish_defense_state(estate_id).await;

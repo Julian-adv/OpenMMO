@@ -49,6 +49,7 @@ const PROP_SOUNDS = {
   coinJackpot: { url: '/sounds/coin-jackpot.ogg', volume: 0.5, pool: 1 },
   keyDrop: { url: '/sounds/key-drop.ogg', volume: 0.5, pool: 1 },
   pickaxe: { url: '/sounds/pickaxe-ore.ogg', volume: 0.5, pool: 3 },
+  warHorn: { url: '/sounds/war-horn.ogg', volume: 0.65, pool: 2 },
 } as const
 export type PropSound = keyof typeof PROP_SOUNDS
 
@@ -253,9 +254,9 @@ function preloadSounds(table: SoundTable) {
   }
 }
 
-function playSound({ url, volume, pool }: SoundSpec) {
+function playSound({ url, volume, pool }: SoundSpec, gain = 1) {
   if (!canUseAudio()) return
-  playAudioFromPool(url, volume, pool)
+  playAudioFromPool(url, volume * gain, pool)
 }
 
 export function preloadSwordHitSound() {
@@ -368,12 +369,13 @@ export function preloadPropSounds() {
  *  pile's pour clip starting. `coinJackpot`: the picker's jackpot coin pile.
  *  `keyDrop`: a dungeon key falling as loot. `pickaxe`: each mining swing,
  *  `delayMs` after it starts so it lands with the point. */
-export function playPropSound(kind: PropSound, delayMs = 0) {
+export function playPropSound(kind: PropSound, delayMs = 0, gain = 1) {
+  if (gain <= 0) return
   if (delayMs > 0) {
-    window.setTimeout(() => playPropSound(kind), delayMs)
+    window.setTimeout(() => playPropSound(kind, 0, gain), delayMs)
     return
   }
-  playSound(PROP_SOUNDS[kind])
+  playSound(PROP_SOUNDS[kind], gain)
 }
 
 /** Load dungeon effects on entry. */

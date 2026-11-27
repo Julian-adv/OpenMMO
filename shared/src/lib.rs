@@ -337,7 +337,8 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// `SeasonalEvents` and `ObjectRegionsChanged`.
 /// v185: `RequestRespawn { place }`, `RequestRespawnOptions`/`RespawnOptions` and
 /// `SetShelterAccess`, `EstateChest.shelter` (doc/RESPAWN_POINT.md).
-pub const PROTOCOL_VERSION: u32 = 185;
+/// v186: `WarHornBlown` plays the summoner's horn for nearby players.
+pub const PROTOCOL_VERSION: u32 = 186;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from

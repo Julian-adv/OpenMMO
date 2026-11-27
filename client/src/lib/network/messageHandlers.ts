@@ -2,6 +2,7 @@ import {
   handleEstateDefenseEnded,
   handleEstateDefenseStatus,
   handleEstateDefenseWave,
+  warHornBlown,
 } from '../stores/estateDefenseStore'
 import { manaState } from '../stores/manaStore'
 import { respawnOptions } from '../stores/respawnStore'
@@ -2494,6 +2495,11 @@ export function handleServerMessage(
 
     case 'FieldBossSleeping':
       handleFieldBossSleeping(data)
+      break
+
+    case 'WarHornBlown':
+      if (localFloorLevel() === 0)
+        warHornBlown.emit(data.player_id, listenerGain(data.position, 0))
       break
 
     case 'EstateDefenseStatus':
