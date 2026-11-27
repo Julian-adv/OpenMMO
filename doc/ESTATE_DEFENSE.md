@@ -315,7 +315,13 @@
 - 시작 상태를 받으면 그 등급 몬스터의 모델(Monster.svelte와 같은 로더)과 플레이어 동작 변환을 미리 해 둔다(`utils/monsterPreload.ts`). 세션에서 처음 보는 공용 동작 몬스터가 변환 동안 미끄러지는 문제는 수호전 밖(던전의 홉고블린·버그베어 등)에도 남아 있다.
 - 우두머리 1.3배: `Monster.scale`(전송 필드, `spawn_monster_with`의 인자).
 
-남은 것: 트로피 네 종(에셋 포함)과 지급, 뿔나팔 아이콘(지금은 귀환 주문서 아이콘을 빌려 쓴다).
+트로피 (2026-11-27):
+
+- 등급 표의 `trophy` 열: `trophy_orc_axes`, `trophy_cyclops_skull`, `trophy_statue_face`, `trophy_serpent_head`. `items.csv`에서 거래 불가·가격 없음(상인도 안 산다), `estate_storage.csv`에서 가문 휘장처럼 3m까지 올려 거는 벽걸이.
+- 연습이 아닌 수호전을 지켜내면 소환자의 가방에, 무거우면 발밑에 준다. 끝날 때 접속해 있지 않은 소환자는 받지 못한다.
+- 원화는 `assets/items/trophy_*/concept_v1/`, 3D는 사용자가 Tripo 웹에서 만든 것을 높이 0.90m로 맞췄다(`tripo_web/`). 기록은 [에셋 문서](assets/items.md#영지-수호-트로피--2026-11-27).
+
+남은 것: 명판 날짜(결정 대기), 뿔나팔 아이콘(지금은 귀환 주문서 아이콘을 빌려 쓴다).
 
 ## 결정 기록
 

@@ -170,6 +170,7 @@ async fn holding_the_banner_through_five_waves_pays_the_defender() {
         })
         .count();
     assert_eq!(potions, 3);
+    assert_eq!(bag_count(&game, &pid("Lord"), "trophy_orc_axes").await, 1);
     let character = game.character_id_of(&pid("Lord")).await.unwrap();
     assert!(auth
         .load_titles(character)
@@ -233,6 +234,7 @@ async fn a_wiped_defense_disgraces_the_lord() {
         "{codes:?}"
     );
     assert!(codes.contains(&"server.estateDefense.disgraced".to_string()));
+    assert_eq!(bag_count(&game, &pid("Lord"), "trophy_orc_axes").await, 0);
     let shown = game
         .players
         .read()

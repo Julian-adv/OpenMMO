@@ -21,6 +21,7 @@ struct Row {
     chest_tier: u8,
     chest: String,
     title: String,
+    trophy: String,
 }
 
 /// One line of a chest bundle: one of `items`, `quantity` times, at `chance`.
@@ -44,6 +45,8 @@ pub struct DefenseGrade {
     pub chest_tier: u8,
     pub chest: Vec<ChestLine>,
     pub title: String,
+    /// Wall furniture for the summoner of a held defense.
+    pub trophy: String,
 }
 
 fn chest_line(spec: &str) -> ChestLine {
@@ -85,6 +88,7 @@ static GRADES: LazyLock<Vec<DefenseGrade>> = LazyLock::new(|| {
             chest_tier: row.chest_tier,
             chest: row.chest.split('|').map(chest_line).collect(),
             title: row.title,
+            trophy: row.trophy,
         })
         .collect();
     grades.sort_by(|a, b| a.id.cmp(&b.id));
@@ -125,6 +129,14 @@ pub fn validate(monster_defs: &MonsterDefs, item_defs: &ItemDefs) {
                 );
             }
         }
+        assert!(
+            item_defs.get(&grade.trophy).is_some()
+                && item_defs.untradeable(&grade.trophy)
+                && onlinerpg_shared::estate_storage::is_estate_storage_item(&grade.trophy),
+            "estate defense '{}' trophy '{}' must be untradeable estate furniture",
+            grade.id,
+            grade.trophy
+        );
         assert!(
             crate::title_defs::title_def(&grade.title).is_some(),
             "estate defense '{}' names unknown title '{}'",

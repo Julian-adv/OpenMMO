@@ -919,6 +919,7 @@ impl GameState {
         );
         if outcome == EstateDefenseOutcome::Held {
             self.reward_defenders(&defense, auth).await;
+            self.award_trophy(&defense).await;
         }
         let audience = self
             .defense_audience(defense.family_id, &defense.banner)
@@ -987,6 +988,26 @@ impl GameState {
             shares.len(),
             defense.eligible.len(),
             defense.summoner_name
+        );
+    }
+
+    /// A summoner who logged out before the end gets none.
+    async fn award_trophy(&self, defense: &EstateDefense) {
+        if defense.practice {
+            return;
+        }
+        let trophy = &defense.grade.trophy;
+        let Some(player_id) = self.player_id_of_character(defense.summoner).await else {
+            info!(
+                "Estate defense {}: summoner {} is offline, no {trophy}",
+                defense.grade.id, defense.summoner_name
+            );
+            return;
+        };
+        self.award_item(&player_id, trophy).await;
+        info!(
+            "Estate defense {}: {} received {trophy}",
+            defense.grade.id, defense.summoner_name
         );
     }
 

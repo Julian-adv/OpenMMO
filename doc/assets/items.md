@@ -493,3 +493,20 @@
 - `watch_spear`(신병용 창, 2026-11-20) — 새 모델·아이콘 없음. 기존 `spear`의 `weapons/spear.glb`와 `weapons/spear_icon.png`를 그대로 쓴다.
 - `watch_tabard`(신병용 타바드, 2026-11-20) — 새 모델·아이콘 없음. `guard_tabard`의 `armor/guard_tabard.glb`와 `armor/guard_tabard.png`를 그대로 쓴다.
 - `watch_shovel`(경비대 대여 눈삽, 2026-11-21) — 새 모델·아이콘 없음. `snow_shovel`의 `weapons/snow_shovel.glb`와 `objects/snow_shovel.png`를 그대로 쓴다.
+
+## 영지 수호 트로피 — 2026-11-27
+
+[영지 수호전](../ESTATE_DEFENSE.md#트로피) 성공 때 소환자가 받는 벽걸이 트로피 네 종. 등급이 오를수록 받침판이 화려해지고, 아래 놋쇠 명판은 비워 둔다.
+
+| 등급 | 폴더 | 내용 |
+| --- | --- | --- |
+| 하급 | [trophy_orc_axes](../../assets/items/trophy_orc_axes/concept_v1/concept.png) | 거친 참나무 판, 엇갈린 오크 도끼와 찌그러진 방패 |
+| 중급 | [trophy_cyclops_skull](../../assets/items/trophy_cyclops_skull/concept_v1/concept.png) | 호두나무 판, 사이클롭스 외눈 해골 |
+| 상급 | [trophy_statue_face](../../assets/items/trophy_statue_face/concept_v1/concept.png) | 대리석 테두리 판, 깨어나는 석상의 금 간 투구 얼굴 |
+| 최상급 | [trophy_serpent_head](../../assets/items/trophy_serpent_head/concept_v1/concept.png) | 금박 월계수 테 판, 석화된 뱀머리 시녀의 머리 |
+
+- 원화: OpenAI Codex 내장 ImageGen, **ChatGPT Pro 20x**, 2026-11-27 생성, OpenAI 이용약관 적용. 정면 한 장(1254²)으로 그려 Tripo 입력에 맞췄다. 상급은 `garden_statue`, 최상급은 `garden_handmaiden` 원화를 참고 이미지로 주었다. 프롬프트와 해시는 각 `concept_v1/`의 `prompt.txt`, `generation.json`.
+- 하급 3D: 사용자가 2026-11-27 Tripo 웹에서 원화 정면 한 장으로 생성(Tripo 이용약관, 원본 `tripo_web/tripo_convert_58b5594c-….glb`, 2,672 triangles). [export_item_asset.py](../../tools/blender-scripts/export_item_asset.py)로 폭 0.70m에 맞춰 0.70×0.90×0.155m, 원점은 바닥 가운데, 앞면 +Z(뒷면이 원점 0.078m 뒤). 텍스처 세 장 1024² WebP q90, GLB 531,128바이트. 아이콘은 같은 스크립트의 Cycles 렌더 128²(`--icon-rotation -78 22 0`). 명령과 해시는 `tripo_web/generation.json`. `estate_storage.csv` 깊이 0.16m로 뒷면이 벽에 닿게 했다.
+- 최상급 3D: 같은 날 같은 방법(원본 `trophy_serpent_head/tripo_web/tripo_convert_19be25d7-….glb`, 2,592 triangles). 0.70×0.90×0.159m, 텍스처 1024² WebP q90, GLB 479,712바이트, 깊이 0.16m.
+- 상급 3D: 같은 날 같은 방법(원본 `trophy_statue_face/tripo_web/tripo_convert_ff9e0f22-….glb`, 2,760 triangles). 받침판이 좁아 높이를 다른 트로피와 같은 0.90m에 맞췄다(`--size 0.9 --size-axis z`): 0.61×0.90×0.159m, GLB 509,292바이트, 바닥 크기 0.6×0.16m.
+- 중급 3D: 같은 날 같은 방법(원본 `trophy_cyclops_skull/tripo_web/tripo_convert_effd08ea-….glb`, 2,888 triangles), 높이 0.90m에 맞춤. 해골이 앞으로 튀어나와 0.70×0.90×0.342m, GLB 316,728바이트, 바닥 크기 0.7×0.34m.

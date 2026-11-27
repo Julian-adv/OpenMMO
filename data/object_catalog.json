@@ -550,5 +550,25 @@
     "id": "family_pennant",
     "name": "Family Pennant",
     "model": "objects/family_pennant.glb"
+  },
+  {
+    "id": "trophy_orc_axes",
+    "name": "Orc Axe Trophy",
+    "model": "objects/trophy_orc_axes.glb"
+  },
+  {
+    "id": "trophy_cyclops_skull",
+    "name": "Cyclops Skull Trophy",
+    "model": "objects/trophy_cyclops_skull.glb"
+  },
+  {
+    "id": "trophy_statue_face",
+    "name": "Statue Face Trophy",
+    "model": "objects/trophy_statue_face.glb"
+  },
+  {
+    "id": "trophy_serpent_head",
+    "name": "Serpent Head Trophy",
+    "model": "objects/trophy_serpent_head.glb"
   }
 ]
