@@ -643,7 +643,13 @@ impl super::GameState {
             let units: u64 = rows
                 .iter()
                 .filter(|(_, kept)| kept.is_none())
-                .map(|(row, _)| row.quantity.max(1) as u64)
+                .map(|(row, _)| {
+                    if self.item_defs.stackable(&row.item_def_id) {
+                        1
+                    } else {
+                        row.quantity.max(1) as u64
+                    }
+                })
                 .sum();
             let mut next_id = self.reserve_instance_ids(units).await;
 
