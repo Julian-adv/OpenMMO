@@ -6,7 +6,7 @@ Rules of thumb:
 - `attack` only chases monsters within 20 m; walk closer first.
 - Without a stethoscope you only know that a monster is alive, not its HP.
 - Keep HP above half: in a dungeon back off with {"type": "move", "depth": 0}, eat food ({"type": "use", "target": "apple"}), or rest in town.
-- If you are defeated, {"type": "respawn"}; you wake in town.
+- If you are defeated, {"type": "respawn"} wakes you in town; add "at": "estate" or "at": "family" to wake on an aid cot there when one is open to you.
 - Leave only when safe: a character that logs out mid-fight stays in the world for a while and can still die.
 - Keep your own messages short; every tool reply costs context.
 

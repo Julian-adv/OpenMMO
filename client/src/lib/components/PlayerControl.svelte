@@ -251,7 +251,14 @@
     REFUSE_PICKUP_ANIM,
   } from '../stores/emoteStore'
   import { respawnPoseRequest } from '../stores/respawnPoseStore'
-  import { objectManager } from '../managers/objectManager'
+  import {
+    AID_COT,
+    accountCharacterIds,
+    SHELTER_ACCESS,
+    shelterAccessKey,
+  } from '../stores/respawnStore'
+  import { estateChests } from '../stores/estateFurnitureStore'
+  import { estateChestArrival, objectManager } from '../managers/objectManager'
   import { SitAnimationName } from '../types/animations'
 
   interface Props {
@@ -1403,12 +1410,13 @@
   }
 
   /** Lie down on the bed the server respawned us on. */
-  async function enterRespawnPose(objectType: string) {
+  async function enterRespawnPose(objectType: string, objectId: number | null) {
     cancelAutoTravel()
     if (!currentPlayer) return
     const { x, z } = currentPlayer.position
+    if (objectId !== null) await estateChestArrival(objectId)
     const { anim, interactOffset, placement, rotation } =
-      await objectManager.resolvePose(objectType, x, z)
+      await objectManager.resolvePose(objectType, x, z, objectId)
     if (!placement || rotation === undefined || !currentPlayer) return
     enterInteraction(
       {
@@ -1468,10 +1476,10 @@
   })
 
   $effect(() => {
-    const objectType = $respawnPoseRequest
-    if (!objectType) return
+    const request = $respawnPoseRequest
+    if (!request) return
     respawnPoseRequest.set(null)
-    void enterRespawnPose(objectType)
+    void enterRespawnPose(request.objectType, request.objectId)
   })
 
   $effect(() => {
@@ -2171,6 +2179,22 @@
   function handleNpcContextMenu(event: MouseEvent) {
     if (!currentPlayer || currentPlayer.health <= 0) return
     const intent = processClickIntent(event)
+    if (intent.type === 'interact_object' && intent.objectType === AID_COT) {
+      const cot = get(estateChests).get(intent.objectId)
+      if (cot && get(accountCharacterIds).includes(cot.owner_id)) {
+        const current = cot.shelter ?? 'Estate'
+        npcContextMenu.set({
+          npcName: translate('shelter.menuTitle'),
+          screenX: event.clientX,
+          screenY: event.clientY,
+          entries: SHELTER_ACCESS.map((access) => ({
+            label: `${access === current ? '✓ ' : ''}${translate(shelterAccessKey(access))}`,
+            action: () => networkManager.sendSetShelterAccess(cot.id, access),
+          })),
+        })
+        return
+      }
+    }
     if (intent.type === 'interact_npc') {
       const npc = get(gameStore).otherPlayers.get(intent.playerId)
       if (npc?.isOfficialNpc) {

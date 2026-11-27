@@ -6,6 +6,7 @@
 //! `AgentAction` into a `ClientMessage` for the server.
 
 use onlinerpg_shared::notice_board::NoticeBoardRef;
+use onlinerpg_shared::respawn::RespawnPlace;
 use onlinerpg_shared::ClientMessage;
 use serde::Deserialize;
 
@@ -94,8 +95,13 @@ pub(super) enum AgentAction {
         /// true sprints them.
         sprint: Option<bool>,
     },
+    /// `at`: "estate" or "family" wakes on that estate's aid cot when one is
+    /// open to us; anything else wakes at the inn.
     #[serde(rename = "respawn")]
-    Respawn,
+    Respawn {
+        #[serde(default)]
+        at: Option<String>,
+    },
     /// Cast the rod at (x, z), or 4 m south when omitted; server validates.
     /// Reflexes (the state module) fight the fish — this is only the decision to fish.
     #[serde(rename = "fish")]
@@ -851,8 +857,9 @@ pub(super) const ACTION_SPECS: &[ActionSpec] = &[
     ActionSpec {
         names: &["respawn"],
         aliases: &[],
-        doc: r#"- Respawn when dead:
-  {"type": "respawn"}"#,
+        doc: r#"- Respawn when dead, at the inn or on an aid cot of your estate ("estate") or family seat ("family"):
+  {"type": "respawn"}
+  {"type": "respawn", "at": "estate"}"#,
     },
     ActionSpec {
         names: &["wait"],
@@ -1402,7 +1409,7 @@ impl AgentAction {
             | Self::Buy { .. }
             | Self::Buyback { .. }
             | Self::Fish { .. }
-            | Self::Respawn
+            | Self::Respawn { .. }
             | Self::UseAbility {
                 ability: AgentAbility::ValhallaCharge,
                 ..
@@ -1543,7 +1550,7 @@ impl AgentAction {
     /// Of those, the ones an NPC pinned in place must not run at all. Fishing
     /// and respawning keep it where it is, so they stay allowed.
     pub(super) fn blocked_while_holding_position(&self) -> bool {
-        self.takes_over_movement() && !matches!(self, Self::Fish { .. } | Self::Respawn)
+        self.takes_over_movement() && !matches!(self, Self::Fish { .. } | Self::Respawn { .. })
     }
 
     /// Whether the action assumes the agent stands where the turn's plan put
@@ -1611,7 +1618,7 @@ impl AgentAction {
             | Self::Buyback { .. }
             | Self::Fish { .. }
             | Self::StopFishing
-            | Self::Respawn
+            | Self::Respawn { .. }
             | Self::OfferDeal { .. }
             | Self::OpenTrade { .. }
             | Self::OfferPledge { .. }
@@ -1671,7 +1678,7 @@ impl AgentAction {
             Self::CancelPlayerTrade => "cancel_player_trade",
             Self::Move { .. } => "move",
             Self::Follow { .. } => "follow",
-            Self::Respawn => "respawn",
+            Self::Respawn { .. } => "respawn",
             Self::Fish { .. } => "fish",
             Self::StopFishing => "stop_fishing",
             Self::OfferDeal { .. } => "offer_deal",
@@ -2265,7 +2272,13 @@ pub(super) fn action_to_command(
                 client_position: None,
             })
         }
-        AgentAction::Respawn => Some(ClientMessage::RequestRespawn),
+        AgentAction::Respawn { at } => Some(ClientMessage::RequestRespawn {
+            place: match at.as_deref() {
+                Some("estate") => RespawnPlace::Estate,
+                Some("family" | "family_seat") => RespawnPlace::FamilySeat,
+                _ => RespawnPlace::Town,
+            },
+        }),
         AgentAction::Fish { x, z } => {
             // Explicit coordinates, or a fixed short cast south of the agent.
             // The server is the judge of whether that spot is water.

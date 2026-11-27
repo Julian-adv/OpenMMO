@@ -1,6 +1,6 @@
 <script lang="ts">
   import { startFenceTool } from '../utils/fenceTool'
-  import { locale } from '../i18n'
+  import { locale, t } from '../i18n'
   import { onMount } from 'svelte'
   import {
     landscapingMode,
@@ -43,6 +43,12 @@
     beginEstateFurniturePlacementSave,
   } from '../stores/estateFurniturePlacementStore'
   import { estateStorageDefs } from '../data/estateFurnitureDefs'
+  import { estateChests } from '../stores/estateFurnitureStore'
+  import {
+    AID_COT,
+    SHELTER_ACCESS,
+    shelterAccessKey,
+  } from '../stores/respawnStore'
   import { getItemDef, itemDisplayName } from '../data/itemDefs'
   import { playerVisualFloorLevel } from '../stores/housingStore'
   import { networkManager } from '../network/socket'
@@ -65,6 +71,11 @@
       : undefined
   )
   const savedSignText = $derived($selectedEstateFurniture?.text ?? '')
+  const selectedShelter = $derived(
+    $selectedEstateFurniture?.item_def_id === AID_COT
+      ? ($estateChests.get($selectedEstateFurniture.id)?.shelter ?? 'Estate')
+      : undefined
+  )
   let signText = $derived(selectedSignId === undefined ? '' : savedSignText)
   $effect(() => {
     if (selectedFurnitureId !== undefined && panelElement)
@@ -309,6 +320,27 @@
                     signText.trim() === savedSignText}
                   onclick={saveSignText}>Save text</button
                 >
+              </div>
+            {/if}
+            {#if selectedShelter !== undefined && selectedFurnitureId !== undefined}
+              {@const furnitureId = selectedFurnitureId}
+              <div class="shelter-controls">
+                <span>{$t('shelter.menuTitle')}</span>
+                <div class="shelter-choices">
+                  {#each SHELTER_ACCESS as access (access)}
+                    <button
+                      class:active={selectedShelter === access}
+                      aria-pressed={selectedShelter === access}
+                      disabled={$estateChestPending}
+                      onclick={() =>
+                        networkManager.sendSetShelterAccess(
+                          furnitureId,
+                          access
+                        )}>{$t(shelterAccessKey(access))}</button
+                    >
+                  {/each}
+                </div>
+                <small>Applies to every aid cot on this estate.</small>
               </div>
             {/if}
             <div class="furniture-actions">
@@ -604,6 +636,20 @@
     background: #211c16;
     color: inherit;
     font: inherit;
+  }
+  .shelter-controls {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+  }
+  .shelter-choices {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+  .shelter-choices button.active {
+    border-color: #e2b93b;
+    color: #f4d77a;
   }
   .rotation-controls {
     display: flex;

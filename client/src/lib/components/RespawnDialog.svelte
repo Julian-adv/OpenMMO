@@ -4,13 +4,19 @@
   import { mountOverlay } from '../stores/overlayStack'
   import { reviveItem } from '../stores/inventoryStore'
   import { networkManager } from '../network/socket'
+  import { respawnOptions, type RespawnPlace } from '../stores/respawnStore'
 
   interface Props {
-    onRespawn: () => void
+    onRespawn: (place: RespawnPlace) => void
     onLater: () => void
   }
 
   let { onRespawn, onLater }: Props = $props()
+
+  $effect(() => {
+    respawnOptions.set(null)
+    networkManager.requestRespawnOptions()
+  })
 
   function useReviveItem(instanceId: number) {
     networkManager.sendUseItem(instanceId)
@@ -38,7 +44,30 @@
           })}
         </button>
       {/if}
-      <button class="primary" onclick={onRespawn}>{$t('respawn.town')}</button>
+      <button class="primary" onclick={() => onRespawn('Town')}
+        >{$t('respawn.town')}</button
+      >
+      {#if $respawnOptions?.estate}
+        <button class="shelter" onclick={() => onRespawn('Estate')}
+          >{$t('respawn.estate')}</button
+        >
+      {/if}
+      {#if $respawnOptions?.family_seat}
+        <button class="shelter" onclick={() => onRespawn('FamilySeat')}
+          >{$t('respawn.familySeat')}</button
+        >
+      {/if}
+      {#if $respawnOptions?.nearby}
+        {@const nearby = $respawnOptions.nearby}
+        <button
+          class="shelter"
+          onclick={() => onRespawn({ Nearby: { estate_id: nearby.estate_id } })}
+          >{$t('respawn.nearby', {
+            name: nearby.name,
+            distance: Math.round(nearby.distance_m),
+          })}</button
+        >
+      {/if}
       <button class="secondary" onclick={onLater}>{$t('respawn.later')}</button>
     </div>
   </div>
@@ -99,6 +128,12 @@
   .respawn-actions .secondary {
     background: #3d3d3d;
     color: #f0f0f0;
+  }
+
+  .respawn-actions .shelter {
+    background: #8a2b26;
+    color: #fff4ee;
+    font-weight: 700;
   }
 
   .respawn-actions .talisman {

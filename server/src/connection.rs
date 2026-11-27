@@ -789,9 +789,26 @@ async fn handle_client_message(
             }
         }
 
-        ClientMessage::RequestRespawn => {
+        ClientMessage::RequestRespawn { place } => {
             if let Some(id) = &state.require_in_game("respawn request") {
-                game_state.respawn_player(id).await;
+                game_state.respawn_player_at(id, place, auth_service).await;
+            }
+        }
+
+        ClientMessage::RequestRespawnOptions => {
+            if let Some(id) = &state.require_in_game("respawn options") {
+                game_state.send_respawn_options(id, auth_service).await;
+            }
+        }
+
+        ClientMessage::SetShelterAccess {
+            furniture_id,
+            access,
+        } => {
+            if let Some(id) = &state.require_in_game("shelter access") {
+                game_state
+                    .set_shelter_access(id, furniture_id, access, auth_service)
+                    .await;
             }
         }
 

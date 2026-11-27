@@ -190,6 +190,7 @@ pub fn msg_name(msg: &onlinerpg_shared::ServerMessage) -> &'static str {
         ServerMessage::LandClaimed { .. } => "LandClaimed",
         ServerMessage::LandRejected { .. } => "LandRejected",
         ServerMessage::LandAccountState { .. } => "LandAccountState",
+        ServerMessage::RespawnOptions { .. } => "RespawnOptions",
         ServerMessage::CapeTexturePrompt { .. } => "CapeTexturePrompt",
         ServerMessage::HouseSpawned { .. } => "HouseSpawned",
         ServerMessage::HousePlacementStarted { .. } => "HousePlacementStarted",

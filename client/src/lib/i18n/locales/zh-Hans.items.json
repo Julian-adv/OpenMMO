@@ -75,6 +75,8 @@
   "furniture_iron_sword.name": "铁剑摆件",
   "furniture_rustic_bed.description": "拆封后可放置在自己的领地：乡村床。ORKEA装饰家具。",
   "furniture_rustic_bed.name": "乡村床",
+  "furniture_aid_cot.description": "拆封后可放置在自己的领地。倒下的人可以选择在这张床上醒来，谁能使用由主人决定。",
+  "furniture_aid_cot.name": "救护床",
   "furniture_scroll_enchant_armor.description": "拆封后可放置在自己的领地：防具强化卷轴摆件。ORKEA装饰家具。",
   "furniture_scroll_enchant_armor.name": "防具强化卷轴摆件",
   "furniture_scroll_enchant.description": "拆封后可放置在自己的领地：强化卷轴摆件。ORKEA装饰家具。",

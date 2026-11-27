@@ -5,7 +5,6 @@ use crate::{
     types::{PlayerId, Position},
 };
 use onlinerpg_shared::estate_storage::estate_storage_def;
-use onlinerpg_shared::furniture::point_in_house_floor;
 use onlinerpg_shared::housing::FLOOR_THICKNESS;
 use onlinerpg_shared::pathfinding::{get_floor_y_base, is_cell_sealed, is_circle_blocked_on_floor};
 use onlinerpg_terrain::{
@@ -143,47 +142,20 @@ impl GameState {
         if rugs.is_empty() {
             return None;
         }
-        let houses = self.housing_io.read_all_houses().await.ok()?;
         let max_height_offset = estate_storage_def("furniture_hearthbound_rug")?.max_height_offset;
         for &(mut position, rotation_deg, floor_level) in rugs {
-            if !position.is_finite() || !rotation_deg.is_finite() || !(0..=3).contains(&floor_level)
-            {
-                continue;
-            }
-            if !plots.contains(&super::land::plot_key(plot_addr(position.x, position.z))) {
+            if !rotation_deg.is_finite() {
                 continue;
             }
             let floor = floor_level as u8;
-            let house = houses
-                .iter()
-                .find(|house| point_in_house_floor(house, position.x, position.z, floor));
-            if let Some(house) = house {
-                let Some(y) = self.house_floor_y_base(house, &position, floor) else {
-                    continue;
-                };
-                if !y.is_finite()
-                    || !(y - 0.15..=y + FLOOR_THICKNESS / 2.0 + max_height_offset + 0.15)
-                        .contains(&position.y)
-                {
-                    continue;
-                }
-                position.y = y;
-            } else {
-                if floor_level != 0 {
-                    continue;
-                }
-                let Some((y, depth)) = self.ground_and_depth_at(position.x, position.z).await
-                else {
-                    continue;
-                };
-                if !y.is_finite()
-                    || depth > 0.1
-                    || !(y - 0.15..=y + max_height_offset + 0.15).contains(&position.y)
-                {
-                    continue;
-                }
-                position.y = y;
+            let Some((y, indoor)) = self.estate_floor_y(plots, &position, floor_level).await else {
+                continue;
+            };
+            let top = if indoor { FLOOR_THICKNESS / 2.0 } else { 0.0 } + max_height_offset;
+            if !(y - 0.15..=y + top + 0.15).contains(&position.y) {
+                continue;
             }
+            position.y = y;
             let cache = self.passability_read();
             if is_cell_sealed(&cache, position.x, position.z, floor, Some(position.y))
                 || is_circle_blocked_on_floor(
@@ -202,7 +174,40 @@ impl GameState {
         None
     }
 
-    async fn estate_return_position(&self, plots: &[(i32, i32, u8)]) -> Option<Position> {
+    /// The walking height under furniture on the estate's plots, and whether
+    /// it is a house floor: that storey's floor indoors, dry ground outside.
+    pub(super) async fn estate_floor_y(
+        &self,
+        plots: &[(i32, i32, u8)],
+        position: &Position,
+        floor_level: i8,
+    ) -> Option<(f32, bool)> {
+        if !position.is_finite()
+            || !(0..=3).contains(&floor_level)
+            || !plots.contains(&super::land::plot_key(plot_addr(position.x, position.z)))
+        {
+            return None;
+        }
+        let floor = floor_level as u8;
+        let house_floor = {
+            let cache = self.passability_read();
+            (floor > 0 || get_floor_y_base(&cache, position.x, position.z, 0).is_some())
+                .then(|| get_floor_y_base(&cache, position.x, position.z, floor))
+        };
+        match house_floor {
+            Some(y) => y.filter(|y| y.is_finite()).map(|y| (y, true)),
+            None => self
+                .ground_and_depth_at(position.x, position.z)
+                .await
+                .filter(|(y, depth)| y.is_finite() && *depth <= 0.1)
+                .map(|(y, _)| (y, false)),
+        }
+    }
+
+    pub(super) async fn estate_return_position(
+        &self,
+        plots: &[(i32, i32, u8)],
+    ) -> Option<Position> {
         'plots: for &(tx, tz, quadrant) in plots {
             let origin_x = tx * TILE_DIM as i32 - PLOT_SIZE + i32::from(quadrant % 2) * PLOT_SIZE;
             let origin_z = tz * TILE_DIM as i32 - PLOT_SIZE + i32::from(quadrant / 2) * PLOT_SIZE;

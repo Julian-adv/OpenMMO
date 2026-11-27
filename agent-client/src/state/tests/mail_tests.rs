@@ -108,6 +108,8 @@ fn an_estate_mailbox_is_listed_by_distance() {
             text: None,
             family_id: None,
             emblem: None,
+            item_id: None,
+            shelter: None,
         }],
         &[],
     );

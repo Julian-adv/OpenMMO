@@ -126,6 +126,9 @@ pub struct EstateChest {
     /// The lasting id of the item that was placed (doc/ITEM_IDS.md).
     #[serde(default)]
     pub item_id: Option<u64>,
+    /// Who may wake on it, for an aid cot.
+    #[serde(default)]
+    pub shelter: Option<crate::respawn::ShelterAccess>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

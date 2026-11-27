@@ -1,6 +1,10 @@
 <script lang="ts">
   import { t } from './lib/i18n'
   import { onMount } from 'svelte'
+  import {
+    accountCharacterIds,
+    type RespawnPlace,
+  } from './lib/stores/respawnStore'
   import type SceneCanvasComponent from './lib/components/SceneCanvas.svelte'
   import LoginScreen from './lib/components/LoginScreen.svelte'
   import CharacterSelectScreen from './lib/components/CharacterSelectScreen.svelte'
@@ -44,6 +48,7 @@
   /** The account's character another connection is playing, if any. */
   let accountPlaying = $state<string | null>(null)
   let accountCharacters = $state<AccountCharacter[]>([])
+  $effect(() => accountCharacterIds.set(accountCharacters.map((c) => c.id)))
   let selectedCharacterId = $state<number | null>(null)
   let characterSlotLayout = $state<CharacterSlotLayout[]>([])
   let selectedCharacter = $derived<AccountCharacter | null>(
@@ -359,9 +364,9 @@
     screen = 'login'
   }
 
-  function requestRespawn() {
+  function requestRespawn(place: RespawnPlace) {
     deathUiState = 'dialog_closed'
-    networkManager.requestRespawn()
+    networkManager.requestRespawn(place)
   }
 
   function closeRespawnDialog() {

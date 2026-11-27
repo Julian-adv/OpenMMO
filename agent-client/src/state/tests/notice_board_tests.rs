@@ -124,6 +124,8 @@ fn family_board(id: i64, estate_id: i64, x: f32) -> onlinerpg_shared::estate_sto
         text: None,
         family_id: Some(4),
         emblem: None,
+        item_id: None,
+        shelter: None,
     }
 }
 

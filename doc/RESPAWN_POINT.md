@@ -1,6 +1,6 @@
 # 구호소 부활
 
-상태: 기획 확정 (2026-11-26), 구현 전. 영지 수호전([ESTATE_DEFENSE.md](ESTATE_DEFENSE.md)) 논의 중 나온 아이디어.
+상태: 구현됨 (2026-11-27, 프로토콜 185), 미배포. ORKEA 판매는 전시품 배치 후. 영지 수호전([ESTATE_DEFENSE.md](ESTATE_DEFENSE.md)) 논의 중 나온 아이디어.
 
 영지 주인이 영지에 **구호 침상**(가칭)을 놓으면 그 영지가 구호소가 된다. 죽은 사람은 부활 대화상자에서 어디서 깨어날지 고른다. 마을 여관 병실, 자기 영지, 본가, 그리고 주인이 공개한 가까운 구호소 중에서 고른다. 공개 구호소는 근처에서 죽은 누구나 쓸 수 있다.
 
@@ -23,22 +23,22 @@
 
 ## 구호 침상
 
-- ORKEA 가구로 판다. 다른 가구와 같은 배치·이동·회수 경로(`estate_chests`, `estate_storage.csv`)를 쓴다. 모델은 기존 Rustic Bed(`rustic_bed.glb`)의 담요 색만 바꾼 변형이다(예: 흰 담요에 붉은 줄). 새 형태를 만들지 않고 텍스처만 바꿔 별도 GLB·아이콘으로 낸다. 적십자 모양은 쓰지 않는다(국제 보호 표장이라 게임에서 쓰면 안 된다).
+- ORKEA 가구로 판다(`furniture_aid_cot`, 8,000c). 판매 목록은 전시품 id로 결제하므로 매장에 `aid_cot` 전시품을 놓고 그 id를 `data/furniture_shop.json`에 넣어야 팔린다. 다른 가구와 같은 배치·이동·회수 경로(`estate_chests`, `estate_storage.csv`)를 쓴다. 모델은 기존 Rustic Bed(`rustic_bed.glb`)의 담요 색만 바꾼 변형이다(예: 흰 담요에 붉은 줄). 새 형태를 만들지 않고 텍스처만 바꿔 별도 GLB·아이콘으로 낸다. 적십자 모양은 쓰지 않는다(국제 보호 표장이라 게임에서 쓰면 안 된다).
 - 부활 지점이 되는 것은 구호 침상뿐이다(결정 2026-11-26). 일반 침대(Bed·Rustic Bed)는 지금처럼 눕기와 회복 2배만 한다. 어느 가구가 부활 지점인지 헷갈리지 않고, 공개 설정을 둘 곳이 하나로 정해진다.
 - 구호 침상에서도 눕기와 회복 2배는 일반 침대와 같다.
 - 한 영지에 여러 개 놓을 수 있다. 공개 설정은 영지 단위로 하나다(침상마다 따로 두지 않는다).
 
 ### 공개 설정
 
-영지 주인이 영지 편집기(또는 침상 클릭 메뉴)에서 고른다.
+영지 주인(같은 계정의 캐릭터)이 구호 침상을 우클릭하면 나오는 메뉴(내 영지만 / 가문원까지 / 근처의 누구나)에서 고른다. 지금 설정에 ✓가 붙는다. `Estate Editor → Objects → Select`로 침상을 골라도 같은 버튼이 나온다. 그 영지의 모든 구호 침상에 함께 적용된다.
 
 | 설정 | 깨어날 수 있는 사람 |
 | --- | --- |
 | 영지 | 그 영지 계정의 캐릭터 |
-| 가문 | 위 + 그 영지가 연결된 가문의 가문원 |
+| 가문 | 위 + 그 영지가 본가인 가문의 가문원. 본가가 아닌 가문 영지는 `영지`와 같다 |
 | 공개 | 누구나. 다만 아래 "가까운 구호소" 조건 안에서 |
 
-기본값은 `영지`. 가문 영지가 아니면 `가문`은 `영지`와 같다.
+기본값은 `영지`. 가문원에게 제안하는 것은 본가 하나뿐이라, 본가가 아닌 영지에서 `가문`은 `영지`와 같다.
 
 ## 부활 대화상자
 
@@ -57,8 +57,8 @@
 
 ## 침상 고르기와 도착
 
-- 그 영지의 침상을 먼저 설치한 순서로 살펴, 안전하고 비어 있는 첫 침상에 눕는다. 모두 차 있으면 첫 안전한 침상 옆에 선다. 여관과 같은 규칙이다.
-- "안전한 침상"은 귀향의 깔개 도착 검사(`estate_rug_destination`)와 같다. 지금 그 계정이 소유한 구획 위, 바닥이 남아 있음(실내 0~3층 포함), 막힌 칸이 아님.
+- 그 영지의 침상을 먼저 설치한 순서로 살펴, 안전하고 비어 있는 첫 침상에 눕는다. 모두 차 있으면 영지 귀환 주문서가 도착하는 영지의 안전한 바깥 땅에 선다. 그런 땅이 없으면 첫 침상 자리에 선다.
+- "안전한 침상"은 지금 그 영지가 소유한 구획 위에 있고, 바닥이 남아 있는(실내 0~3층은 통행 캐시의 그 층 바닥, 바깥은 수심 0.1m 이하 지면) 침상이다. 침상 자체가 막힌 칸이라 막힘 검사는 하지 않는다.
 - 누운 상태는 영지 침대에 직접 누운 것과 같다(`object_type` = 침상 아이템 ID, `object_id` = `estate_chests.id`).
 - 버튼을 누른 사이 침상을 회수했거나, 설정을 닫았거나, 영지가 압류되어 갈 곳이 없어지면 마을에서 깨어나고 이유를 시스템 메시지로 알린다.
 - HP는 최대치, 허기 초기화, 마나 회복 지연 등은 여관 부활과 같다.
@@ -96,7 +96,7 @@
 
 - 위치는 그 영지의 첫 안전한 침상 좌표. 마우스를 올리면 영지 이름(없으면 주인 이름)을 보인다.
 - `영지`·`가문` 설정 구호소는 지도에 나오지 않는다. 가문원에게 본가 표지를 따로 보이는 것은 후속.
-- 데이터는 지금 지도가 영지 소유를 받는 공개 API(`GET /api/terrain/land-ownership`)에 `shelters` 목록으로 붙인다. 서버 메모리의 공개 구호소 목록에서 내므로 DB를 읽지 않는다.
+- 데이터는 공개 API `GET /api/terrain/shelters`(영지 소유 API와 같은 방식의 DB 조회 한 번)에서 받는다. 지도를 열 때 한 번 읽는다. 체납 영지는 빠진다.
 
 ## 결정할 쟁점
 
@@ -110,46 +110,39 @@
 ## 프로토콜과 클라이언트
 
 - `ClientMessage::RequestRespawn`에 목적지를 붙인다: `RequestRespawn { place: RespawnPlace }`, `RespawnPlace = Town | Estate | FamilySeat | Nearby { estate_id }`. 프로토콜 번호를 올린다.
-- 서버가 사망 직후(그리고 죽은 채 접속했을 때) `RespawnOptions { estate, family_seat, nearby: Option<{ estate_id, name, distance }> }`를 보낸다. 대화상자는 이것으로 버튼을 정한다. `Nearby`는 서버가 다시 검사하므로 클라이언트가 다른 `estate_id`를 보내도 그 사망 지점 기준 조건을 넘어야 한다.
-- 영지 편집기에 공개 설정(영지/가문/공개). `SetEstateShelter { access }`.
-- agent-client `AgentAction::Respawn`은 선택 인자 `at`(`town`·`estate`·`family`·`nearby`, 기본 `town`)을 받는다. 액션 설명과 `openmmo-mcp/src/instructions.md`의 "you wake in town" 문장을 고친다. NPC(공식 캐릭터)는 지금처럼 일정표 위치에서 일어난다.
+- 부활 대화상자가 열릴 때 클라이언트가 `RequestRespawnOptions`를 보내고, 서버가 `RespawnOptions { estate, family_seat, nearby: Option<NearbyShelter { estate_id, name, distance_m }> }`로 답한다. 대화상자는 이것으로 버튼을 정한다. `Nearby`는 서버가 사망 지점 기준으로 다시 찾아 같은 영지일 때만 받아 준다.
+- 공개 설정은 `SetShelterAccess { furniture_id, access }`. 주인 계정만 바꿀 수 있고, 바뀌면 그 영지 구호 침상들의 `EstateChest.shelter`를 다시 보낸다.
+- agent-client `{"type": "respawn"}`은 선택 인자 `at`(`estate`·`family`, 그 밖은 마을)을 받는다. MCP 안내문도 같이 고쳤다. NPC(공식 캐릭터)는 지금처럼 일정표 위치에서 일어난다.
 - i18n: 버튼 문구, 공개 설정, 실패 메시지.
 
 ## 데이터
 
 - `land_estates`에 `shelter_access INTEGER NOT NULL DEFAULT 0`(0 영지, 1 가문, 2 공개).
-- 침상은 `estate_chests`의 `item_def_id = furniture_aid_cot`(가칭) 행.
-- 서버 메모리에 공개 구호소 목록(영지 id, 첫 침상 좌표)을 리전 격자로 둔다. 침상 설치·이동·회수, 설정 변경, 압류 때 갱신한다. 이미 메모리에 있는 `EstateChestIndex`에서 만든다.
+- 침상은 `estate_chests`의 `item_def_id = furniture_aid_cot` 행. 구호 침상의 `EstateChest.shelter`에 영지의 공개 설정을 싣는다.
+- 서버 메모리 `EstateChestIndex`가 구호 침상 id 집합을 따로 둔다. 설치·회수 때 함께 바뀌고, 설정 변경은 `set_shelter`로 반영한다.
 
 ## 동접 5,000
 
-- 사망마다 "여관보다 가까운 공개 구호소" 찾기: 메모리 격자에서 사망 지점부터 여관 거리까지 넓혀 가며 찾는다. DB를 읽지 않는다.
-- 자기 영지·본가 확인은 사망·부활 때 DB 조회 한 번씩.
-- 지금 깔개 검증은 `housing_io.read_all_houses()`로 모든 집 파일을 디스크에서 읽는다. 사망마다 부르면 안 된다. 침상 좌표의 집 청크 폴더만 읽도록 바꾸고, 주문서 경로도 같이 고친다.
+- "여관보다 가까운 공개 구호소"는 메모리의 구호 침상 집합만 훑는다. 고른 영지(가까운 순 최대 3곳)만 DB로 공개·체납을 확인한다.
+- 자기 영지·본가 확인은 대화상자를 열 때와 부활 때 DB 조회 한 번씩.
+- 침상과 귀향의 깔개의 바닥 검사는 디스크의 집 파일 대신 메모리의 통행 캐시(`get_floor_y_base`)를 쓴다. 전에는 주문서를 읽을 때마다 `read_all_houses()`로 모든 집 파일을 읽었다.
 - `respawn_player`는 조회와 검증을 `lock_player_movement` 전에 하고, 고른 침상 위치를 잠금 목적지에 넣는다.
 - 빈 침상 판정은 다른 플레이어의 `object_type`과 `object_id`를 함께 본다. 여관 침대 ID와 `estate_chests.id`가 겹칠 수 있어서다.
 
-## 채택 시 바꿀 문서
+## 함께 바꾼 문서
 
-- [ESTATE_STORAGE.md](ESTATE_STORAGE.md): 구호 침상, 공개 설정.
-- [LAND_SYSTEM.md](LAND_SYSTEM.md), [FAMILY_SYSTEM.md](FAMILY_SYSTEM.md) 본가 절, [FURNITURE_SHOP.md](FURNITURE_SHOP.md).
-- [ESTATE_DEFENSE.md](ESTATE_DEFENSE.md) "사망과 회피": 죽은 사람은 구호 침상에서 일어나 바로 돌아올 수 있다.
-- `agent-client/data/npcs/cocoly/instance.txt`: 병실 대사.
-- `openmmo-mcp/src/instructions.md`, agent-client 액션 설명.
-- `doc/assets/items.md`: 구호 침상 모델·아이콘 출처.
+- [ESTATE_STORAGE.md](ESTATE_STORAGE.md), [ESTATE_DEFENSE.md](ESTATE_DEFENSE.md) "사망과 회피".
+- `openmmo-mcp/src/instructions.md`, agent-client `respawn` 액션 설명.
+- [doc/assets/props.md](assets/props.md): 구호 침상 모델·아이콘 출처.
+
+남은 일: ORKEA 전시품 배치와 판매 목록 등록, 코콜리 병실 대사(`agent-client/data/npcs/cocoly/instance.txt`)에 구호 침상 언급을 넣을지.
 
 ## 테스트
 
-- 자기 영지 부활: 빈 침상에 눕고 `object_id`가 그 침상.
-- 침상 여럿·모두 사용 중: 먼저 설치한 빈 침상, 다 차면 첫 침상 옆.
-- 공개 설정별: 영지(다른 계정 거부), 가문(가문원 허용, 비가문원 거부), 공개(여관보다 가까울 때만 허용).
-- 가까운 구호소: 여러 공개 영지 중 가장 가까운 곳, 여관이 더 가까우면 없음, 던전 안 사망은 입구 근처 좌표 기준.
-- 지도: `공개` 구호소만 `shelters`에 나오고, 설정을 바꾸거나 침상을 회수하면 빠진다.
-- 클라이언트가 조건 밖의 `estate_id`로 `Nearby`를 보내면 거부하고 마을.
-- 회수·압류·설정 변경·바닥 철거·막힌 침상: 마을로 떨어지고 메시지.
-- 체납: 주인 허용, 가문원·공개 거부.
-- 수호전 진행 중인 영지: 주인·가문원·공개 모두 평소와 같이 허용.
-- 일반 침대는 부활 지점이 아님.
-- 여관 침대 ID와 같은 `estate_chests.id`를 가진 침상이 있어도 빈 침상 판정이 섞이지 않음.
-- agent-client·MCP가 `at` 없이 보내면 마을.
-- 던전 층(음수)에서 죽어 영지 0층·실내 2층 침상으로 부활.
+`server/src/game_state/tests/respawn_shelter_tests.rs`, `family_tests.rs`:
+
+- 자기 영지 부활: 여관 근처에서 죽어도 영지 구호 침상에 눕는다(`object_id`가 그 침상, HP 최대).
+- 공개 구호소: `영지` 설정이면 낯선 사람의 `Nearby` 요청은 마을로, `공개`로 바꾸면 그 침상에. 여관이 더 가까운 곳에서 죽으면 제안하지 않는다.
+- 사용 중인 침상: 두 번째 사람은 영지 바깥 땅에 서서 깨어난다.
+- 공개 설정: 주인이 아니면 바뀌지 않고, 바꾸면 메모리·DB·지도 목록에 반영된다.
+- 본가: `가문` 설정 전에는 가문원에게 제안하지 않고, 설정 후 본가 침상에 눕는다.

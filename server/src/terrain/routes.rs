@@ -36,6 +36,7 @@ pub fn terrain_router(
 ) -> Router {
     let ownership_router = Router::new()
         .route("/api/terrain/land-ownership", get(get_land_ownership))
+        .route("/api/terrain/shelters", get(get_public_shelters))
         .with_state(auth);
     let objects_router = Router::new()
         .route(
@@ -163,6 +164,22 @@ async fn get_land_ownership(
         .map(Json)
         .map_err(|e| {
             error!("Failed to read land ownership: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })
+}
+
+async fn get_public_shelters(
+    State(auth): State<Arc<crate::auth::AuthService>>,
+) -> Result<Json<Vec<onlinerpg_shared::respawn::ShelterMarker>>, StatusCode> {
+    tokio::task::spawn_blocking(move || auth.public_shelter_markers())
+        .await
+        .map_err(|e| {
+            error!("Public shelter task failed: {}", e);
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?
+        .map(Json)
+        .map_err(|e| {
+            error!("Failed to read public shelters: {}", e);
             StatusCode::INTERNAL_SERVER_ERROR
         })
 }

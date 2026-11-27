@@ -75,6 +75,8 @@
   "furniture_iron_sword.name": "鉄の剣の飾り",
   "furniture_rustic_bed.description": "開封すると自分の領地に配置できます：素朴なベッド。ORKEAの装飾家具です。",
   "furniture_rustic_bed.name": "素朴なベッド",
+  "furniture_aid_cot.description": "開封すると自分の領地に配置できます。倒れた人はこのベッドで目覚めることを選べます。誰が使えるかは持ち主が決めます。",
+  "furniture_aid_cot.name": "救護ベッド",
   "furniture_scroll_enchant_armor.description": "開封すると自分の領地に配置できます：防具強化の巻物の飾り。ORKEAの装飾家具です。",
   "furniture_scroll_enchant_armor.name": "防具強化の巻物の飾り",
   "furniture_scroll_enchant.description": "開封すると自分の領地に配置できます：強化の巻物の飾り。ORKEAの装飾家具です。",

@@ -64,9 +64,12 @@ mod gold_sinks;
 mod land;
 #[path = "auth_road_patrol.rs"]
 mod road_patrol;
+#[path = "auth_shelter.rs"]
+mod shelter;
 #[cfg(test)]
 pub(crate) use road_patrol::IMPOUND_HOLD_SECONDS;
 pub(crate) use road_patrol::{ImpoundedStack, RoadClearance, RoadSeizure};
+pub use shelter::{OwnShelters, ShelterSite};
 #[path = "auth_watch_shift.rs"]
 mod watch_shift;
 pub(crate) use watch_shift::{WatchHire, WatchShiftRow};

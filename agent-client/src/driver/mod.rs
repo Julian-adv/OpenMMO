@@ -1855,7 +1855,12 @@ async fn request_respawn(
         append_memory(path, "I was killed and woke up back at the spawn point.");
     }
     let mut s = state.lock().await;
-    if let Err(e) = s.send_command(ClientMessage::RequestRespawn).await {
+    if let Err(e) = s
+        .send_command(ClientMessage::RequestRespawn {
+            place: Default::default(),
+        })
+        .await
+    {
         error!("[{label}] Respawn request failed: {e}");
     }
 }
@@ -2212,7 +2217,10 @@ mod tests {
 
         request_respawn(&state, &Some(memory.clone()), "test").await;
 
-        assert!(matches!(rx.try_recv(), Ok(ClientMessage::RequestRespawn)));
+        assert!(matches!(
+            rx.try_recv(),
+            Ok(ClientMessage::RequestRespawn { .. })
+        ));
         assert!(std::fs::read_to_string(&memory)
             .unwrap()
             .contains("I was killed"));

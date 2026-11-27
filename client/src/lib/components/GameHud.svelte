@@ -2,6 +2,7 @@
   import { watchMode } from '../stores/watchStore'
   import { t } from '../i18n'
   import type { Writable } from 'svelte/store'
+  import type { RespawnPlace } from '../stores/respawnStore'
   import ChatPanel from './ChatPanel.svelte'
   import FPSCounter from './FPSCounter.svelte'
   import WavePhaseDebug from './WavePhaseDebug.svelte'
@@ -124,7 +125,7 @@
     isCurrentPlayerLoading: boolean
     onReopenRespawnDialog: () => void
     onBackToCharacterSelect: () => void
-    onRespawn: () => void
+    onRespawn: (place: RespawnPlace) => void
     onCloseRespawnDialog: () => void
     onOpenSettings: () => void
   }

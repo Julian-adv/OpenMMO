@@ -8,6 +8,25 @@ import { apiFetch, getTerrainApiUrl } from '../utils/networkUtils'
 import type { ObjectPlacement, ObjectRegionData } from '../stores/editorStore'
 import type { Position } from '../network/networkTypes'
 import { createEvent } from '../network/networkEvents'
+
+/** Estate furniture at a far respawn arrives just after the respawn. */
+export function estateChestArrival(
+  id: number,
+  timeoutMs = 3000
+): Promise<void> {
+  if (get(estateChests).has(id)) return Promise.resolve()
+  return new Promise((resolve) => {
+    const timer = setTimeout(done, timeoutMs)
+    const unsubscribe = estateChests.subscribe((chests) => {
+      if (chests.has(id)) done()
+    })
+    function done() {
+      clearTimeout(timer)
+      queueMicrotask(unsubscribe)
+      resolve()
+    }
+  })
+}
 import {
   TERRAIN_TILE_SIZE,
   worldRectToTileBounds,

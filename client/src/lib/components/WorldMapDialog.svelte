@@ -124,6 +124,7 @@
   import { familyInfo } from '../stores/familyStore'
   import { getTerrainApiUrl } from '../utils/networkUtils'
   import SelfMarker from './SelfMarker.svelte'
+  import type { ShelterMarker } from '../stores/respawnStore'
 
   const graphicsPreset = $derived(getEffectivePreset($graphicsQuality))
   const mobileMapBudget = $derived(graphicsPreset.renderBudget === 'mobile')
@@ -222,6 +223,22 @@
       controller.abort()
       clearTimeout(timer)
     }
+  })
+
+  let shelters = $state<ShelterMarker[]>([])
+  $effect(() => {
+    if (!$worldMapVisible) return
+    const controller = new AbortController()
+    fetch(`${getTerrainApiUrl()}/api/terrain/shelters`, {
+      signal: controller.signal,
+      cache: 'no-store',
+    })
+      .then((response) => (response.ok ? response.json() : []))
+      .then((list: ShelterMarker[]) => {
+        if (!controller.signal.aborted) shelters = list
+      })
+      .catch(() => {})
+    return () => controller.abort()
   })
 
   // Restore saved view state or center on player when dialog opens
@@ -545,6 +562,26 @@
     left: number
     top: number
   }
+
+  let hoveredShelter = $state<{
+    name: string
+    left: number
+    top: number
+  } | null>(null)
+  $effect(() => {
+    if (isDragging) hoveredShelter = null
+  })
+
+  let shelterMarkers = $derived.by(() => {
+    const view = renderedView
+    if (!view) return []
+    return shelters.flatMap((shelter) => {
+      const p = worldToScreen(shelter.x, shelter.z, view)
+      return onScreen(p, view.width, view.height, 20)
+        ? [{ id: shelter.estate_id, name: shelter.name, ...p }]
+        : []
+    })
+  })
 
   let partyMarkers = $derived.by<PartyMarker[]>(() => {
     const roster = $partyRoster
@@ -1090,6 +1127,16 @@
             {/if}
           </div>
         {/each}
+        {#each shelterMarkers as marker (marker.id)}
+          <div
+            class="shelter-marker"
+            role="img"
+            aria-label={$t('map.shelter', { name: marker.name })}
+            style="left: {marker.left}px; top: {marker.top}px;"
+            onpointerenter={() => (hoveredShelter = marker)}
+            onpointerleave={() => (hoveredShelter = null)}
+          ></div>
+        {/each}
         {#each partyMarkers as marker (marker.id)}
           <div
             class="party-marker"
@@ -1107,7 +1154,18 @@
           />
         {/if}
       </div>
-      {#if hoveredOwner}
+      {#if hoveredShelter}
+        <div
+          class="plot-owner-tooltip"
+          role="tooltip"
+          style="left: {Math.min(
+            hoveredShelter.left + 12,
+            containerW - 180
+          )}px; top: {Math.min(hoveredShelter.top + 16, containerH - 40)}px;"
+        >
+          {$t('map.shelter', { name: hoveredShelter.name })}
+        </div>
+      {:else if hoveredOwner}
         <div
           class="plot-owner-tooltip"
           role="tooltip"
@@ -1569,6 +1627,18 @@
     background: #29272c;
     border: 2px solid #985246;
     box-shadow: 0 1px 3px rgba(62, 22, 18, 0.68);
+  }
+
+  .shelter-marker {
+    position: absolute;
+    width: 9px;
+    height: 9px;
+    transform: translate(-50%, -50%);
+    border: 2px solid #fff4ee;
+    border-radius: 2px;
+    background: #b3322b;
+    box-sizing: border-box;
+    pointer-events: auto;
   }
 
   .party-marker {

@@ -98,7 +98,10 @@ impl AuthService {
         })
     }
 
-    fn homestead_id(conn: &Connection, character_id: i64) -> Result<Option<i64>, AuthError> {
+    pub(super) fn homestead_id(
+        conn: &Connection,
+        character_id: i64,
+    ) -> Result<Option<i64>, AuthError> {
         Ok(conn
             .query_row(
                 "SELECT id FROM land_estates

@@ -256,6 +256,7 @@ furniture_chest,Chest,Unpack to place chest on your estate. Decorative furniture
 furniture_chair,Chair,Unpack to place chair on your estate. Decorative furniture from ORKEA.,1,,false,objects/chair.png,,furniture,,,,800,,,,,,,,true,,,,,,,,,,,,,estate_storage,,
 furniture_table,Table,Unpack to place table on your estate. Decorative furniture from ORKEA.,1,,false,objects/table_icon.png,,furniture,,,,3000,,,,,,,,true,,,,,,,,,,,,,estate_storage,,
 furniture_rustic_bed,Rustic Bed,Unpack to place rustic bed on your estate. Decorative furniture from ORKEA.,1,,false,objects/rustic_bed.png,,furniture,,,,4000,,,,,,,,true,,,,,,,,,,,,,estate_storage,,
+furniture_aid_cot,Aid Cot,Unpack to place an aid cot on your estate. The fallen can choose to wake on it; you decide who may.,1,,false,objects/aid_cot.png,,furniture,,,,8000,,,,,,,,true,,,,,,,,,,,,,estate_storage,,
 furniture_stone_hearth,Stone Hearth,Unpack to place stone hearth on your estate. Decorative furniture from ORKEA.,1,,false,objects/stone_hearth.png,,furniture,,,,12000,,,,,,,,true,,,,,,,,,,,,,estate_storage,,
 furniture_torch_wall,Wall Torch,Unpack to place wall torch on your estate. Decorative furniture from ORKEA.,1,,false,objects/torch_wall.png,,furniture,,,,300,,,,,,,,true,,,,,,,,,,,,,estate_storage,,
 furniture_health_potion,Greater Healing Potion Ornament,Unpack to place greater healing potion on your estate. Decorative furniture from ORKEA.,1,,false,objects/greater_healing_potion.png,,furniture,,,,200,,,,,,,,true,,,,,,,,,,,,,estate_storage,,

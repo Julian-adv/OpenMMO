@@ -1,3 +1,4 @@
+import type { RespawnPlace, ShelterAccess } from '../stores/respawnStore'
 import type { MailboxRef } from '../stores/mailStore'
 import type { NoticeBoardRef } from '../stores/noticeBoardStore'
 import type { FamilyMergeTerms } from '../stores/familyStore'
@@ -230,7 +231,9 @@ export type ClientMessage =
         target_player_id: number | null
       }
     }
-  | 'RequestRespawn'
+  | { RequestRespawn: { place: RespawnPlace } }
+  | 'RequestRespawnOptions'
+  | { SetShelterAccess: { furniture_id: number; access: ShelterAccess } }
   | { FishingCast: { position: Position } }
   | { FishingRespond: { action: FishingAction } }
   | 'FishingStop'
@@ -563,6 +566,8 @@ export type EstateChest = {
   emblem?: Emblem | null
   /** The lasting id of the item that was placed. */
   item_id?: number | null
+  /** Who may wake on it, for an aid cot. */
+  shelter?: ShelterAccess | null
 }
 
 /** The defense behind one wall trophy. */

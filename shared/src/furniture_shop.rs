@@ -37,7 +37,7 @@ impl FurnitureTip {
     pub fn for_item(item_def_id: &str) -> Option<Self> {
         match item_def_id {
             "storage_chest" => Some(Self::StorageChest),
-            "furniture_bed" | "furniture_rustic_bed" => Some(Self::Bed),
+            "furniture_bed" | "furniture_rustic_bed" | crate::respawn::AID_COT => Some(Self::Bed),
             _ => None,
         }
     }

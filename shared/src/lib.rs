@@ -42,6 +42,7 @@ pub mod occupancy;
 pub mod pathfinding;
 pub mod pricing;
 pub mod reach;
+pub mod respawn;
 pub mod salon;
 pub mod schedule;
 pub mod seasonal;
@@ -334,7 +335,9 @@ pub const NPC_TOKEN_FILENAME: &str = "npc_token";
 /// fields and messages.
 /// v181: operator schedules for seasonal events: `QuerySeasonalEvents`/`SetSeasonalEvent`,
 /// `SeasonalEvents` and `ObjectRegionsChanged`.
-pub const PROTOCOL_VERSION: u32 = 184;
+/// v185: `RequestRespawn { place }`, `RequestRespawnOptions`/`RespawnOptions` and
+/// `SetShelterAccess`, `EstateChest.shelter` (doc/RESPAWN_POINT.md).
+pub const PROTOCOL_VERSION: u32 = 185;
 
 /// Fingerprint of the dungeon layout generator this build compiled, stamped by
 /// `build.rs`. Layouts never travel the wire — both sides generate them from
@@ -448,10 +451,25 @@ mod tests {
 
     #[test]
     fn roundtrip_unit_variant() {
-        let msg = ClientMessage::RequestRespawn;
+        let msg = ClientMessage::RequestRespawnOptions;
         let bytes = serialize_client_msg(&msg).unwrap();
         let decoded = deserialize_client_msg(&bytes).unwrap();
-        assert!(matches!(decoded, ClientMessage::RequestRespawn));
+        assert!(matches!(decoded, ClientMessage::RequestRespawnOptions));
+    }
+
+    #[test]
+    fn roundtrip_respawn_place() {
+        use crate::respawn::RespawnPlace;
+        let msg = ClientMessage::RequestRespawn {
+            place: RespawnPlace::Nearby { estate_id: 7 },
+        };
+        let bytes = serialize_client_msg(&msg).unwrap();
+        assert!(matches!(
+            deserialize_client_msg(&bytes).unwrap(),
+            ClientMessage::RequestRespawn {
+                place: RespawnPlace::Nearby { estate_id: 7 }
+            }
+        ));
     }
 
     #[test]

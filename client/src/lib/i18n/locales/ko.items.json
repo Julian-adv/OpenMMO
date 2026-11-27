@@ -75,6 +75,8 @@
   "furniture_iron_sword.name": "철검 장식",
   "furniture_rustic_bed.description": "포장을 풀어 자신의 영지에 배치합니다: 소박한 침대. ORKEA의 장식용 가구입니다.",
   "furniture_rustic_bed.name": "소박한 침대",
+  "furniture_aid_cot.description": "포장을 풀어 자신의 영지에 배치합니다. 쓰러진 사람이 이 침상에서 깨어나기를 고를 수 있으며, 누가 쓸 수 있는지는 주인이 정합니다.",
+  "furniture_aid_cot.name": "구호 침상",
   "furniture_scroll_enchant_armor.description": "포장을 풀어 자신의 영지에 배치합니다: 방어구 강화 주문서 장식. ORKEA의 장식용 가구입니다.",
   "furniture_scroll_enchant_armor.name": "방어구 강화 주문서 장식",
   "furniture_scroll_enchant.description": "포장을 풀어 자신의 영지에 배치합니다: 강화 주문서 장식. ORKEA의 장식용 가구입니다.",

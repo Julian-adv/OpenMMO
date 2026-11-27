@@ -1185,3 +1185,59 @@ async fn family_metrics_count_foundings_mergers_and_dissolutions() {
     assert_eq!(top.elders, ["HeadA"]);
     assert_eq!((top.members, top.estates), (3, 2));
 }
+
+#[tokio::test]
+async fn members_wake_at_the_family_seat_once_the_head_opens_it_to_them() {
+    use onlinerpg_shared::respawn::{RespawnPlace, ShelterAccess, AID_COT};
+    let (game, auth, registrar) = setup("family_shelter").await;
+    enter(&game, &auth, "Head", FAMILY_FOUND_STAMPS + 1).await;
+    claim(&game, &auth, "Head", 0).await;
+    found(&game, &auth, &registrar, "Head", "Ironwood").await;
+    let (_, mut member_rx) = enter(&game, &auth, "Member", 0).await;
+    join(&game, &auth, "Head", "Member").await;
+    give(&game, &pid("Head"), bag_item(50, AID_COT, 1)).await;
+    let spot = pos3(6.5, 5.0, 6.5);
+    game.players
+        .write()
+        .await
+        .get_mut(&pid("Head"))
+        .unwrap()
+        .position = spot;
+    game.place_estate_chest(&pid("Head"), 50, spot, 90.0, 0, &auth)
+        .await;
+    let cot = auth
+        .load_estate_chests()
+        .unwrap()
+        .into_iter()
+        .find(|chest| chest.item_def_id == AID_COT)
+        .unwrap();
+    let fall = || async {
+        let mut players = game.players.write().await;
+        let member = players.get_mut(&pid("Member")).unwrap();
+        member.position = pos3(-1440.0, 5.0, 4750.0);
+        member.health = 0;
+    };
+    let seat_offered = |rx: &mut DirectRx| {
+        drain(rx)
+            .into_iter()
+            .rev()
+            .find_map(|message| match message {
+                ServerMessage::RespawnOptions { family_seat, .. } => Some(family_seat),
+                _ => None,
+            })
+    };
+
+    fall().await;
+    game.send_respawn_options(&pid("Member"), &auth).await;
+    assert_eq!(seat_offered(&mut member_rx), Some(false));
+
+    game.set_shelter_access(&pid("Head"), cot.id, ShelterAccess::Family, &auth)
+        .await;
+    game.send_respawn_options(&pid("Member"), &auth).await;
+    assert_eq!(seat_offered(&mut member_rx), Some(true));
+    game.respawn_player_at(&pid("Member"), RespawnPlace::FamilySeat, &auth)
+        .await;
+    let member = game.players.read().await[&pid("Member")].clone();
+    assert_eq!(member.position, cot.position);
+    assert_eq!(member.object_id, Some(cot.id as u32));
+}

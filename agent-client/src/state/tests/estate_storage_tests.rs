@@ -16,6 +16,8 @@ fn chest(x: f32, z: f32) -> EstateChest {
         text: None,
         family_id: None,
         emblem: None,
+        item_id: None,
+        shelter: None,
     }
 }
 
@@ -371,6 +373,7 @@ fn chest_contents(
             bag_item(991, "iron_ore", 12),
             bag_item(992, "iron_sword", 1),
         ],
+        item_ids: vec![],
     }
 }
 

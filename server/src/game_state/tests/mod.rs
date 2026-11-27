@@ -62,6 +62,7 @@ mod pickup_tests;
 mod player_interaction_tests;
 mod player_tests;
 mod player_trade_tests;
+mod respawn_shelter_tests;
 mod road_patrol_tests;
 mod salon_tests;
 mod seasonal_tests;

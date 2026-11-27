@@ -1,3 +1,4 @@
+import type { RespawnPlace, ShelterAccess } from '../stores/respawnStore'
 import type { AbilityId } from '../data/abilities'
 import { setLocalFishingAction } from '../stores/fishingStore'
 import type {
@@ -573,10 +574,20 @@ class NetworkManager {
     })
   }
 
-  requestRespawn() {
-    if (this.sendAndSerialize('RequestRespawn')) {
+  requestRespawn(place: RespawnPlace = 'Town') {
+    if (this.sendAndSerialize({ RequestRespawn: { place } })) {
       this.respawnRequested.emit()
     }
+  }
+
+  requestRespawnOptions() {
+    this.sendMessage('RequestRespawnOptions')
+  }
+
+  sendSetShelterAccess(furnitureId: number, access: ShelterAccess) {
+    this.sendMessage({
+      SetShelterAccess: { furniture_id: furnitureId, access },
+    })
   }
 
   nextMoveRequestId() {

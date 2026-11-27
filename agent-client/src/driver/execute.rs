@@ -467,7 +467,9 @@ pub(super) async fn run_turn(
         // scheduled object, or serving a customer with an open trade window.
         let trading = state.lock().await.player_trade_in_progress();
         if (skip_movement && action.blocked_while_holding_position())
-            || (trading && action.takes_over_movement() && !matches!(action, AgentAction::Respawn))
+            || (trading
+                && action.takes_over_movement()
+                && !matches!(action, AgentAction::Respawn { .. }))
         {
             debug!("Skipping {:?} action — NPC is holding position", action);
             let mut s = state.lock().await;
@@ -3385,6 +3387,7 @@ mod family_chest_command_tests {
                     bag_item(991, "healing_potion", 12),
                     bag_item(992, "healing_potion", 2),
                 ],
+                item_ids: vec![],
             }),
             error: None,
         });

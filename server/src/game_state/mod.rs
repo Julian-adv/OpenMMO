@@ -263,6 +263,7 @@ mod player_interaction;
 mod player_trade;
 mod pricing;
 pub use pricing::TargetPath;
+mod respawn_shelter;
 mod road_patrol;
 pub(crate) use player::restored_floor_level;
 mod salary;

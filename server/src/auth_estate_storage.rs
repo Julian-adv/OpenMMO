@@ -11,6 +11,7 @@ use onlinerpg_shared::family::{
 use onlinerpg_shared::fence::FencePlot;
 use onlinerpg_shared::inventory::ItemInstance;
 use onlinerpg_shared::messages::BagLineItem;
+use onlinerpg_shared::respawn::{ShelterAccess, AID_COT};
 use onlinerpg_shared::Position;
 use onlinerpg_terrain::land::plot_addr;
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
@@ -529,18 +530,24 @@ impl AuthService {
         let mut stmt = conn.prepare(&format!(
             "SELECT c.id,c.estate_id,c.owner_id,c.item_def_id,c.x,c.y,c.z,c.rotation_deg,
                         c.floor_level,COALESCE(e.missed,1)>0,c.revision,c.text,c.item_id,
-                        {FURNITURE_FAMILY_COLUMNS}
+                        {FURNITURE_FAMILY_COLUMNS},COALESCE(e.shelter_access,0)
                  FROM estate_chests c LEFT JOIN land_estates e ON e.id=c.estate_id
                  {FURNITURE_FAMILY_JOIN}"
         ))?;
         let chests = stmt
             .query_map([], |row| {
                 let (family_id, emblem) = furniture_family(row, 13)?;
+                let item_def_id: String = row.get(3)?;
+                let shelter = if item_def_id == AID_COT {
+                    Some(ShelterAccess::from_code(row.get(18)?))
+                } else {
+                    None
+                };
                 Ok(EstateChest {
                     id: row.get(0)?,
                     estate_id: row.get(1)?,
                     owner_id: row.get(2)?,
-                    item_def_id: row.get(3)?,
+                    item_def_id,
                     position: Position {
                         x: row.get::<_, f64>(4)? as f32,
                         y: row.get::<_, f64>(5)? as f32,
@@ -554,6 +561,7 @@ impl AuthService {
                     family_id,
                     emblem,
                     item_id: row.get::<_, Option<u64>>(12)?,
+                    shelter,
                 })
             })?
             .collect::<Result<Vec<_>, _>>()?;
@@ -666,6 +674,11 @@ impl AuthService {
             )?),
             _ => None,
         };
+        let shelter = if item_def_id == AID_COT {
+            Some(Self::shelter_access_of(&tx, estate_id)?)
+        } else {
+            None
+        };
         Self::write_character_states(&tx, std::slice::from_ref(character))?;
         Self::replace_inventories(&tx, [(character.character_id, inventory)])?;
         tx.commit()?;
@@ -683,6 +696,7 @@ impl AuthService {
             family_id,
             emblem,
             item_id: Some(item_id),
+            shelter,
         }))
     }
 

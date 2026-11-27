@@ -4,6 +4,7 @@ import {
   handleEstateDefenseWave,
 } from '../stores/estateDefenseStore'
 import { manaState } from '../stores/manaStore'
+import { respawnOptions } from '../stores/respawnStore'
 import { tempHealth } from '../stores/playerHealthDisplay'
 import {
   beginChargeStrike,
@@ -2035,7 +2036,10 @@ export function handleServerMessage(
       events.playerRespawned.emit(serverPlayer.id)
       // After the idle transition the emit triggers, so it keeps the pose.
       if (isCurrentPlayerRespawned && serverPlayer.object_type) {
-        respawnPoseRequest.set(serverPlayer.object_type)
+        respawnPoseRequest.set({
+          objectType: serverPlayer.object_type,
+          objectId: serverPlayer.object_id ?? null,
+        })
       }
       break
     }
@@ -2847,6 +2851,10 @@ export function handleServerMessage(
       }
       break
     }
+
+    case 'RespawnOptions':
+      respawnOptions.set(data)
+      break
 
     case 'LandAccountState': {
       if (get(shopSession)?.merchantPlayerId !== data.merchant_player_id) break

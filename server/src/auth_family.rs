@@ -177,10 +177,10 @@ pub(super) fn family_seat(
     )
 }
 
-pub(super) fn estate_destination(
+pub(super) fn estate_plots(
     conn: &Connection,
     estate_id: i64,
-) -> Result<EstateDestination, rusqlite::Error> {
+) -> Result<Vec<(i32, i32, u8)>, rusqlite::Error> {
     let mut stmt = conn.prepare_cached(
         "SELECT tile_x, tile_z, quadrant FROM land_plots WHERE estate_id=?1 ORDER BY rowid",
     )?;
@@ -189,6 +189,14 @@ pub(super) fn estate_destination(
             Ok((row.get(0)?, row.get(1)?, row.get(2)?))
         })?
         .collect::<Result<Vec<_>, _>>()?;
+    Ok(plots)
+}
+
+pub(super) fn estate_destination(
+    conn: &Connection,
+    estate_id: i64,
+) -> Result<EstateDestination, rusqlite::Error> {
+    let plots = estate_plots(conn, estate_id)?;
     let mut stmt = conn.prepare_cached(
         "SELECT x, y, z, rotation_deg, floor_level FROM estate_chests
          WHERE estate_id=?1 AND item_def_id=?2 ORDER BY id",

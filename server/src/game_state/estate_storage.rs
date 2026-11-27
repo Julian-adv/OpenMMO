@@ -17,6 +17,7 @@ use onlinerpg_shared::furniture::{
 use onlinerpg_shared::housing::FLOOR_THICKNESS;
 use onlinerpg_shared::inventory::GroundItem;
 use onlinerpg_shared::messages::BagLineItem;
+use onlinerpg_shared::respawn::{ShelterAccess, AID_COT};
 use std::collections::{HashMap, HashSet};
 
 const MAX_TRANSFER_LINES: usize = 128;
@@ -33,6 +34,7 @@ pub(crate) struct EstateFurnitureMove {
 pub(super) struct EstateChestIndex {
     by_id: HashMap<i64, EstateChest>,
     buckets: HashMap<(i32, i32), Vec<i64>>,
+    aid_cots: HashSet<i64>,
 }
 
 impl EstateChestIndex {
@@ -44,6 +46,9 @@ impl EstateChestIndex {
     }
 
     fn insert(&mut self, chest: EstateChest) {
+        if chest.item_def_id == AID_COT {
+            self.aid_cots.insert(chest.id);
+        }
         if let Some(old) = self.by_id.insert(chest.id, chest.clone()) {
             self.remove_bucket(old.id, Self::bucket(&old.position));
         }
@@ -63,6 +68,7 @@ impl EstateChestIndex {
     }
 
     fn remove(&mut self, id: i64) -> Option<EstateChest> {
+        self.aid_cots.remove(&id);
         let chest = self.by_id.remove(&id)?;
         self.remove_bucket(id, Self::bucket(&chest.position));
         Some(chest)
@@ -70,6 +76,28 @@ impl EstateChestIndex {
 
     pub(super) fn get(&self, id: i64) -> Option<&EstateChest> {
         self.by_id.get(&id)
+    }
+
+    pub(super) fn aid_cots(&self) -> impl Iterator<Item = &EstateChest> {
+        self.aid_cots.iter().filter_map(|id| self.by_id.get(id))
+    }
+
+    /// Set the estate's shelter access on its aid cots; returns those changed.
+    pub(super) fn set_shelter(
+        &mut self,
+        estate_id: i64,
+        access: ShelterAccess,
+    ) -> Vec<EstateChest> {
+        let mut changed = Vec::new();
+        for id in &self.aid_cots {
+            if let Some(cot) = self.by_id.get_mut(id) {
+                if cot.estate_id == estate_id && cot.shelter != Some(access) {
+                    cot.shelter = Some(access);
+                    changed.push(cot.clone());
+                }
+            }
+        }
+        changed
     }
 
     pub(super) fn group(&self, key: (i32, i32)) -> Vec<EstateChest> {
@@ -1342,6 +1370,7 @@ mod index_tests {
             family_id: None,
             emblem: None,
             item_id: None,
+            shelter: None,
         }
     }
 

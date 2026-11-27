@@ -751,7 +751,18 @@ pub enum ClientMessage {
         request_id: u32,
         dagger_skill: bool,
     },
-    RequestRespawn,
+    RequestRespawn {
+        #[serde(default)]
+        place: crate::respawn::RespawnPlace,
+    },
+    /// Ask where the defeated sender may wake; answered with `RespawnOptions`.
+    RequestRespawnOptions,
+    /// The estate owner sets who may wake on the estate's aid cots, naming
+    /// one of those cots.
+    SetShelterAccess {
+        furniture_id: i64,
+        access: crate::respawn::ShelterAccess,
+    },
     /// Open the treasure chest on a dungeon's final floor. The server
     /// validates proximity, boss state and the per-player cooldown.
     OpenDungeonChest {
@@ -2435,6 +2446,12 @@ pub enum ServerMessage {
     LandRejected {
         reason: String,
     },
+    /// Where the defeated recipient may wake besides the inn.
+    RespawnOptions {
+        estate: bool,
+        family_seat: bool,
+        nearby: Option<crate::respawn::NearbyShelter>,
+    },
     LandAccountState {
         merchant_player_id: PlayerId,
         treasury: i64,
@@ -3364,6 +3381,7 @@ impl ServerMessage {
             | Self::LandClaimed { .. }
             | Self::LandRejected { .. }
             | Self::LandAccountState { .. }
+            | Self::RespawnOptions { .. }
             | Self::CapeTexturePrompt { .. }
             | Self::InteractionRejected { .. }
             | Self::AltarStatus { .. }

@@ -671,7 +671,7 @@ Client → Server:
   StartPlayerAttack { monster_id, dagger_skill, request_id }
   StopPlayerAttack  { request_id }
   PlayerAttack      { monster_id }                 (agent-client 단발 공격)
-  RequestRespawn
+  RequestRespawn    { place }                      (Town | Estate | FamilySeat | Nearby, doc/RESPAWN_POINT.md)
   UseItem           { instance_id }                (phoenix_talisman → 제자리 부활)
 
 Server → Client:

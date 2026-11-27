@@ -9,6 +9,7 @@ use bytes::Bytes;
 use onlinerpg_shared::estate_storage::is_estate_storage_item;
 use onlinerpg_shared::housing::MAX_FLOOR_LEVEL;
 use onlinerpg_shared::inventory::PlayerInventory;
+use onlinerpg_shared::respawn::AID_COT;
 use onlinerpg_shared::{wrap_world_x, VisibleEquipment};
 use std::collections::HashMap;
 use tokio::sync::mpsc;
@@ -1225,6 +1226,15 @@ impl super::GameState {
     /// Wake the dead in the inn's sick room: lying in the first free bed, or
     /// standing beside them when every bed is taken.
     pub async fn respawn_player(&self, player_id: &PlayerId) {
+        self.respawn_player_with(player_id, None).await;
+    }
+
+    /// Wake the dead at `shelter`, or in the inn's sick room without one.
+    pub(super) async fn respawn_player_with(
+        &self,
+        player_id: &PlayerId,
+        shelter: Option<super::respawn_shelter::ShelterSpot>,
+    ) {
         self.clear_stone_corpse(player_id).await;
         let respawn = &world_config().respawn;
         let npc_spawn = self
@@ -1244,6 +1254,8 @@ impl super::GameState {
             y: bed.y,
             z: bed.z,
         }));
+        let shelter = shelter.filter(|_| npc_spawn.is_none());
+        destinations.extend(shelter.map(|spot| spot.position));
         let Some(mut movement) = self
             .lock_player_movement(*player_id, &destinations, 0.0, true, None)
             .await
@@ -1273,6 +1285,13 @@ impl super::GameState {
                 .filter_map(|p| p.object_id)
                 .collect();
             let free_bed = beds.iter().find(|bed| !taken.contains(&bed.id));
+            let shelter_cot = shelter.and_then(|spot| spot.cot).filter(|id| {
+                !players.values().any(|other| {
+                    other.id != *player_id
+                        && other.object_type.as_deref() == Some(AID_COT)
+                        && other.object_id == Some(*id)
+                })
+            });
             let player = players.get_mut(player_id).expect("looked up above");
             let old_health = player.health;
             self.delay_mana_regeneration(player_id).await;
@@ -1281,8 +1300,15 @@ impl super::GameState {
             let old_floor = player.floor_level;
             let old_position = player.position;
             player.floor_level = respawn.floor_level;
-            match (npc_spawn.as_ref(), free_bed) {
-                (Some(entry), _) => {
+            match (npc_spawn.as_ref(), shelter, free_bed) {
+                (None, Some(spot), _) => {
+                    player.position = spot.position;
+                    player.rotation = spot.rotation;
+                    player.floor_level = spot.floor_level;
+                    player.object_type = shelter_cot.map(|_| AID_COT.to_string());
+                    player.object_id = shelter_cot;
+                }
+                (Some(entry), ..) => {
                     player.position = Position {
                         x: entry.pos[0],
                         y: entry.pos[1],
@@ -1293,7 +1319,7 @@ impl super::GameState {
                     player.object_type = None;
                     player.object_id = None;
                 }
-                (None, Some(bed)) => {
+                (None, None, Some(bed)) => {
                     player.position = Position {
                         x: bed.x,
                         y: bed.y,
@@ -1303,7 +1329,7 @@ impl super::GameState {
                     player.object_type = Some(bed.type_id.clone());
                     player.object_id = Some(bed.id);
                 }
-                (None, None) => {
+                (None, None, None) => {
                     player.position = respawn.position();
                     player.rotation = respawn.rotation_deg.to_radians();
                     player.object_type = None;
