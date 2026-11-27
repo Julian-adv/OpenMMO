@@ -105,7 +105,7 @@ function matchBodySkin(doc) {
   material.getBaseColorTexture().setImage(readFileSync(bodySkin.color)).setMimeType('image/png')
   material.getMetallicRoughnessTexture().setImage(readFileSync(bodySkin.orm)).setMimeType('image/png')
 }
-const packs = ['locomotion', 'combat_melee', 'social', 'fishing', 'combat_ranged', 'offhand', 'enchant_armor', 'great_sword', 'riding', 'dagger_preview', 'spear', 'cart_push', 'snow_dig']
+const packs = ['locomotion', 'combat_melee', 'social', 'fishing', 'combat_ranged', 'offhand', 'enchant_armor', 'great_sword', 'riding', 'dagger_preview', 'spear', 'cart_push', 'snow_dig', 'war_horn']
 const bakeExisting = process.argv.includes('--bake-existing')
 const packFlag = process.argv.indexOf('--pack')
 const selectedPack = packFlag === -1 ? undefined : process.argv[packFlag + 1]

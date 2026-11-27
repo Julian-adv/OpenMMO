@@ -57,7 +57,12 @@
   import { RiderMotion } from '../utils/riderMotion'
   import { MovementRotation } from '../utils/movementRotation'
   import { FishingReel } from '../utils/fishingReel'
-  import { WAR_HORN_BLOW_DELAY_MS, WarHornPose } from '../utils/warHornPose'
+  import {
+    WAR_HORN_CLIP,
+    WAR_HORN_MODEL,
+    WAR_HORN_PACK,
+    WAR_HORN_RAISE_SECONDS,
+  } from '../utils/warHorn'
   import { fishingReelStance, type FishingCatch } from '../stores/fishingStore'
   import {
     ENCHANT_WEAPON_ANIMATION,
@@ -809,6 +814,8 @@
   }
   let cartPushClip: THREE.AnimationClip | undefined
   let snowDigClip: THREE.AnimationClip | undefined
+  let warHornClip: THREE.AnimationClip | undefined
+  let warHornAt: number | undefined
   /** The cart push or bout of shovelling this player is in the middle of. */
   function toilNow() {
     if (riding || playerState !== 'idle') return undefined
@@ -817,6 +824,7 @@
     for (const [clip, at] of [
       [cartPushClip, $cartPushes.get(id)],
       [snowDigClip, $snowDigs.get(id)],
+      [warHornClip, warHornAt],
     ] as const) {
       if (clip && at !== undefined && Date.now() - at < clip.duration * 1000) {
         return { clip, at }
@@ -1871,7 +1879,7 @@
     // Cleanup on unmount
     return () => {
       destroyed = true
-      warHorn?.dispose()
+      dropWarHorn()
       daggerTrail?.dispose()
       daggerTrail = undefined
       if (mixer) {
@@ -1956,22 +1964,36 @@
     playCastPose(HEAL_ANIMATION, true)
   }
 
-  let warHorn: WarHornPose | null = null
-  let hornStartedAt = 0
+  let warHornProp: THREE.Object3D | null = null
 
-  /** Raise the horn and sound it at `gain` once it reaches the lips. */
+  function dropWarHorn() {
+    if (!warHornProp) return
+    warHornProp.removeFromParent()
+    disposeObjectTree(warHornProp)
+    warHornProp = null
+  }
+
+  /** Blow the horn in the right hand; it sounds at `gain` at the lips. */
   export async function playWarHorn(gain: number) {
     const root = modelRoot
     if (!root) return
     try {
-      const { scene } = await loadWarmGLB('/models/objects/war_horn.glb')
+      const [clips, { scene }] = await Promise.all([
+        loadWeaponAnimations(modelPath, root, { pack: WAR_HORN_PACK }),
+        loadWarmGLB(WAR_HORN_MODEL),
+      ])
       if (destroyed || modelRoot !== root) return
-      warHorn?.dispose()
-      warHorn = WarHornPose.create(root, scene, gender === 'female')
-      hornStartedAt = performance.now()
-      playPropSound('warHorn', WAR_HORN_BLOW_DELAY_MS, gain)
+      warHornClip = clips.get(WAR_HORN_CLIP)
+      const hand = root.getObjectByName('RightHand')
+      if (!warHornClip || !hand) return
+      dropWarHorn()
+      warHornProp = scene.clone()
+      poseMainHandProp(warHornProp, 'war_horn_1', undefined, modelPath)
+      hand.add(warHornProp)
+      warHornAt = Date.now()
+      playPropSound('warHorn', WAR_HORN_RAISE_SECONDS * 1000, gain)
     } catch (error) {
-      console.error('Failed to load war horn', error)
+      console.error('Failed to blow the war horn', error)
     }
   }
 
@@ -1995,14 +2017,14 @@
     const pushing = toilNow()?.clip === cartPushClip && !!cartPushClip
     if (weaponObject) {
       weaponObject.visible =
-        !warHorn &&
+        !warHornProp &&
         !riding &&
         !handsOnOars &&
         !pushing &&
         (playerState !== 'interact' || fishingInteraction)
     }
     const offhandVisible =
-      !warHorn &&
+      !warHornProp &&
       !riding &&
       !handsOnOars &&
       !pushing &&
@@ -2024,7 +2046,6 @@
 
   // Step the cape after the mixer and pose corrections.
   export function update(deltaTime: number, wind: WindState | null = null) {
-    warHorn?.restore()
     fishingReel?.restore()
     enchantGrip?.update(0)
     riderMotion?.restore()
@@ -2087,13 +2108,8 @@
         !riding,
       catchPresentation
     )
-    if (
-      warHorn &&
-      (playerState === 'dead' ||
-        !warHorn.update((performance.now() - hornStartedAt) / 1000))
-    ) {
-      warHorn.dispose()
-      warHorn = null
+    if (warHornProp && (!warHornClip || toilNow()?.clip !== warHornClip)) {
+      dropWarHorn()
       updateHeldPropVisibility()
     }
     const onScreen = !teleportHidden && position.y > OFFSCREEN_Y / 2

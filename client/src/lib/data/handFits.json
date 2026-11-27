@@ -58,6 +58,10 @@
     "model:weapons/miner_pickaxe.glb": {
       "position": [-0.025, 0.0575, 0.0275],
       "rotation": [-1.82042, -0.466272, 0.020861]
+    },
+    "model:objects/war_horn.glb": {
+      "position": [-0.104, 0.23, 0.013],
+      "rotation": [-1.38, 0.797, -0.646]
     }
   },
   "modular_male": {
@@ -73,6 +77,10 @@
     "model:weapons/miner_pickaxe.glb": {
       "position": [0, 0.08, 0.045],
       "rotation": [-1.797689, -0.471239, 0.02618]
+    },
+    "model:objects/war_horn.glb": {
+      "position": [-0.065, 0.239, 0.017],
+      "rotation": [-1.342, 0.961, -0.681]
     }
   }
 }

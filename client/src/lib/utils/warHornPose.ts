@@ -1,9 +1,12 @@
+// The war-horn blow as tools/bake-war-horn.mjs bakes it into the war_horn
+// pack; the client plays the baked clip, not this pose.
 import * as THREE from 'three'
 import { findBoneByName } from './characterAnimationUtils'
 import { disposeObjectTree } from './disposeObjectTree'
 import { RiderMotion } from './riderMotion'
+import { WAR_HORN_RAISE_SECONDS } from './warHorn'
 
-const RAISE_SECONDS = 0.6
+const RAISE_SECONDS = WAR_HORN_RAISE_SECONDS
 const HOLD_END = RAISE_SECONDS + 2.15
 const END = HOLD_END + 0.48
 const MOUTHPIECE = new THREE.Vector3(0.296, 0.076, 0.07)
@@ -14,6 +17,10 @@ const GRIPS = [
 const HORN_ORIENTATION = new THREE.Quaternion().setFromEuler(
   new THREE.Euler(-Math.PI / 2, Math.PI / 2, 0, 'YXZ')
 )
+const lipOffset = (female: boolean) =>
+  female
+    ? new THREE.Vector3(0, -0.022, 0.096)
+    : new THREE.Vector3(0, 0.027, 0.122)
 
 export class WarHornPose {
   private readonly pivot = new THREE.Group()
@@ -34,9 +41,7 @@ export class WarHornPose {
     female: boolean
   ) {
     this.motion = new RiderMotion(root)
-    this.lip = female
-      ? new THREE.Vector3(0, -0.022, 0.096)
-      : new THREE.Vector3(0, 0.027, 0.122)
+    this.lip = lipOffset(female)
     this.targets = ['LeftHand', 'RightHand'].map((name) => {
       const hand = findBoneByName(root, name)
       const thumb = findBoneByName(root, name + 'Thumb3')
@@ -101,4 +106,20 @@ export class WarHornPose {
   }
 }
 
-export const WAR_HORN_BLOW_DELAY_MS = RAISE_SECONDS * 1000
+export { WAR_HORN_CLIP } from './warHorn'
+export const WAR_HORN_SECONDS = END
+export const WAR_HORN_HOLD_SECONDS = (RAISE_SECONDS + HOLD_END) / 2
+
+/** World matrix of the horn at the lips with the horn fully raised. */
+export function warHornHoldMatrix(root: THREE.Object3D, female: boolean) {
+  const head = findBoneByName(root, 'Head')!
+  const pivot = head.localToWorld(lipOffset(female))
+  const rotation = new THREE.Quaternion()
+    .setFromEuler(new THREE.Euler(0.85 - 1.05, 0.24, 0, 'YXZ'))
+    .multiply(HORN_ORIENTATION)
+  root.updateMatrixWorld(true)
+  const facing = root.getWorldQuaternion(new THREE.Quaternion())
+  return new THREE.Matrix4()
+    .compose(pivot, facing.multiply(rotation), new THREE.Vector3(1, 1, 1))
+    .multiply(new THREE.Matrix4().makeTranslation(MOUTHPIECE.clone().negate()))
+}

@@ -323,6 +323,8 @@
 
 뿔나팔 (2026-11-28): 모델 `objects/war_horn.glb` 하나를 네 등급이 같이 쓰고, 아이콘 `war_horn_1`~`4`는 쇠 띠 색(쇠·청동·은·금)으로 등급을 가른다. 기록은 [에셋 문서](assets/items.md#도발의-뿔나팔--2026-11-28).
 
+부는 동작은 애니메이션 팩 `war_horn.glb`에 구웠다(`tools/bake-war-horn.mjs`). `client/src/lib/utils/warHornPose.ts`의 동작을 공용 골격에서 30fps로 샘플링해 공용 팩을 만들고, `prepare-modular-character`·`prepare-female-knight --pack war_horn`으로 남·여 팩을 만든 뒤 `--rigs`가 리그마다 팔을 뿔 손잡이에 다시 맞춘다(재타깃만 하면 손이 약 9cm 어긋난다). 뿔나팔은 오른손에 들리고 자리는 `handFits.json`의 `model:objects/war_horn.glb`(리그별, 같은 도구가 잰다). 클라이언트는 `WarHornBlown`을 받으면 이 클립을 짐 나르기·눈 치우기와 같은 방식으로 한 번 재생하고, 0.6초 뒤 소리를 낸다.
+
 ## 결정 기록
 
 2026-11-26 사용자와 정한 내용이다. 수치(드롭률, 기본가, 상자 확률, 웨이브 수, 반경)는 실측 후 조정한다.

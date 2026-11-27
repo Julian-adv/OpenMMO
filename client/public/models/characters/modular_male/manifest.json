@@ -67,7 +67,8 @@
     "assets/modular_human_male_01/guard/tripo_v1/tabard_guard.glb": "893dc976ddcd733f5b4010619c1e1be7813d3695d68c04f36573a4d94e35a62a",
     "client/public/models/animations/spear.glb": "8bfb15a28edaa7eaba5e7ad9e809f0325f5cd0d303d6e5e42c4ea9c754ebdf18",
     "client/public/models/animations/snow_dig.glb": "cd603ba6fbd30f0d9c69b1fc07466a7e8ce86dfddfa0a25b5eeb16e70d3da33f",
-    "assets/items/blindfold/tripo_male_v1/fitted/helmet_blindfold.glb": "d4339f2c85dec08ee9b9a39278f204204a6d93773d51de739caeb05f051e62a6"
+    "assets/items/blindfold/tripo_male_v1/fitted/helmet_blindfold.glb": "d4339f2c85dec08ee9b9a39278f204204a6d93773d51de739caeb05f051e62a6",
+    "client/public/models/animations/war_horn.glb": "b297f395611fce6d44a6facea82a3d56654702b16c377fff8eb123b0a507ef4a"
   },
   "outputs": {
     "base.glb": "abf1a12178d5df11269afed6793e46ed16796c47174e356708ee73bdf590bdad",
@@ -221,6 +222,10 @@
       "sha256": "0b48b31eed00a3e81971718b2414596ac7190e2955731549ba65df945c759cd6",
       "clips": ["snow_dig"]
     },
-    "helmet_blindfold.glb": "357943ec469adddb9ae1fd33b63946fd608c4c9f578142a1f756423f8d172e68"
+    "helmet_blindfold.glb": "357943ec469adddb9ae1fd33b63946fd608c4c9f578142a1f756423f8d172e68",
+    "animations/war_horn.glb": {
+      "sha256": "7f53284ff4048e99ee7da83448b663609cea3a75110011335df0675ba539a7cc",
+      "clips": ["war_horn"]
+    }
   }
 }
