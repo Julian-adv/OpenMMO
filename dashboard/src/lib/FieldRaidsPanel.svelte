@@ -77,29 +77,32 @@
                 {#if raid.raiders.length === 0}
                   —
                 {:else}
-                  <div class="raider-columns">
-                    {#each halves(raid.raiders) as half (half[0].character_id)}
-                      <table class="raiders">
-                        <thead>
-                          <tr>
-                            <th scope="col">이름</th><th scope="col">비고</th><th scope="col" class="num">준 피해</th>
-                            <th scope="col" class="num">받은 피해</th><th scope="col" class="num">사망</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {#each half as raider (raider.character_id)}
+                  <details>
+                    <summary>{formatCount(raid.raiders.length)}명</summary>
+                    <div class="raider-columns">
+                      {#each halves(raid.raiders) as half (half[0].character_id)}
+                        <table class="raiders">
+                          <thead>
                             <tr>
-                              <th scope="row" class="name">{raider.name}</th>
-                              <td>{#each raiderTags(raid, raider) as tag (tag)}<span class="tag">{tag}</span>{/each}</td>
-                              <td class="num">{formatCount(raider.dealt)}</td>
-                              <td class="num">{formatCount(raider.taken)}</td>
-                              <td class="num">{formatCount(raider.deaths)}</td>
+                              <th scope="col">이름</th><th scope="col">비고</th><th scope="col" class="num">준 피해</th>
+                              <th scope="col" class="num">받은 피해</th><th scope="col" class="num">사망</th>
                             </tr>
-                          {/each}
-                        </tbody>
-                      </table>
-                    {/each}
-                  </div>
+                          </thead>
+                          <tbody>
+                            {#each half as raider (raider.character_id)}
+                              <tr>
+                                <th scope="row" class="name">{raider.name}</th>
+                                <td>{#each raiderTags(raid, raider) as tag (tag)}<span class="tag">{tag}</span>{/each}</td>
+                                <td class="num">{formatCount(raider.dealt)}</td>
+                                <td class="num">{formatCount(raider.taken)}</td>
+                                <td class="num">{formatCount(raider.deaths)}</td>
+                              </tr>
+                            {/each}
+                          </tbody>
+                        </table>
+                      {/each}
+                    </div>
+                  </details>
                 {/if}
               </td>
             </tr>
@@ -134,7 +137,8 @@
   .fill { width: 100%; }
   .sub { display: block; margin-top: 3px; color: #74857d; font-size: 11px; }
   .sub-heading { margin: 0; font-size: 13px; font-weight: 600; }
-  .raider-columns { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 32px; }
+  summary { cursor: pointer; color: #4f6158; }
+  .raider-columns { margin-top: 6px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 0 32px; }
   .raiders { width: auto; min-width: 0; font-size: 12px; }
   .raiders th, .raiders td { padding: 2px 16px 2px 0; border-bottom: 0; white-space: nowrap; }
   .raiders thead th { background: none; }
