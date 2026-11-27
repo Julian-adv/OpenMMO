@@ -113,12 +113,12 @@ export class EarthRoarEffect {
     this.group.visible = false
   }
 
-  /** Lay out one roar from the boss standing at `origin`. */
-  start(origin: THREE.Vector3) {
+  /** Lay out one roar from the boss standing at `origin`, `atMs` into it. */
+  start(origin: THREE.Vector3, atMs = 0) {
     const rand = createRng(Math.floor(origin.x * 131 + origin.z * 17))
     this.group.position.copy(origin)
     this.group.visible = true
-    this.elapsedMs = 0
+    this.elapsedMs = atMs
     const rim = (k: number) => {
       const a = rand() * Math.PI * 2
       const x = Math.cos(a) * this.halfX * k

@@ -2507,7 +2507,7 @@ export function handleServerMessage(
       break
 
     case 'EstateDefenseWave':
-      handleEstateDefenseWave(data.spawns, data.rise_in_ms)
+      handleEstateDefenseWave(data.spawns, data.rise_in_ms, data.leader)
       break
 
     case 'EstateDefenseEnded':

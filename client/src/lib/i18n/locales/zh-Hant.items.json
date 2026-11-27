@@ -550,5 +550,13 @@
   "war_horn_3.description": "夜裡在自己領地的空地上吹響，敵人會分五波從四面八方湧來。守住旗幟即可獲得寶箱。在家族領地只有家主能吹響。",
   "war_horn_3.name": "上級挑釁號角",
   "war_horn_4.description": "夜裡在自己領地的空地上吹響，敵人會分五波從四面八方湧來。守住旗幟即可獲得寶箱。在家族領地只有家主能吹響。",
-  "war_horn_4.name": "頂級挑釁號角"
+  "war_horn_4.name": "頂級挑釁號角",
+  "defense_purse_1.name": "下級守護錢袋",
+  "defense_purse_1.description": "守住領地防衛戰所得的錢幣。使用後存入錢包。",
+  "defense_purse_2.name": "中級守護錢袋",
+  "defense_purse_2.description": "守住領地防衛戰所得的錢幣。使用後存入錢包。",
+  "defense_purse_3.name": "上級守護錢袋",
+  "defense_purse_3.description": "守住領地防衛戰所得的錢幣。使用後存入錢包。",
+  "defense_purse_4.name": "頂級守護錢袋",
+  "defense_purse_4.description": "守住領地防衛戰所得的錢幣。使用後存入錢包。"
 }

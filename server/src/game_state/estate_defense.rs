@@ -132,7 +132,17 @@ impl EstateDefense {
             next_wave_in_ms: WAVE_AT
                 .get(self.next_wave)
                 .map(|at| at.saturating_sub(self.elapsed) * 1000),
-            next_side: self.wave_side(self.next_wave).map(|side| side as u8),
+            next_from: self
+                .wave_side(self.next_wave)
+                .and_then(|side| self.sides[side])
+                .map(|angle| {
+                    let (x, z) = ring_point(&self.banner, angle);
+                    Position {
+                        x,
+                        z,
+                        ..self.banner
+                    }
+                }),
             wave_total: WAVE_AT.len() as u8,
             banner_hp: self.banner_hp,
             banner_max: BANNER_DURABILITY,
@@ -833,6 +843,10 @@ impl GameState {
             }
         }
         let positions = spawns.iter().map(|(p, _)| *p).collect();
+        let leader = spawns
+            .iter()
+            .position(|(_, leader)| *leader)
+            .map(|i| i as u8);
         if let Some(defense) = self.defenses().get_mut(&estate_id) {
             defense.rising = Some((defense.elapsed + RISE_SECS, spawns));
         }
@@ -856,6 +870,7 @@ impl GameState {
                 estate_id,
                 spawns: positions,
                 rise_in_ms: RISE_SECS * 1000,
+                leader,
             },
         )
         .await;
@@ -1215,7 +1230,7 @@ mod tests {
         let mut rng = rand::rngs::mock::StepRng::new(0, 0);
         let share = roll_share(grade, &[("iron_sword".into(), 1.0)], &mut rng);
         assert_eq!(share.iter().filter(|i| *i == "healing_potion").count(), 3);
-        assert_eq!(share.iter().filter(|i| *i == "coin_pile").count(), 3);
+        assert_eq!(share.iter().filter(|i| *i == "defense_purse_2").count(), 1);
         assert!(share.iter().any(|i| i.starts_with("scroll_of_")));
         assert!(share.contains(&"iron_sword".to_string()));
     }

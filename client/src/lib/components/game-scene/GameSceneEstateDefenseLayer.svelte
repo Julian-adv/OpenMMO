@@ -9,7 +9,9 @@
   import type { Position } from '../../network/networkTypes'
   import {
     estateDefense,
+    incomingAngles,
     takeDefensePillars,
+    type EstateDefenseState,
     type DefensePillar,
   } from '../../stores/estateDefenseStore'
   import { playerVisualFloorLevel } from '../../stores/housingStore'
@@ -24,9 +26,11 @@
   import { preloadMonsterTypes } from '../../utils/monsterPreload'
   import { playPropSound } from '../../managers/sfxManager'
   import { unwrapWorldXNear } from '../../terrain/world-wrap'
+  import { EarthRoarEffect } from '../../effects/earth-roar'
+  import { EARTH_ROAR_STRIKE_MS } from '../../data/monsterSkills'
 
   let { currentPlayer }: { currentPlayer: LocalPlayer | null } = $props()
-  const { camera, renderer, scene } = useThrelte()
+  const { camera, renderer, scene, size } = useThrelte()
   // Same loader and key as Monster.svelte, so its cache is the one warmed.
   const monsterLoader = useLoader(GLTFLoader, {
     extend: (loader) => loader.setMeshoptDecoder(MeshoptDecoder),
@@ -34,10 +38,16 @@
   /** The most pillars up at once: the last wave and its leader. */
   const PILLAR_SLOTS = 13
   const CHEST_LINGER_MS = 60_000
+  /** A leader's rising shakes the ground this far around it. */
+  const LEADER_ROAR_REACH = 5
+  const LEADER_FOOTPRINT = { halfWidth: 0.8, front: 0.8, back: 0.8 }
   const group = new THREE.Group()
   const banner = new THREE.Group()
+  /** Scratch for placing a server position near the player. */
+  const dummy = new THREE.Object3D()
   const slots: { system: TeleportEffectSystem; event: DefensePillar | null }[] =
     []
+  let leaderRoar: EarthRoarEffect | null = null
   let chestModel: THREE.Object3D | null = null
   let chestOpenClip: THREE.AnimationClip | null = null
   const chests: {
@@ -57,10 +67,17 @@
       group.add(system.group)
     }
     group.add(banner)
+    leaderRoar = new EarthRoarEffect(LEADER_ROAR_REACH, LEADER_FOOTPRINT)
+    group.add(leaderRoar.group)
+    // Hidden objects are skipped by the warmup compile.
+    leaderRoar.group.visible = true
     void (renderer as unknown as WebGPURenderer)
       .compileAsync(group, $camera, scene)
       .catch((error) => console.error('Summon shader warmup failed', error))
-      .finally(() => slots.forEach(({ system }) => system.clear()))
+      .finally(() => {
+        slots.forEach(({ system }) => system.clear())
+        if (leaderRoar) leaderRoar.group.visible = false
+      })
     loadGLB('/models/objects/family_banner.glb')
       .then((gltf) => banner.add(gltf.scene.clone(true)))
       .catch((error) => console.error('Banner model failed to load', error))
@@ -84,6 +101,7 @@
   onDestroy(() => {
     unsubscribe()
     slots.forEach(({ system }) => system.dispose())
+    leaderRoar?.dispose()
   })
 
   function place(object: THREE.Object3D, at: Position) {
@@ -96,6 +114,36 @@
   }
 
   let lastUpdate = Date.now()
+  const projectedFrom = new THREE.Vector3()
+  const projectedBanner = new THREE.Vector3()
+  /** The last wave comes from every side. */
+  const EVERY_SIDE = [Math.PI / 2, 0, -Math.PI / 2, Math.PI]
+  let shown: number | 'every side' | null = null
+
+  /** The next wave's direction on screen, which follows the camera. */
+  function updateIncomingAngles(state: EstateDefenseState | undefined) {
+    if (!state || state.next_wave_in_ms == null) {
+      if (shown !== null) incomingAngles.set([])
+      shown = null
+      return
+    }
+    if (!state.next_from) {
+      if (shown !== 'every side') incomingAngles.set(EVERY_SIDE)
+      shown = 'every side'
+      return
+    }
+    projectedBanner.copy(banner.position).project($camera)
+    place(dummy, state.next_from)
+    projectedFrom.copy(dummy.position).project($camera)
+    const angle = Math.atan2(
+      (projectedFrom.y - projectedBanner.y) * size.current.height,
+      (projectedFrom.x - projectedBanner.x) * size.current.width
+    )
+    if (typeof shown !== 'number' || Math.abs(angle - shown) > 0.02) {
+      shown = angle
+      incomingAngles.set([angle])
+    }
+  }
 
   export function update() {
     const now = Date.now()
@@ -106,9 +154,21 @@
     const state = $estateDefense?.state
     banner.visible = !!state
     if (state) place(banner, state.banner)
+    updateIncomingAngles(state)
 
     for (const pillar of takeDefensePillars()) {
       freeOrOldest(slots).event = pillar
+      if (pillar.leader && leaderRoar) {
+        // Joined late in its gathering, so the ground breaks as it appears.
+        place(dummy, pillar.position)
+        leaderRoar.start(
+          dummy.position,
+          Math.max(
+            0,
+            EARTH_ROAR_STRIKE_MS - pillar.riseMs + now - pillar.startedAt
+          )
+        )
+      }
       if (pillar.chest && chestModel) {
         const model = chestModel.clone(true)
         place(model, pillar.position)
@@ -132,6 +192,7 @@
       }
       chest.mixer?.update(delta)
     }
+    leaderRoar?.update(delta, $camera)
     for (const slot of slots) {
       const pillar = slot.event
       if (!pillar) continue

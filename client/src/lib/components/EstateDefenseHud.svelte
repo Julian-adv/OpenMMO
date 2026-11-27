@@ -1,11 +1,10 @@
 <script lang="ts">
   import { t } from '../i18n'
-  import { estateDefense } from '../stores/estateDefenseStore'
+  import { estateDefense, incomingAngles } from '../stores/estateDefenseStore'
   import { deadlineClock } from '../stores/deadlineClock'
 
   /** Arrows point the way the next wave comes for its last seconds. */
   const ARROW_LEAD_MS = 20_000
-  const SIDES = ['up', 'right', 'down', 'left'] as const
 
   const now = deadlineClock(estateDefense, (current) =>
     current ? current.receivedAt + current.state.ends_in_ms : 0
@@ -18,17 +17,13 @@
     const left = (ms: number) =>
       Math.max(0, Math.ceil((ms - ($now - receivedAt)) / 1000))
     const nextWave =
-      state.next_wave_in_ms === null ? null : left(state.next_wave_in_ms)
+      state.next_wave_in_ms == null ? null : left(state.next_wave_in_ms)
     const soon = nextWave !== null && nextWave * 1000 <= ARROW_LEAD_MS
     return {
       state,
       nextWave,
       endsIn: left(state.ends_in_ms),
-      arrows: !soon
-        ? []
-        : state.next_side === null
-          ? SIDES
-          : [SIDES[state.next_side]],
+      arrows: soon ? $incomingAngles : [],
     }
   })
 
@@ -54,8 +49,14 @@
     </span>
     <span class="clock">{clock(view.endsIn)}</span>
   </div>
-  {#each view.arrows as side (side)}
-    <div class="arrow {side}" aria-hidden="true"></div>
+  {#each view.arrows as angle, i (i)}
+    <div
+      class="arrow"
+      style:left="calc(50% + {Math.cos(angle)} * (50vw - 48px))"
+      style:top="calc(50% - {Math.sin(angle)} * (50vh - 130px))"
+      style:transform="translate(-50%, -50%) rotate({-angle}rad)"
+      aria-hidden="true"
+    ></div>
   {/each}
 {/if}
 
@@ -107,37 +108,11 @@
     z-index: 44;
     width: 0;
     height: 0;
-    border: 16px solid transparent;
+    border-top: 16px solid transparent;
+    border-bottom: 16px solid transparent;
+    border-left: 22px solid rgba(214, 96, 110, 0.9);
     pointer-events: none;
     animation: pulse 0.9s ease-in-out infinite;
-  }
-  .arrow.up {
-    top: 96px;
-    left: 50%;
-    margin-left: -16px;
-    border-bottom: 22px solid rgba(214, 96, 110, 0.9);
-    border-top: none;
-  }
-  .arrow.down {
-    bottom: 120px;
-    left: 50%;
-    margin-left: -16px;
-    border-top: 22px solid rgba(214, 96, 110, 0.9);
-    border-bottom: none;
-  }
-  .arrow.left {
-    left: 16px;
-    top: 50%;
-    margin-top: -16px;
-    border-right: 22px solid rgba(214, 96, 110, 0.9);
-    border-left: none;
-  }
-  .arrow.right {
-    right: 16px;
-    top: 50%;
-    margin-top: -16px;
-    border-left: 22px solid rgba(214, 96, 110, 0.9);
-    border-right: none;
   }
   @keyframes pulse {
     50% {

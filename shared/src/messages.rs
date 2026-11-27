@@ -281,9 +281,9 @@ pub struct EstateDefenseState {
     pub wave: u8,
     /// Until the next wave rises; `None` once all have.
     pub next_wave_in_ms: Option<u32>,
-    /// Screen side the next wave comes from: 0 up, 1 right, 2 down, 3 left;
-    /// `None` for every side.
-    pub next_side: Option<u8>,
+    /// Where on the clear-ground ring the next wave rises; `None` for the
+    /// last wave, which comes from every side.
+    pub next_from: Option<Position>,
     pub wave_total: u8,
     pub banner_hp: u8,
     pub banner_max: u8,
@@ -2595,6 +2595,8 @@ pub enum ServerMessage {
         estate_id: i64,
         spawns: Vec<Position>,
         rise_in_ms: u32,
+        /// Which of `spawns` is the leader, who shakes the ground rising.
+        leader: Option<u8>,
     },
     EstateDefenseEnded {
         estate_id: i64,

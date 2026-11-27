@@ -550,5 +550,13 @@
   "war_horn_3.description": "밤에 자기 영지의 빈 터에서 불면 사방에서 적이 다섯 웨이브로 몰려옵니다. 깃발을 지켜내면 보물 상자를 얻습니다. 가문 영지에서는 가주만 불 수 있습니다.",
   "war_horn_3.name": "상급 도발의 뿔나팔",
   "war_horn_4.description": "밤에 자기 영지의 빈 터에서 불면 사방에서 적이 다섯 웨이브로 몰려옵니다. 깃발을 지켜내면 보물 상자를 얻습니다. 가문 영지에서는 가주만 불 수 있습니다.",
-  "war_horn_4.name": "최상급 도발의 뿔나팔"
+  "war_horn_4.name": "최상급 도발의 뿔나팔",
+  "defense_purse_1.name": "하급 수호의 돈주머니",
+  "defense_purse_1.description": "영지 수호전을 지켜낸 몫의 동전. 쓰면 지갑에 들어갑니다.",
+  "defense_purse_2.name": "중급 수호의 돈주머니",
+  "defense_purse_2.description": "영지 수호전을 지켜낸 몫의 동전. 쓰면 지갑에 들어갑니다.",
+  "defense_purse_3.name": "상급 수호의 돈주머니",
+  "defense_purse_3.description": "영지 수호전을 지켜낸 몫의 동전. 쓰면 지갑에 들어갑니다.",
+  "defense_purse_4.name": "최상급 수호의 돈주머니",
+  "defense_purse_4.description": "영지 수호전을 지켜낸 몫의 동전. 쓰면 지갑에 들어갑니다."
 }

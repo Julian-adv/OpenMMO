@@ -10,9 +10,9 @@ export type EstateDefenseState = {
   estate_id: number
   banner: Position
   wave: number
-  next_wave_in_ms: number | null
-  /** 0 up, 1 right, 2 down, 3 left on screen; null for every side. */
-  next_side: number | null
+  next_wave_in_ms?: number | null
+  /** Where the next wave rises; null for the last, from every side. */
+  next_from?: Position | null
   wave_total: number
   banner_hp: number
   banner_max: number
@@ -32,6 +32,10 @@ export const estateDefense = writable<{
   receivedAt: number
 } | null>(null)
 
+/** Screen angles (radians, counterclockwise from right) the next wave comes
+ *  from, as the scene layer projects them. */
+export const incomingAngles = writable<readonly number[]>([])
+
 /** A summoning pillar: a raider rises in it, or a held banner's chest. */
 export type DefensePillar = {
   position: Position
@@ -39,6 +43,8 @@ export type DefensePillar = {
   riseMs: number
   /** A chest that opens `riseMs` in. */
   chest?: boolean
+  /** The wave's leader, who shakes the ground as it rises. */
+  leader?: boolean
 }
 
 const NONE: readonly DefensePillar[] = []
@@ -53,9 +59,20 @@ export function handleEstateDefenseStatus(state: EstateDefenseState) {
   estateDefense.set({ state, receivedAt: Date.now() })
 }
 
-export function handleEstateDefenseWave(spawns: Position[], riseMs: number) {
+export function handleEstateDefenseWave(
+  spawns: Position[],
+  riseMs: number,
+  leader: number | null | undefined
+) {
   const startedAt = Date.now()
-  pending.push(...spawns.map((position) => ({ position, startedAt, riseMs })))
+  pending.push(
+    ...spawns.map((position, i) => ({
+      position,
+      startedAt,
+      riseMs,
+      leader: i === leader,
+    }))
+  )
 }
 
 export function handleEstateDefenseEnded(
