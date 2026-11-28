@@ -1,0 +1,171 @@
+# Development
+
+Setting up a local copy of OpenMMO, deploying it, and reading its logs. For an overview of the game, see the [README](../README.md).
+
+## Development Setup
+
+### 1. Prerequisites
+
+- **Rust & Cargo**: [Install Rust](https://rustup.rs/)
+- **Node.js & npm**: [Install Node.js](https://nodejs.org/)
+- **flock**: Required to serialize WASM builds (provided by `util-linux` on Linux).
+- **(Recommended) cargo-watch**: For automatic server restarts on code changes.
+  ```bash
+  cargo install cargo-watch
+  ```
+
+### 2. Port Assignments
+
+| Port  | Service                          |
+|-------|----------------------------------|
+| 10004 | Client (Vite dev)                |
+| 10005 | GLB Editor                       |
+| 10006 | Server WebSocket (binds 127.0.0.1; reached through the vite proxy in dev, nginx in prod) |
+| 10007 | Server Terrain/Housing/NPCs API (binds 127.0.0.1; writes require auth) |
+| 10008 | Pulse dashboard (Vite dev)       |
+
+> Both server ports are loopback-only by default (`--bind` / `--api-bind`). Pass `--bind 0.0.0.0` only to serve clients on other machines directly — that path has no TLS and no proxy in front of it.
+
+> **Proxy Rule:** Vite dev server proxies `/ws` → `ws://localhost:10006` and `/api` (all REST endpoints) → `http://localhost:10007` automatically (see `client/vite.config.ts`).
+
+### 3. Generating Terrain Data
+
+World terrain (heightmaps, splatmaps, minimaps, water fields) is baked locally — it is not in git or the asset dataset. Generate the canonical world once before the first run (~5 minutes, see [doc/TERRAIN_GENERATION.md](TERRAIN_GENERATION.md)):
+
+```bash
+cargo run -p terrain-gen --release -- bake --seed 42
+```
+
+> **Disk space:** A full-world bake writes 262,144 tiles and currently produces about 73 GB under `data/terrain`. Check available space before running it.
+
+Without this step the server's terrain API returns 404s and the world renders black.
+
+### 4. Running the Server
+
+This project is organized as a **Cargo Workspace**. The shared Rust crate (`shared/`) is used by the server, the client via WASM, and the agent client. Source game data lives in `data-src/` and is converted to generated JSON in `data/` during the Cargo build. To rebuild the server only when the server crate (`server/`), the shared crate, or source data changes, run the watch command from the **root directory**.
+
+```bash
+cargo watch -w server -w shared -w data-src -x "run -p onlinerpg-server"
+```
+
+The server listens on port 10006 by default. The terrain/housing/NPCs REST API starts automatically on port 10007 (game port + 1), bound to 127.0.0.1 (`--api-bind` to override). Game reads are public; writes (PUT/POST/DELETE) require a bearer token: either the NPC token (local scripts) or a Google ID token whose email is in `ADMIN_EMAILS` / `--admin-emails` (comma-separated) — the map editor sends the signed-in user's token automatically. All `/api/metrics/` reads require a verified Google admin; NPC and game session tokens are not accepted there.
+
+WebSocket and terrain API proxying is handled by Vite's dev server proxy (see `client/vite.config.ts`), so no separate socat or SSL proxy is needed.
+
+**Google sign-in**: browser login uses Google OAuth. Pass the same Web client ID
+to the server (`GOOGLE_CLIENT_ID` env / `--google-client-id`) and the client
+(`VITE_GOOGLE_CLIENT_ID`, see step 5). Without it the server runs but rejects
+browser logins. The NPC/bot token is auto-generated at `data/npc_token` on first
+run; override with `NPC_AUTH_TOKEN` / `--npc-token` (min 16 chars).
+
+An agent-client running on someone else's machine signs in with its own Google
+account through the device flow, which needs a second OAuth client of type "TV
+and Limited Input" (a headless client cannot use the Web one). Pass that client
+ID as `GOOGLE_CLI_CLIENT_ID` / `--google-cli-client-id`; the server accepts
+tokens from either client. See [doc/REMOTE_AGENT_CLIENT.md](REMOTE_AGENT_CLIENT.md).
+
+
+### 5. Running the Client
+
+Binary assets (3D models, music, sounds) are hosted on Hugging Face, not in git.
+Fetch them once from the repo root (re-run after `assets.lock` changes):
+
+```bash
+bash tools/fetch-assets.sh
+```
+
+```bash
+cd client
+cp .env.example .env.local   # then set VITE_GOOGLE_CLIENT_ID (required for login)
+npm install
+npm run dev -- --port 10004
+```
+
+The modular-character workshop is available at `/modular-character-preview.html`
+on the Vite dev server. It previews the final body, interchangeable hair and clothing,
+baked character animations, and sword grip without signing in. Required assets are
+documented in [the asset guide](assets/modular-human-male-01.md).
+
+### 6. Running the Agent Client
+
+Edit `agent-client/data/config.toml` to set the correct port numbers, then run:
+
+```bash
+cd agent-client
+cargo watch -i "data/npcs/**/memory.txt" -i "data/npcs/**/favor.json" -x run
+```
+
+### 7. Automatic WASM Rebuild on Shared Code Changes (Recommended)
+To have Rust code changes in the `shared` library reflected in the browser immediately during client development, run the following command in a separate terminal:
+
+```bash
+# Run from the root directory
+cargo watch -w shared -s "npm run build:wasm --prefix client"
+```
+
+`build:wasm` skips `wasm-opt`, which takes minutes; `npm run build` passes
+`--release` so deployed builds are still optimized. It serializes data
+generation, output cleanup, and packaging with a per-checkout lock. Manual builds and the watcher can run together; a second build
+waits for the first to finish before touching the generated files.
+
+### 8. Running the GLB Editor
+
+```bash
+cd tools/glb-editor
+npm install
+npm run dev -- --port 10005
+```
+
+## Production Deployment
+
+Prod runs both binaries as systemd units (`tools/systemd/`), with the client bundle served statically from `/var/www/openmmo`.
+
+| Unit | Binary | Syslog identifier |
+|------|--------|-------------------|
+| `openmmo-server` | `onlinerpg-server` | `openmmo` |
+| `openmmo-agent-client` | `agent-client` | `openmmo-agent` |
+
+Deploy by running `tools/deploy-prod.sh` **on the prod host** — it pulls master, builds both binaries and the client bundle, prepares terrain snapshot files, publishes the static files, then restarts both units. It also builds and publishes the dashboard on first deployment or when its source, build environment, or Node.js version changes. Unchanged dashboard builds are skipped. The default dashboard location is `/var/www/openmmo-dashboard`, served at `/dashboard/`; see [dashboard deployment](../dashboard/README.md#배포-스크립트로-자동-게시).
+
+There is no host-setup script. nginx on prod is a hand-maintained `/etc/nginx/sites-available/openmmo`; keep it in step with `docker/nginx.conf.template`, which is the reference for the cache rules. Models fetched by fixed path under `/models/` must be served with `Cache-Control: no-cache`. The object catalog lives in `data/object_catalog.json` and is bundled into the client and Rust binaries.
+
+Terrain snapshots are served directly from `TERRAIN_DIR/snapshots/` by nginx. Add the snapshot locations from `docker/nginx.conf.template` to the host configuration with the host's absolute terrain path, and allow the nginx worker to read that directory. The deployment script prepares changed snapshots before publication; the server validates and caches each tile index on first subscription, without scanning or generating the whole world at startup. Initial preparation needs additional disk space and time. See [terrain static serving](TERRAIN_STATIC_SERVING.md) for setup and validation.
+
+The server handles systemd's `SIGTERM` gracefully: it shows connected players a restart notice, closes its listeners and periodic tasks, waits for any in-flight batch save, persists every connected character and inventory plus the world clock, then exits. `systemctl restart` waits for that drain before starting the new binary.
+
+Admin characters can use `/notice <message>` to raise the same banner by hand (this is the live in-game banner, not the login-screen announcements served from `data/announcements/`). `/notice` with no message clears it; players who enter while one is active receive it on join.
+
+Admins also have moderation and movement commands: `/kick <name>` disconnects a player, `/mute <name> [minutes]` silences their chat and whispers (default 10 minutes, survives a relog, cleared by `/unmute <name>` or a server restart), `/summon <name>` teleports them to your side, `/goto <name>` teleports you to theirs, `/follow <name>` keeps you walking after them and puts you back beside them when they teleport or change floors (`/unfollow` stops), and `/ban <name> [minutes]` blocks the account behind that character from logging in at all — permanently without minutes, and `/unban <name>` lifts it. A ban keys on the account, so deleting and recreating characters does not shed it, and it survives a server restart (unlike a mute).
+
+Over SSH, detach it from the session so a dropped connection cannot kill the build midway:
+
+```bash
+ssh prod 'setsid nohup bash ~/work/OnlineRPG/tools/deploy-prod.sh > ~/deploy-latest.log 2>&1 < /dev/null &'
+ssh prod 'tail -f ~/deploy-latest.log'   # follow; ends at "==> deployed <commit>"
+```
+
+Losing the connection to a foreground run costs the whole build but never a half-deploy: the script builds everything first and only touches live state at the end (`rsync` to the webroot, then the restarts), so an interruption before that leaves the old bundle and the old server process running as a matched pair.
+
+### Logs
+
+Both units log to journald (`StandardOutput=journal`); there are no separate log files.
+
+```bash
+journalctl -u openmmo-server -f              # follow the game server
+journalctl -u openmmo-agent-client -f        # follow the NPC agent client
+journalctl -u openmmo-server -n 200 --no-pager   # recent history
+journalctl -u openmmo-server --since "1 hour ago" -p err   # errors only
+```
+
+Both binaries build their subscriber from `RUST_LOG`, defaulting to `info` when it is unset or unparseable. Per-action detail — monster spawn/despawn, combat dice/HP/XP rolls — sits at `debug` to keep the journal rate sane at high player counts, so raise the level to see it:
+
+```bash
+sudo systemctl edit openmmo-server   # or write /etc/openmmo/server.env
+# [Service]
+# Environment=RUST_LOG=debug
+sudo systemctl restart openmmo-server
+```
+
+Each unit reads `EnvironmentFile=-/etc/openmmo/{server,agent-client}.env`, so `RUST_LOG` can go there instead. Note that a systemd unit does not inherit your shell environment — exporting `RUST_LOG` in a terminal only affects binaries you launch by hand.
+
+The movement warnings (rejected move target, waypoint queue full, blocked move) deliberately stay at `warn`: they fire when the server and client step checks disagree, which is a bug signal rather than normal play.

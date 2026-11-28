@@ -10,7 +10,7 @@ Contributions are welcome — this guide collects the practical details that are
 
 ## Development setup
 
-Follow the [Development Setup](README.md#development-setup) section of the README. Two steps live outside git and are required for a working world: fetching binary assets (`bash tools/fetch-assets.sh`, re-run whenever `assets.lock` changes) and baking terrain (`cargo run -p terrain-gen --release -- bake --seed 42`, ~73 GB).
+Follow the [Development Setup](doc/DEVELOPMENT.md#development-setup) guide. Two steps live outside git and are required for a working world: fetching binary assets (`bash tools/fetch-assets.sh`, re-run whenever `assets.lock` changes) and baking terrain (`cargo run -p terrain-gen --release -- bake --seed 42`, ~73 GB).
 
 ## Checks CI runs
 

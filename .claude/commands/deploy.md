@@ -7,7 +7,7 @@ runs **on the prod host**: it `git pull --ff-only`s master, builds both Rust
 binaries and the client bundle, rsyncs the bundle to the webroot, then restarts
 both systemd units. Restarting disconnects everyone currently playing.
 
-The prod host is the `prod` SSH alias. See README.md "Production Deployment" for
+The prod host is the `prod` SSH alias. See doc/DEVELOPMENT.md "Production Deployment" for
 the reference.
 
 ## 1. Preflight — before touching prod

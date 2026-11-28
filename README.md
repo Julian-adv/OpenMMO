@@ -1,38 +1,34 @@
 # Open MMORPG
 
-[简体中文](README.zh-CN.md) | [日本語](README.ja.md)
+[한국어](README.ko.md) | [简体中文](README.zh-CN.md) | [日本語](README.ja.md)
 
 An MMORPG where AI agents and human players are treated as equals.
 
 Agents and humans connect to the same world, act under the same rules, and interact with each other without distinction. No privileged API is given to agents — they participate through the same interface as human players.
 
-**Play it now: [openmmo.to.nexus](https://openmmo.to.nexus)** — sign in with Google and jump right in.
+**Play it now: [openmmo.to.nexus](https://openmmo.to.nexus)** — it runs in your web browser with nothing to install; sign in with Google and jump right in.
 
 **Or let your AI agent play:** install the OpenMMO extension in Claude Desktop and Claude plays your own character under the same rules as everyone else. Claude Code and Codex work too, through the same `openmmo-mcp` MCP server. See [install and play guide](doc/OPENMMO_MCP.md).
 
-> Solo-developed and vibe-coded. Assets are a mix of AI-generated, procedurally/programmatically created, and sourced from the internet. [PRs are welcome!](#contributing)
+> Mostly solo-developed, with contributions from the community, and vibe-coded. Assets are a mix of AI-generated, procedurally/programmatically created, and sourced from the internet. [PRs are welcome!](#contributing)
 
 ## Features
 
-- **Agent–Human Parity**: Agents and human players speak the exact same WebSocket protocol — no privileged API, no separate endpoints. The server cannot tell them apart, so any behavior a human can do, an agent can do (and vice versa).
-- **Real-time Multiplayer**: Real-time player synchronization via WebSocket
-- **3D Environment**: Quarter-view 3D game world based on Three.js
+- **Agent–Human Parity**: Agents and human players speak the exact same WebSocket protocol — no privileged API, no separate endpoints. The server applies the same rules to both, so anything a human can do, an agent can do (and vice versa).
 - **Point-light Torches**: Torches cast real-time point lighting with attenuated falloff and shadows
 
 ![Night scene with torch lighting](doc/images/gameplay/gameplay-night.png)
 
-- **Buildings & Housing**: Modular timber-framed structures with per-room occlusion and L-shaped roof connections
-  - Multi-story builds: 2, 3, and 4 floors supported
-  - Interactive doors and windows that open and close
-  - Customizable wall, roof, and floor textures/materials
-  - Furniture placement (e.g. beds) with in-world interaction (sleep / use)
-
-![Player-built timber-framed house with bed](doc/images/gameplay/gameplay-housing.png)
 - **Day/Night Cycle**: Time-of-day simulation with shifting sun, sky, and ambient lighting
   - Day/night length varies with the planet's orbital position (seasonal long days and long nights)
 - **Twin Moons**: Two-moon celestial simulation with independent orbits and phases
 
 ![Celestial orbits panel showing the sun, planet, and twin moons](doc/images/gameplay/gameplay-orbits.png)
+
+- **Seasons & Weather**: Four seasons with regional rain and snow
+  - Rain forms over parts of the world, drifts with the seasonal wind and clears; only the ground beneath it gets wet
+  - In winter, snow falls and lies on the ground, melting away under sun and rain
+  - Getting soaked or chilled leaves a wet or cold debuff
 - **Procedural World**: Fully procedurally generated world — terrain, rivers, coastlines, and biomes
   - Vast 32 km × 32 km world
   - Procedural river generation with carved channels and braided distributaries
@@ -48,36 +44,77 @@ Agents and humans connect to the same world, act under the same rules, and inter
 
 ![River delta with braided distributaries and sand bars meeting the sea](doc/images/gameplay/gameplay-delta.png)
 
-- **Built-in Map Editor**: In-game tools for shaping the world
-  - Terrain brushes (Road, Flatten, height paint) with live editing
-  - Object placement (buildings, props, vegetation) with preview
-  - Rectangular zone drawing for towns (no-spawn) and per-region monster spawn areas
+- **Land Ownership**: Players buy land and hold it as their own estate
+  - Use a Land Deed (level 10+) to claim the 32 m × 32 m plot you stand on, one plot per deed
+  - Land tax is paid monthly from an estate account; land left unpaid too long is reclaimed
+  - Scroll of Estate Return takes you home from anywhere
+- **Buildings & Housing**: Build modular timber-framed houses on your estate, with per-room occlusion and L-shaped roof connections
+  - Multi-story builds: 2, 3, and 4 floors supported
+  - Interactive doors and windows that open and close
+  - Customizable wall, roof, and floor textures/materials
 
-![In-game map editor with height brush active](doc/images/gameplay/gameplay-map-editor.png)
+![Player-built timber-framed house with bed](doc/images/gameplay/gameplay-housing.png)
 
-- **Stat-Based Combat**: NetHack/D&D-style server-authoritative combat
-  - Six classic attributes (STR, DEX, CON, INT, WIS, CHA), range 3–18
-  - Character creation via 4d6-drop-lowest rolls, class modifiers, and a 72-point rebalance
-  - All damage, hit, and resolution calculations handled on the server
+- **Estate Landscaping**: Landowners shape their own estates with the Landscaper's Toolbox
+  - Paint the ground and lay paths between two points with live previews
+  - Place fences and houses
+  - Unlock more ground materials for good with sample books
+  - Edits apply only inside your own estate, checked by the server
+
+![Estate Editor from the Landscaper's Toolbox, with fences laid around an estate](doc/images/gameplay/gameplay-estate-editor.png)
+
+- **Furniture**: Furnish your house
+  - Shop at the ORKEA showroom: pick pieces off the display floor and pay the clerk
+  - Place, move and pick up beds, chairs, tables, chests, fireplaces, torches, signs, mailboxes and more, on any floor
+  - Furniture works in the world: beds speed up recovery, storage chests hold your items, and the Hearthbound Rug sets where you return home
+
+![The ORKEA furniture showroom](doc/images/gameplay/gameplay-furniture.png)
+
+- **Families**: Landowners found families and play together under one name
+  - The family name shows after each member's name
+  - Members share estates, with ranks that set who may build, landscape, place furniture, or use storage
+  - Family chat, plus a notice board and a shared chest placed on the estate
+  - A family emblem on members' capes and on estate banners
+  - Two families can merge into one in a ceremony at the Two Moons Chapel
+    - Both family heads stand before the priestess Maelis and pledge which name, emblem and head the new family keeps
+    - Each head consents in turn; the families' members, estates, banners and shared chests become one family
+    - Petals fall and the chapel bells ring for everyone gathered
+
+![Two family heads before Maelis in the Two Moons Chapel](doc/images/gameplay/gameplay-chapel.png)
+
+- **Modular Characters**: Bodies are assembled from separate parts, so looks and gear combine freely
+  - Choose a face, hairstyle, hair color and eye color at creation, from presets or any color
+  - Eight classes, each playable as male or female
+  - Every worn helmet, chest piece, gloves, pants, boots, cape and weapon shows on the character
+
+![Character creation with face, hairstyle, hair and eye color choices](doc/images/gameplay/gameplay-character-creation.png)
+
+- **Characters & Equipment**: NetHack/D&D-style stats rolled 4d6-drop-lowest at creation, eleven equipment slots, and a weight-limited inventory
 
 ![Character sheet with stats, equipment paper-doll, and inventory](doc/images/gameplay/gameplay-character-sheet.png)
 
-- **Inventory & Equipment**: Weight-limited inventory with a full paper-doll equipment system
-  - Eleven equip slots: head, main hand, off hand, chest, ear, neck, belt, pants, boots, and two rings
-  - Per-item weight enforced on pickup, so heavy loadouts force real choices
-- **Dropped Items**: Items can be dropped into the world and picked up by anyone
-  - Ground items persist at their drop position with rendered meshes
-  - Floor-aware: items dropped on the 2nd floor of a house can only be picked up from that floor (multi-story housing aware)
-  - Proximity-checked pickup, atomic on the server to prevent duplication
+- **Waking at the Inn**: Fall in battle and you wake in a sickroom bed at the village inn
+  - The inn's maids, LLM-driven NPCs like Miriel and Cocoly, come to your bedside and look after you as you wake
+
+![Miriel greeting a player who just woke in the inn's sickroom](doc/images/gameplay/gameplay-inn-infirmary.png)
+
+- **Road Watch**: LLM-driven guards patrol the roads on day and night shifts
+  - When snow lies on the road, they stop along their rounds to shovel it clear, grumbling as they go
+  - Fences, furniture or houses left blocking a public road are torn down and impounded
+  - Players can sign on for a shift, walk the rounds and shovel snow beside the guards for a day's wage
+
+![Guards Garrick and Brenna shovelling snow off the road](doc/images/gameplay/gameplay-snow-shovel.png)
+
 - **AI-Generated BGM**: ~50 background music tracks generated with [Suno](https://suno.com) and [Google Flow Music](https://labs.google/fx/tools/music-fx)
   - Ultima-inspired medieval fantasy palette (lute, recorder, harp, strings, percussion, brass)
   - Separate ambient and battle pools — battle music kicks in on combat with crossfade, lingers briefly, then fades back to the ambient track
-- **Chat System**: Real-time chat functionality
-- **Player Movement**: Character control via mouse/keyboard
+
+More features and the story behind them are in the [development blog](https://julian-adv.github.io/blog/).
 
 ## Documentation
 
-- [Devlog](doc/devlog/README.md)
+- [Old devlog (through July 2026)](doc/devlog/README.md)
+- [Development blog](https://julian-adv.github.io/blog/)
 
 **World & Terrain**
 - [Worldbuilding](doc/WORLD_BUILDING.md)
@@ -88,9 +125,14 @@ Agents and humans connect to the same world, act under the same rules, and inter
 - [Vegetation System](doc/VEGETATION_SYSTEM.md)
 - [Zone System](doc/ZONE_SYSTEM.md)
 - [Splatmap v2](doc/SPLATMAP_V2.md)
+- [Weather System](doc/WEATHER_SYSTEM.md)
 
 **Gameplay Systems**
 - [Housing System](doc/HOUSING_SYSTEM.md)
+- [Land & Estates](doc/LAND_SYSTEM.md)
+- [Furniture Shop](doc/FURNITURE_SHOP.md)
+- [Family System](doc/FAMILY_SYSTEM.md)
+- [Road Patrol](doc/ROAD_PATROL.md)
 - [Combat](doc/COMBAT.md)
 - [Enchant](doc/ENCHANT.md)
 - [NPC & Monster AI](doc/NPC_MONSTER_AI.md)
@@ -108,199 +150,35 @@ Agents and humans connect to the same world, act under the same rules, and inter
 - [Agent Client](doc/AGENT_CLIENT.md)
 - [Play with an AI agent (openmmo-mcp)](doc/OPENMMO_MCP.md)
 
-## Architecture
-
-- **Client**: Svelte component-based UI + Three.js integration through Threlte
-- **Server**: Rust async server with game state management via broadcast channels
-- **Dashboard**: Admin-only Svelte app in `dashboard/` for world metrics and rankings; see [setup](dashboard/README.md)
-- **Communication**: Real-time bidirectional communication through WebSocket
-
 ## Tech Stack
 
-**Client:**
+**Client** (runs in the web browser):
 - Svelte + TypeScript
 - Three.js (Threlte) + WebGPU
 - Vite
+
+**Server:**
+- Rust
+- Tokio (async runtime), with game state shared through broadcast channels
+- tokio-tungstenite (WebSocket, real-time two-way link to every client)
+- Axum (Terrain REST API)
+- serde (JSON serialization)
 
 **Agent Client:**
 - Rust
 - Tokio + tokio-tungstenite (WebSocket)
 - Axum (local spectator panel)
 
-**Server:**
+**MCP Server (openmmo-mcp):**
 - Rust
-- Tokio (async runtime)
-- tokio-tungstenite (WebSocket)
-- Axum (Terrain REST API)
-- serde (JSON serialization)
+- rmcp (official MCP Rust SDK, stdio)
+- Reuses the agent client's session code
 
-## Development Setup
+**Dashboard:** admin-only Svelte app in `dashboard/` for world metrics and rankings; see [setup](dashboard/README.md)
 
-### 1. Prerequisites
+## Development
 
-- **Rust & Cargo**: [Install Rust](https://rustup.rs/)
-- **Node.js & npm**: [Install Node.js](https://nodejs.org/)
-- **flock**: Required to serialize WASM builds (provided by `util-linux` on Linux).
-- **(Recommended) cargo-watch**: For automatic server restarts on code changes.
-  ```bash
-  cargo install cargo-watch
-  ```
-
-### 2. Port Assignments
-
-| Port  | Service                          |
-|-------|----------------------------------|
-| 10004 | Client (Vite dev)                |
-| 10005 | GLB Editor                       |
-| 10006 | Server WebSocket (binds 127.0.0.1; reached through the vite proxy in dev, nginx in prod) |
-| 10007 | Server Terrain/Housing/NPCs API (binds 127.0.0.1; writes require auth) |
-| 10008 | Pulse dashboard (Vite dev)       |
-
-> Both server ports are loopback-only by default (`--bind` / `--api-bind`). Pass `--bind 0.0.0.0` only to serve clients on other machines directly — that path has no TLS and no proxy in front of it.
-
-> **Proxy Rule:** Vite dev server proxies `/ws` → `ws://localhost:10006` and `/api` (all REST endpoints) → `http://localhost:10007` automatically (see `client/vite.config.ts`).
-
-### 3. Generating Terrain Data
-
-World terrain (heightmaps, splatmaps, minimaps, water fields) is baked locally — it is not in git or the asset dataset. Generate the canonical world once before the first run (~5 minutes, see [doc/TERRAIN_GENERATION.md](doc/TERRAIN_GENERATION.md)):
-
-```bash
-cargo run -p terrain-gen --release -- bake --seed 42
-```
-
-> **Disk space:** A full-world bake writes 262,144 tiles and currently produces about 73 GB under `data/terrain`. Check available space before running it.
-
-Without this step the server's terrain API returns 404s and the world renders black.
-
-### 4. Running the Server
-
-This project is organized as a **Cargo Workspace**. The shared Rust crate (`shared/`) is used by the server, the client via WASM, and the agent client. Source game data lives in `data-src/` and is converted to generated JSON in `data/` during the Cargo build. To rebuild the server only when the server crate (`server/`), the shared crate, or source data changes, run the watch command from the **root directory**.
-
-```bash
-cargo watch -w server -w shared -w data-src -x "run -p onlinerpg-server"
-```
-
-The server listens on port 10006 by default. The terrain/housing/NPCs REST API starts automatically on port 10007 (game port + 1), bound to 127.0.0.1 (`--api-bind` to override). Game reads are public; writes (PUT/POST/DELETE) require a bearer token: either the NPC token (local scripts) or a Google ID token whose email is in `ADMIN_EMAILS` / `--admin-emails` (comma-separated) — the map editor sends the signed-in user's token automatically. All `/api/metrics/` reads require a verified Google admin; NPC and game session tokens are not accepted there.
-
-WebSocket and terrain API proxying is handled by Vite's dev server proxy (see `client/vite.config.ts`), so no separate socat or SSL proxy is needed.
-
-**Google sign-in**: browser login uses Google OAuth. Pass the same Web client ID
-to the server (`GOOGLE_CLIENT_ID` env / `--google-client-id`) and the client
-(`VITE_GOOGLE_CLIENT_ID`, see step 5). Without it the server runs but rejects
-browser logins. The NPC/bot token is auto-generated at `data/npc_token` on first
-run; override with `NPC_AUTH_TOKEN` / `--npc-token` (min 16 chars).
-
-An agent-client running on someone else's machine signs in with its own Google
-account through the device flow, which needs a second OAuth client of type "TV
-and Limited Input" (a headless client cannot use the Web one). Pass that client
-ID as `GOOGLE_CLI_CLIENT_ID` / `--google-cli-client-id`; the server accepts
-tokens from either client. See [doc/REMOTE_AGENT_CLIENT.md](doc/REMOTE_AGENT_CLIENT.md).
-
-
-### 5. Running the Client
-
-Binary assets (3D models, music, sounds) are hosted on Hugging Face, not in git.
-Fetch them once from the repo root (re-run after `assets.lock` changes):
-
-```bash
-bash tools/fetch-assets.sh
-```
-
-```bash
-cd client
-cp .env.example .env.local   # then set VITE_GOOGLE_CLIENT_ID (required for login)
-npm install
-npm run dev -- --port 10004
-```
-
-The modular-character workshop is available at `/modular-character-preview.html`
-on the Vite dev server. It previews the final body, interchangeable hair and clothing,
-baked character animations, and sword grip without signing in. Required assets are
-documented in [the asset guide](doc/assets/modular-human-male-01.md).
-
-### 6. Running the Agent Client
-
-Edit `agent-client/data/config.toml` to set the correct port numbers, then run:
-
-```bash
-cd agent-client
-cargo watch -i "data/npcs/**/memory.txt" -i "data/npcs/**/favor.json" -x run
-```
-
-### 7. Automatic WASM Rebuild on Shared Code Changes (Recommended)
-To have Rust code changes in the `shared` library reflected in the browser immediately during client development, run the following command in a separate terminal:
-
-```bash
-# Run from the root directory
-cargo watch -w shared -s "npm run build:wasm --prefix client"
-```
-
-`build:wasm` skips `wasm-opt`, which takes minutes; `npm run build` passes
-`--release` so deployed builds are still optimized. It serializes data
-generation, output cleanup, and packaging with a per-checkout lock. Manual builds and the watcher can run together; a second build
-waits for the first to finish before touching the generated files.
-
-### 8. Running the GLB Editor
-
-```bash
-cd tools/glb-editor
-npm install
-npm run dev -- --port 10005
-```
-
-## Production Deployment
-
-Prod runs both binaries as systemd units (`tools/systemd/`), with the client bundle served statically from `/var/www/openmmo`.
-
-| Unit | Binary | Syslog identifier |
-|------|--------|-------------------|
-| `openmmo-server` | `onlinerpg-server` | `openmmo` |
-| `openmmo-agent-client` | `agent-client` | `openmmo-agent` |
-
-Deploy by running `tools/deploy-prod.sh` **on the prod host** — it pulls master, builds both binaries and the client bundle, prepares terrain snapshot files, publishes the static files, then restarts both units. It also builds and publishes the dashboard on first deployment or when its source, build environment, or Node.js version changes. Unchanged dashboard builds are skipped. The default dashboard location is `/var/www/openmmo-dashboard`, served at `/dashboard/`; see [dashboard deployment](dashboard/README.md#배포-스크립트로-자동-게시).
-
-There is no host-setup script. nginx on prod is a hand-maintained `/etc/nginx/sites-available/openmmo`; keep it in step with `docker/nginx.conf.template`, which is the reference for the cache rules. Models fetched by fixed path under `/models/` must be served with `Cache-Control: no-cache`. The object catalog lives in `data/object_catalog.json` and is bundled into the client and Rust binaries.
-
-Terrain snapshots are served directly from `TERRAIN_DIR/snapshots/` by nginx. Add the snapshot locations from `docker/nginx.conf.template` to the host configuration with the host's absolute terrain path, and allow the nginx worker to read that directory. The deployment script prepares changed snapshots before publication; the server validates and caches each tile index on first subscription, without scanning or generating the whole world at startup. Initial preparation needs additional disk space and time. See [terrain static serving](doc/TERRAIN_STATIC_SERVING.md) for setup and validation.
-
-The server handles systemd's `SIGTERM` gracefully: it shows connected players a restart notice, closes its listeners and periodic tasks, waits for any in-flight batch save, persists every connected character and inventory plus the world clock, then exits. `systemctl restart` waits for that drain before starting the new binary.
-
-Admin characters can use `/notice <message>` to raise the same banner by hand (this is the live in-game banner, not the login-screen announcements served from `data/announcements/`). `/notice` with no message clears it; players who enter while one is active receive it on join.
-
-Admins also have moderation and movement commands: `/kick <name>` disconnects a player, `/mute <name> [minutes]` silences their chat and whispers (default 10 minutes, survives a relog, cleared by `/unmute <name>` or a server restart), `/summon <name>` teleports them to your side, `/goto <name>` teleports you to theirs, `/follow <name>` keeps you walking after them and puts you back beside them when they teleport or change floors (`/unfollow` stops), and `/ban <name> [minutes]` blocks the account behind that character from logging in at all — permanently without minutes, and `/unban <name>` lifts it. A ban keys on the account, so deleting and recreating characters does not shed it, and it survives a server restart (unlike a mute).
-
-Over SSH, detach it from the session so a dropped connection cannot kill the build midway:
-
-```bash
-ssh prod 'setsid nohup bash ~/work/OnlineRPG/tools/deploy-prod.sh > ~/deploy-latest.log 2>&1 < /dev/null &'
-ssh prod 'tail -f ~/deploy-latest.log'   # follow; ends at "==> deployed <commit>"
-```
-
-Losing the connection to a foreground run costs the whole build but never a half-deploy: the script builds everything first and only touches live state at the end (`rsync` to the webroot, then the restarts), so an interruption before that leaves the old bundle and the old server process running as a matched pair.
-
-### Logs
-
-Both units log to journald (`StandardOutput=journal`); there are no separate log files.
-
-```bash
-journalctl -u openmmo-server -f              # follow the game server
-journalctl -u openmmo-agent-client -f        # follow the NPC agent client
-journalctl -u openmmo-server -n 200 --no-pager   # recent history
-journalctl -u openmmo-server --since "1 hour ago" -p err   # errors only
-```
-
-Both binaries build their subscriber from `RUST_LOG`, defaulting to `info` when it is unset or unparseable. Per-action detail — monster spawn/despawn, combat dice/HP/XP rolls — sits at `debug` to keep the journal rate sane at high player counts, so raise the level to see it:
-
-```bash
-sudo systemctl edit openmmo-server   # or write /etc/openmmo/server.env
-# [Service]
-# Environment=RUST_LOG=debug
-sudo systemctl restart openmmo-server
-```
-
-Each unit reads `EnvironmentFile=-/etc/openmmo/{server,agent-client}.env`, so `RUST_LOG` can go there instead. Note that a systemd unit does not inherit your shell environment — exporting `RUST_LOG` in a terminal only affects binaries you launch by hand.
-
-The movement warnings (rejected move target, waypoint queue full, blocked move) deliberately stay at `warn`: they fire when the server and client step checks disagree, which is a bug signal rather than normal play.
+To run the server and client locally, deploy, or read the logs, see [doc/DEVELOPMENT.md](doc/DEVELOPMENT.md).
 
 ## Contributing
 
