@@ -864,9 +864,7 @@ impl super::GameState {
         }
         let placement = {
             let mut inventories = self.inventories.write().await;
-            let Some(inv) = inventories.get_mut(player_id) else {
-                return None;
-            };
+            let inv = inventories.get_mut(player_id)?;
             if self.calc_total_weight(inv, armor_mult) + def_weight > max_weight {
                 Placement::Overweight
             } else {

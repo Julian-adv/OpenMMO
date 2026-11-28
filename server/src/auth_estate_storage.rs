@@ -606,6 +606,7 @@ impl AuthService {
         )
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn place_estate_chest(
         &self,
         character: &CharacterSaveData,

@@ -35,6 +35,11 @@ const FINAL_WAVE_PER_SIDE: usize = 3;
 /// No success is judged before this, so a defense always takes as long.
 const EARLIEST_SUCCESS: u32 = 420;
 const TIME_LIMIT: u32 = 600;
+const _: () = {
+    assert!(EARLIEST_SUCCESS > WAVE_AT[WAVE_AT.len() - 1]);
+    assert!(TIME_LIMIT > EARLIEST_SUCCESS);
+    assert!(WAVE_SIZE * 4 + FINAL_WAVE_PER_SIDE * 4 + 1 == 37);
+};
 /// Blows the banner takes: one per raider swing, `LEADER_BLOW` per leader's.
 const BANNER_DURABILITY: u8 = 30;
 const LEADER_BLOW: u8 = 3;
@@ -1370,12 +1375,5 @@ mod tests {
         assert_eq!(share.iter().filter(|i| *i == "defense_purse_2").count(), 1);
         assert!(share.iter().any(|i| i.starts_with("scroll_of_")));
         assert!(share.contains(&"iron_sword".to_string()));
-    }
-
-    #[test]
-    fn a_defense_lasts_at_least_until_the_last_wave_is_down() {
-        assert!(EARLIEST_SUCCESS > *WAVE_AT.last().unwrap());
-        assert!(TIME_LIMIT > EARLIEST_SUCCESS);
-        assert_eq!(WAVE_SIZE * 4 + FINAL_WAVE_PER_SIDE * 4 + 1, 37);
     }
 }

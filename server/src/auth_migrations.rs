@@ -375,7 +375,8 @@ mod tests {
             .iter()
             .any(|row| row.item_def_id == "dagger" && row.enchant == 2));
         let conn = Connection::open(&db_path).unwrap();
-        let owners: Vec<(String, Option<i64>, Option<i64>, Option<String>, bool)> = conn
+        type OwnerRow = (String, Option<i64>, Option<i64>, Option<String>, bool);
+        let owners: Vec<OwnerRow> = conn
             .prepare(
                 "SELECT item_def_id, character_id, chest_id, account_name, charged
                  FROM items ORDER BY id",
